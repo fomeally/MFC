@@ -52,7 +52,9 @@ module m_patches
               s_cuboid, &
               s_cylinder, &
               s_sweep_plane, &
-              s_model
+              s_model, &
+              s_1d_gaussian, &
+              s_1d_tanh
 
     real(kind(0d0)) :: x_centroid, y_centroid, z_centroid
     real(kind(0d0)) :: length_x, length_y, length_z
@@ -143,6 +145,134 @@ contains
         end do
 
     end subroutine s_line_segment
+
+    !>          The Gaussian patch is a 1D geometry. The geometry
+    !!              of the patch is well-defined when its centroid  (mu) and length
+    !!              in the x-coordinate direction are provided (sigma is 1). Note that the
+    !!              Gaussian patch DOES NOT allow for the smearing of its
+    !!              boundaries.
+    !! @param patch_id patch identifier
+    !! @param patch_id_fp Array to track patch ids
+    !! @param q_prim_vf Array of primitive variables
+    subroutine s_1d_gaussian(patch_id, patch_id_fp, q_prim_vf) ! ----------------------------------
+
+        integer, intent(IN) :: patch_id
+        integer, intent(INOUT), dimension(0:m, 0:n, 0:p) :: patch_id_fp
+        type(scalar_field), dimension(1:sys_size) :: q_prim_vf
+
+        real(kind(0d0)) :: pi_inf, gamma, lit_gamma
+
+        integer :: i, j, k !< Generic loop operators
+
+        pi_inf = fluid_pp(1)%pi_inf
+        gamma = fluid_pp(1)%gamma
+        lit_gamma = (1d0 + gamma)/gamma
+
+        ! Transferring the line segment's centroid and length information
+        x_centroid = patch_icpp(patch_id)%x_centroid
+        length_x = patch_icpp(patch_id)%length_x
+
+        ! Computing the beginning and end x-coordinates of the line segment
+        ! based on its centroid and length
+        x_boundary%beg = x_centroid - 0.5d0*length_x
+        x_boundary%end = x_centroid + 0.5d0*length_x
+
+        ! Since the line segment patch does not allow for its boundaries to
+        ! be smoothed out, the pseudo volume fraction is set to 1 to ensure
+        ! that only the current patch contributes to the fluid state in the
+        ! cells that this patch covers.
+        eta = 1d0
+
+        ! Checking whether the line segment covers a particular cell in the
+        ! domain and verifying whether the current patch has the permission
+        ! to write to that cell. If both queries check out, the primitive
+        ! variables of the current patch are assigned to this cell.
+        do i = 0, m
+            
+
+            
+
+            if (x_boundary%beg <= x_cc(i) .and. &
+                x_boundary%end >= x_cc(i) .and. &
+                patch_icpp(patch_id)%alter_patch(patch_id_fp(i, 0, 0))) then
+
+                eta = exp(-5d-1*(x_cc(i) - x_centroid)**2)/sqrt(2d0*pi)
+                call s_assign_patch_primitive_variables(patch_id, i, 0, 0, &
+                                            eta, q_prim_vf, patch_id_fp)
+
+                @:analytical()
+            end if
+
+        end do
+
+    end subroutine s_1d_gaussian ! ----------------------------------------
+
+
+
+    !>          The tanh patch is a 1D geometry. The geometry
+    !!              of the patch is well-defined when its centroid and length
+    !!              in the x-coordinate direction are provided. Note that the
+    !!              tanh patch DOES NOT allow for the smearing of its
+    !!              boundaries. Parameters to ensure vol frac in [0,1].
+    !! @param patch_id patch identifier
+    !! @param patch_id_fp Array to track patch ids
+    !! @param q_prim_vf Array of primitive variables
+    subroutine s_1d_tanh(patch_id, patch_id_fp, q_prim_vf) ! ----------------------------------
+
+        integer, intent(IN) :: patch_id
+        integer, intent(INOUT), dimension(0:m, 0:n, 0:p) :: patch_id_fp
+        type(scalar_field), dimension(1:sys_size) :: q_prim_vf
+
+        real(kind(0d0)) :: pi_inf, gamma, lit_gamma, b, c, d
+
+        integer :: i, j, k !< Generic loop operators
+
+        pi_inf = fluid_pp(1)%pi_inf
+        gamma = fluid_pp(1)%gamma
+        lit_gamma = (1d0 + gamma)/gamma
+
+        b = 15d0
+        c = 0.5d0
+        d = 0.5d0
+
+        ! Transferring the line segment's centroid and length information
+        x_centroid = patch_icpp(patch_id)%x_centroid
+        length_x = patch_icpp(patch_id)%length_x
+
+        ! Computing the beginning and end x-coordinates of the line segment
+        ! based on its centroid and length
+        x_boundary%beg = x_centroid - 0.5d0*length_x
+        x_boundary%end = x_centroid + 0.5d0*length_x
+
+        ! Since the line segment patch does not allow for its boundaries to
+        ! be smoothed out, the pseudo volume fraction is set to 1 to ensure
+        ! that only the current patch contributes to the fluid state in the
+        ! cells that this patch covers.
+        eta = 1d0
+
+        ! Checking whether the line segment covers a particular cell in the
+        ! domain and verifying whether the current patch has the permission
+        ! to write to that cell. If both queries check out, the primitive
+        ! variables of the current patch are assigned to this cell.
+        do i = 0, m
+            
+
+            
+
+            if (x_boundary%beg <= x_cc(i) .and. &
+                x_boundary%end >= x_cc(i) .and. &
+                patch_icpp(patch_id)%alter_patch(patch_id_fp(i, 0, 0))) then
+
+                eta = c*tanh(b*(x_cc(i) - x_centroid)) + d
+                call s_assign_patch_primitive_variables(patch_id, i, 0, 0, &
+                                            eta, q_prim_vf, patch_id_fp)
+
+                @:analytical()
+            end if
+
+        end do
+
+    end subroutine s_1d_tanh ! ----------------------------------------
 
     !>  The spiral patch is a 2D geometry that may be used, The geometry
         !!              of the patch is well-defined when its centroid and radius

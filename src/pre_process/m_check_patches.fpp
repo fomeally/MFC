@@ -92,6 +92,10 @@ contains
                     call s_check_2D_TaylorGreen_vortex_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == 21) then
                     call s_check_model_geometry(i)
+                elseif (patch_icpp(i)%geometry == 22) then
+                    call s_check_gaussian_patch_geometry(i)
+                elseif (patch_icpp(i)%geometry == 23) then
+                    call s_check_tanh_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == dflt_int) then
                     call s_prohibit_abort("Active patch undefined", "patch_icpp("//trim(iStr)//")%geometry must be set")
                 else
@@ -160,6 +164,34 @@ contains
         @:PROHIBIT(cyl_coord, "Line segment patch "//trim(iStr)//": cyl_coord is not supported")
 
     end subroutine s_check_line_segment_patch_geometry
+
+    !> This subroutine checks the gaussian patch input
+        !!  @param patch_id Patch identifier
+    subroutine s_check_gaussian_patch_geometry(patch_id)
+
+        integer, intent(in) :: patch_id
+        call s_int_to_str(patch_id, iStr)
+
+        @:PROHIBIT(n > 0, "Gaussian patch "//trim(iStr)//": n must be zero")
+        @:PROHIBIT(patch_icpp(patch_id)%length_x <= 0d0, "Gaussian patch "//trim(iStr)//": length_x must be greater than zero")
+        @:PROHIBIT(f_is_default(patch_icpp(patch_id)%x_centroid), "Gaussian patch "//trim(iStr)//": x_centroid must be set")
+        @:PROHIBIT(cyl_coord, "Gaussian patch "//trim(iStr)//": cyl_coord is not supported")
+
+    end subroutine s_check_gaussian_patch_geometry
+
+    !> This subroutine checks the tanh patch input
+        !!  @param patch_id Patch identifier
+    subroutine s_check_tanh_patch_geometry(patch_id)
+
+        integer, intent(in) :: patch_id
+        call s_int_to_str(patch_id, iStr)
+
+        @:PROHIBIT(n > 0, "tanh patch "//trim(iStr)//": n must be zero")
+        @:PROHIBIT(patch_icpp(patch_id)%length_x <= 0d0, "tanh patch "//trim(iStr)//": length_x must be greater than zero")
+        @:PROHIBIT(f_is_default(patch_icpp(patch_id)%x_centroid), "tanh patch "//trim(iStr)//": x_centroid must be set")
+        @:PROHIBIT(cyl_coord, "tanh patch "//trim(iStr)//": cyl_coord is not supported")
+
+    end subroutine s_check_tanh_patch_geometry
 
     !>  This subroutine checks the circle patch input
         !!  @param patch_id Patch identifier

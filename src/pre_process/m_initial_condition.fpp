@@ -310,6 +310,14 @@ contains
                     ! 1d bubble screen with sinusoidal pressure pulse
                 elseif (patch_icpp(i)%geometry == 16) then
                     call s_1d_bubble_pulse(i, patch_id_fp, q_prim_vf)
+
+                    ! 1d gaussian patch
+                elseif (patch_icpp(i)%geometry == 22) then
+                    call s_1d_gaussian(i, patch_id_fp, q_prim_vf)
+                
+                    ! 1d tanh patch
+                elseif (patch_icpp(i)%geometry == 23) then
+                    call s_1d_tanh(i, patch_id_fp, q_prim_vf)
                 end if
 
             end do

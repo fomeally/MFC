@@ -90,6 +90,7 @@ module m_global_parameters
     integer :: sys_size              !< Number of unknowns in the system of equations
     integer :: weno_order            !< Order of accuracy for the WENO reconstruction
     logical :: hypoelasticity        !< activate hypoelasticity
+    logical :: diffusion             !< activate binary diffusion
     logical, parameter :: chemistry = .${chemistry}$. !< Chemistry modeling
 
     ! Annotations of the structure, i.e. the organization, of the state vectors
@@ -309,6 +310,7 @@ contains
         weno_order = dflt_int
 
         hypoelasticity = .false.
+        diffusion = .true.
 
         bc_x%beg = dflt_int; bc_x%end = dflt_int
         bc_y%beg = dflt_int; bc_y%end = dflt_int
