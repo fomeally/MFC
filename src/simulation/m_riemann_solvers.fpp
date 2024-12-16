@@ -2521,6 +2521,17 @@ contains
             !$acc update device(Res, Re_idx, Re_size)
         end if
 
+        if (diffusion) then
+            @:ALLOCATE(Ds(1:Dif_size))
+        end if
+
+        if (diffusion) then
+            do i = 1, Dif_size
+                Ds(i) = fluid_pp(Dif_idx(i))%Dif
+            end do
+            !$acc update device(Ds, Dif_idx, Dif_size)
+        end if
+
         !$acc enter data copyin(is1, is2, is3, isx, isy, isz)
 
         is1%beg = -1; is2%beg = 0; is3%beg = 0

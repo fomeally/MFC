@@ -145,6 +145,7 @@ module m_global_parameters
     logical :: null_weights   !< Null undesired WENO weights
     logical :: mixture_err    !< Mixture properties correction
     logical :: hypoelasticity !< hypoelasticity modeling
+    logical :: diffusion      !< Diffusion modeling
     logical, parameter :: chemistry = .${chemistry}$. !< Chemistry modeling
     logical :: cu_tensor
     logical :: viscous       !< Viscous effects
@@ -253,6 +254,15 @@ module m_global_parameters
     !> @}
 
     !$acc declare create(Re_size, Re_idx)
+
+    !> @name The number of fluids, along with their identifying indexes, respectively,
+    !! for which binary diffusion effects will be non-negligible.
+    !> @{
+    integer, dimension( ) :: Dif_size
+    integer, allocatable, dimension(:) :: Dif_idx
+    !> @}
+
+    !$acc declare create(Dif_size, Dif_idx)
 
     ! The WENO average (WA) flag regulates whether the calculation of any cell-
     ! average spatial derivatives is carried out in each cell by utilizing the
@@ -512,6 +522,7 @@ contains
         palpha_eps = dflt_real
         ptgalpha_eps = dflt_real
         hypoelasticity = .false.
+        diffusion = .true.
         weno_flat = .true.
         riemann_flat = .true.
         rdma_mpi = .false.
@@ -561,6 +572,7 @@ contains
             fluid_pp(i)%mu_v = dflt_real
             fluid_pp(i)%k_v = dflt_real
             fluid_pp(i)%G = 0d0
+            fluid_pp(i)%D = 0d0
         end do
 
         ! Tait EOS
@@ -707,6 +719,9 @@ contains
         ! of fluids for which the physical and geometric curvatures of the
         ! interfaces will be computed
         Re_size = 0
+
+        ! Initializing the number of fluids for which diffusion will be calculated
+        Dif_size = 0
 
         ! Gamma/Pi_inf Model ===============================================
         if (model_eqns == 1) then
@@ -943,7 +958,14 @@ contains
             if (Re_size(1) > 0d0) shear_stress = .true.
             if (Re_size(2) > 0d0) bulk_stress = .true.
 
-            !$acc update device(Re_size, viscous, shear_stress, bulk_stress)
+            ! Determining the number of fluids for which diffusion will be calculated
+            do i = 1, num_fluids
+                if (fluid_pp(i)%D > 0d0) Dif_size = Dif_size + 1
+            end do
+
+            if (Dif_size > 0d0) diffusion = .true.
+
+            !$acc update device(Re_size, viscous, shear_stress, bulk_stress, Dif_size, diffusion)
 
             ! Bookkeeping the indexes of any viscous fluids and any pairs of
             ! fluids whose interface will support effects of surface tension
@@ -962,6 +984,19 @@ contains
                 do i = 1, num_fluids
                     if (fluid_pp(i)%Re(2) > 0) then
                         k = k + 1; Re_idx(2, k) = i
+                    end if
+                end do
+
+            end if
+
+            if (diffusion) then
+
+                @:ALLOCATE(Dif_idx(1:Dif_size))
+
+                k = 0
+                do i = 1, num_fluids
+                    if (fluid_pp(i)%D > 0d0) then
+                        k = k + 1; Dif_idx(k) = i
                     end if
                 end do
 
@@ -1023,6 +1058,8 @@ contains
             buff_size = 2*weno_polyn + 2
 !        else if (hypoelasticity) then !TODO: check if necessary
 !            buff_size = 2*weno_polyn + 2
+        else if (diffusion) then
+            buff_size = 2*weno_polyn + 2
         else
             buff_size = weno_polyn + 2
         end if
@@ -1093,7 +1130,7 @@ contains
         !$acc update device(cfl_target, m, n, p)
 
         !$acc update device(alt_soundspeed, acoustic_source, num_source)
-        !$acc update device(dt, sys_size, buff_size, pref, rhoref, gamma_idx, pi_inf_idx, E_idx, alf_idx, stress_idx, mpp_lim, bubbles, hypoelasticity, alt_soundspeed, avg_state, num_fluids, model_eqns, num_dims, mixture_err, grid_geometry, cyl_coord, mp_weno, weno_eps, teno_CT, low_Mach)
+        !$acc update device(dt, sys_size, buff_size, pref, rhoref, gamma_idx, pi_inf_idx, E_idx, alf_idx, stress_idx, mpp_lim, bubbles, hypoelasticity, diffusion,  alt_soundspeed, avg_state, num_fluids, model_eqns, num_dims, mixture_err, grid_geometry, cyl_coord, mp_weno, weno_eps, teno_CT, low_Mach)
 
         #:if not MFC_CASE_OPTIMIZATION
             !$acc update device(wenojs, mapped_weno, wenoz, teno)

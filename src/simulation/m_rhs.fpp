@@ -57,6 +57,8 @@ module m_rhs
     use m_body_forces
 
     use m_chemistry
+
+    use m_diffusion
     ! ==========================================================================
 
     implicit none
@@ -75,8 +77,8 @@ module m_rhs
     !! The primitive variables at cell-interior Gaussian quadrature points. These
     !! are calculated from the conservative variables and gradient magnitude (GM)
     !! of the volume fractions, q_cons_qp and gm_alpha_qp, respectively.
-    type(vector_field) :: q_prim_qp !<
-    !$acc declare create(q_prim_qp)
+    type(vector_field) :: q_prim_qp, j_vf_qp !<
+    !$acc declare create(q_prim_qp, j_vf_qp)
 
     !> @name The first-order spatial derivatives of the primitive variables at cell-
     !! interior Gaussian quadrature points. These are WENO-reconstructed from
@@ -85,7 +87,8 @@ module m_rhs
     !! of the primitive variables, located in qK_prim_n, where K = L or R.
     !> @{
     type(vector_field), allocatable, dimension(:) :: dq_prim_dx_qp, dq_prim_dy_qp, dq_prim_dz_qp
-    !$acc declare create(dq_prim_dx_qp, dq_prim_dy_qp, dq_prim_dz_qp)
+    type(vector_field), allocatable, dimension(:) :: dj_prim_dx_qp, dj_prim_dy_qp, dj_prim_dz_qp
+    !$acc declare create(dq_prim_dx_qp, dq_prim_dy_qp, dq_prim_dz_qp, dj_prim_dx_qp, dj_prim_dy_qp, dj_prim_dz_qp)
     !> @}
 
     !> @name The left and right WENO-reconstructed cell-boundary values of the cell-
@@ -95,8 +98,13 @@ module m_rhs
     !> @{
     type(vector_field), allocatable, dimension(:) :: dqL_prim_dx_n, dqL_prim_dy_n, dqL_prim_dz_n
     type(vector_field), allocatable, dimension(:) :: dqR_prim_dx_n, dqR_prim_dy_n, dqR_prim_dz_n
+    type(vector_field), allocatable, dimension(:) :: djL_prim_dx_n, djL_prim_dy_n, djL_prim_dz_n
+    type(vector_field), allocatable, dimension(:) :: djR_prim_dx_n, djR_prim_dy_n, djR_prim_dz_n
+
     !$acc declare create(dqL_prim_dx_n, dqL_prim_dy_n, dqL_prim_dz_n)
     !$acc declare create(dqR_prim_dx_n, dqR_prim_dy_n, dqR_prim_dz_n)
+    !$acc declare create(djL_prim_dx_n, djL_prim_dy_n, djL_prim_dz_n)
+    !$acc declare create(djR_prim_dx_n, djR_prim_dy_n, djR_prim_dz_n)
     !> @}
 
     type(scalar_field), allocatable, dimension(:) :: tau_Re_vf
@@ -124,12 +132,14 @@ module m_rhs
     type(vector_field), allocatable, dimension(:) :: flux_n
     type(vector_field), allocatable, dimension(:) :: flux_src_n
     type(vector_field), allocatable, dimension(:) :: flux_gsrc_n
-    !$acc declare create(flux_n, flux_src_n, flux_gsrc_n)
+    type(vector_field), allocatable, dimension(:) :: j_src_vf
+    !$acc declare create(flux_n, flux_src_n, flux_gsrc_n, j_src_vf)
     !> @}
 
     type(vector_field), allocatable, dimension(:) :: qL_prim, qR_prim
+    ype(vector_field), allocatable, dimension(:) :: jL_prim, jR_prim
     !$acc declare create(qL_prim, qR_prim)
-
+    !$acc declare create(jL_prim, jR_prim)
     type(int_bounds_info) :: iv !< Vector field indical bounds
     !$acc declare create(iv)
 
@@ -149,16 +159,23 @@ module m_rhs
 
     real(kind(0d0)), allocatable, dimension(:, :, :) :: blkmod1, blkmod2, alpha1, alpha2, Kterm
     real(kind(0d0)), allocatable, dimension(:, :, :, :) :: qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, qR_rsx_vf, qR_rsy_vf, qR_rsz_vf
+    real(kind(0d0)), allocatable, dimension(:, :, :, :) :: jL_rsx_vf, jL_rsy_vf, jL_rsz_vf, jR_rsx_vf, jR_rsy_vf, jR_rsz_vf
     real(kind(0d0)), allocatable, dimension(:, :, :, :) :: dqL_rsx_vf, dqL_rsy_vf, dqL_rsz_vf, dqR_rsx_vf, dqR_rsy_vf, dqR_rsz_vf
+    real(kind(0d0)), allocatable, dimension(:, :, :, :) :: djL_rsx_vf, djL_rsy_vf, djL_rsz_vf, djR_rsx_vf, djR_rsy_vf, djR_rsz_vf
     !$acc declare create(blkmod1, blkmod2, alpha1, alpha2, Kterm)
     !$acc declare create(qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, qR_rsx_vf, qR_rsy_vf, qR_rsz_vf)
+    !$acc declare create(jL_rsx_vf, jL_rsy_vf, jL_rsz_vf, jR_rsx_vf, jR_rsy_vf, jR_rsz_vf)
     !$acc declare create(dqL_rsx_vf, dqL_rsy_vf, dqL_rsz_vf, dqR_rsx_vf, dqR_rsy_vf, dqR_rsz_vf)
+    !$acc declare create(djL_rsx_vf, djL_rsy_vf, djL_rsz_vf, djR_rsx_vf, djR_rsy_vf, djR_rsz_vf)
 
     real(kind(0d0)), allocatable, dimension(:) :: gamma_min, pres_inf
     !$acc declare create(gamma_min, pres_inf)
 
     real(kind(0d0)), allocatable, dimension(:, :) :: Res
     !$acc declare create(Res)
+
+    real(kind(0d0)), allocatable, dimension(:) :: Ds
+    !$acc declare create(Ds)
 
     real(kind(0d0)), allocatable, dimension(:, :, :) :: nbub !< Bubble number density
     !$acc declare create(nbub)
@@ -214,6 +231,17 @@ contains
             !$acc enter data attach(q_prim_qp%vf(l)%sf)
         end do
 
+        !1 to Dif:size
+        if (diffusion) then 
+            @:ALLOCATE(j_vf_qp%vf(1:Dif_size))
+            do l = 1, Dif_size
+                @:ALLOCATE(j_vf_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
+                !$acc enter data copyin(j_vf_qp%vf(l)%sf)
+                !$acc enter data attach(j_vf_qp%vf(l)%sf)
+            end do
+     
+        end if
+
         if (surface_tension) then
             q_prim_qp%vf(c_idx)%sf => &
                 q_cons_qp%vf(c_idx)%sf
@@ -265,6 +293,9 @@ contains
         @:ALLOCATE(qL_prim(1:num_dims))
         @:ALLOCATE(qR_prim(1:num_dims))
 
+        @:ALLOCATE(jL_prim(1:num_dims))
+        @:ALLOCATE(jR_prim(1:num_dims))
+
         do i = 1, num_dims
             @:ALLOCATE(qL_prim(i)%vf(1:sys_size))
             @:ALLOCATE(qR_prim(i)%vf(1:sys_size))
@@ -273,6 +304,16 @@ contains
                 @:ALLOCATE(qR_prim(i)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
             end do
             @:ACC_SETUP_VFs(qL_prim(i), qR_prim(i))
+        end do
+
+        do i = 1, num_dims
+            @:ALLOCATE(jL_prim(i)%vf(1:Dif_size))
+            @:ALLOCATE(jR_prim(i)%vf(1:Dif_size))
+            do l = 1, Dif_size
+                @:ALLOCATE(jL_prim(i)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
+                @:ALLOCATE(jR_prim(i)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
+            end do
+            @:ACC_SETUP_VFs(jL_prim(i), jR_prim(i))
         end do
 
         if (mpp_lim .and. bubbles) then
@@ -285,17 +326,33 @@ contains
         @:ALLOCATE(qR_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
             idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
 
+        @:ALLOCATE(jL_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
+            idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:Dif_size))
+        @:ALLOCATE(jR_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
+            idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:Dif_size))
+
         if (n > 0) then
 
             @:ALLOCATE(qL_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
                 idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
             @:ALLOCATE(qR_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
                 idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
+
+            @:ALLOCATE(jL_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
+                idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:Dif_size))
+            @:ALLOCATE(jR_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
+                idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:Dif_size))
+            
         else
             @:ALLOCATE(qL_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
             @:ALLOCATE(qR_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
+
+            @:ALLOCATE(jL_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
+                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:Dif_size))
+            @:ALLOCATE(jR_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
+                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:Dif_size))
         end if
 
         if (p > 0) then
@@ -303,11 +360,21 @@ contains
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:sys_size))
             @:ALLOCATE(qR_rsz_vf(idwbuff(3)%beg:idwbuff(3)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:sys_size))
+
+            @:ALLOCATE(jL_rsz_vf(idwbuff(3)%beg:idwbuff(3)%end, &
+                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:Dif_size))
+            @:ALLOCATE(jR_rsz_vf(idwbuff(3)%beg:idwbuff(3)%end, &
+                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:Dif_size))
         else
             @:ALLOCATE(qL_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
             @:ALLOCATE(qR_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
+
+            @:ALLOCATE(jL_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
+                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:Dif_size))
+            @:ALLOCATE(jR_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
+                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:Dif_size))
 
         end if
 
@@ -374,6 +441,70 @@ contains
             end do
         end if
         ! END: Allocation of dq_prim_ds_qp =================================
+
+        ! Allocation of dj_prim_ds_qp ======================================
+
+        @:ALLOCATE(dj_prim_dx_qp(1:Dif_size))
+        @:ALLOCATE(dj_prim_dy_qp(1:Dif_size))
+        @:ALLOCATE(dj_prim_dz_qp(1:Dif_size))
+
+        if (diffusion) then
+            @:ALLOCATE(dq_prim_dx_qp(1)%vf(1:sys_size))
+            @:ALLOCATE(dq_prim_dy_qp(1)%vf(1:sys_size))
+            @:ALLOCATE(dq_prim_dz_qp(1)%vf(1:sys_size))
+
+            do l = mom_idx%beg, mom_idx%end
+                @:ALLOCATE(dq_prim_dx_qp(1)%vf(l)%sf( &
+                          & idwbuff(1)%beg:idwbuff(1)%end, &
+                          & idwbuff(2)%beg:idwbuff(2)%end, &
+                          & idwbuff(3)%beg:idwbuff(3)%end))
+            end do
+
+            @:ACC_SETUP_VFs(dq_prim_dx_qp(1))
+
+            if (n > 0) then
+
+                do l = mom_idx%beg, mom_idx%end
+                    @:ALLOCATE(dq_prim_dy_qp(1)%vf(l)%sf( &
+                             & idwbuff(1)%beg:idwbuff(1)%end, &
+                             & idwbuff(2)%beg:idwbuff(2)%end, &
+                             & idwbuff(3)%beg:idwbuff(3)%end))
+                end do
+
+                @:ACC_SETUP_VFs(dq_prim_dy_qp(1))
+
+                if (p > 0) then
+
+                    do l = mom_idx%beg, mom_idx%end
+                        @:ALLOCATE(dq_prim_dz_qp(1)%vf(l)%sf( &
+                                 & idwbuff(1)%beg:idwbuff(1)%end, &
+                                 & idwbuff(2)%beg:idwbuff(2)%end, &
+                                 & idwbuff(3)%beg:idwbuff(3)%end))
+                    end do
+                    @:ACC_SETUP_VFs(dq_prim_dz_qp(1))
+                end if
+
+            end if
+
+        else
+            @:ALLOCATE(dq_prim_dx_qp(1)%vf(1:sys_size))
+            @:ALLOCATE(dq_prim_dy_qp(1)%vf(1:sys_size))
+            @:ALLOCATE(dq_prim_dz_qp(1)%vf(1:sys_size))
+
+            do l = momxb, momxe
+                @:ALLOCATE(dq_prim_dx_qp(1)%vf(l)%sf(0, 0, 0))
+                @:ACC_SETUP_VFs(dq_prim_dx_qp(1))
+                if (n > 0) then
+                    @:ALLOCATE(dq_prim_dy_qp(1)%vf(l)%sf(0, 0, 0))
+                    @:ACC_SETUP_VFs(dq_prim_dy_qp(1))
+                    if (p > 0) then
+                        @:ALLOCATE(dq_prim_dz_qp(1)%vf(l)%sf(0, 0, 0))
+                        @:ACC_SETUP_VFs(dq_prim_dz_qp(1))
+                    end if
+                end if
+            end do
+        end if
+        ! END: Allocation of dj_prim_ds_qp =================================
 
         ! Allocation/Association of dqK_prim_ds_n =======================
         @:ALLOCATE(dqL_prim_dx_n(1:num_dims))

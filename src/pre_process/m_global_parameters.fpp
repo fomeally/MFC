@@ -464,6 +464,7 @@ contains
             fluid_pp(i)%qv = 0d0
             fluid_pp(i)%qvp = 0d0
             fluid_pp(i)%G = 0d0
+            fluid_pp(i)%D = 0d0
         end do
 
     end subroutine s_assign_default_values_to_user_inputs

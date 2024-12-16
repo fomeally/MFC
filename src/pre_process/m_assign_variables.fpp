@@ -93,7 +93,7 @@ contains
         !!              is designated by the indexes (j,k,l). In addition, the
         !!              variable bookkeeping the patch identities in the entire
         !!              domain is updated with the new assignment. Note that if
-        !!              the smoothing of the patch's boundaries is employed, the
+        !!              the smoothing of the patchs boundaries is employed, the
         !!              ensuing primitive variables in the cell will be a type of
         !!              combination of the current patch's primitive variables
         !!              with those of the smoothing patch. The specific details

@@ -51,6 +51,8 @@ module m_start_up
 
     use m_hypoelastic
 
+    use m_diffusion
+
     use m_phase_change          !< Phase-change module
 
     use m_viscous
@@ -142,7 +144,7 @@ contains
             riemann_solver, low_Mach, wave_speeds, avg_state, &
             bc_x, bc_y, bc_z, &
             x_domain, y_domain, z_domain, &
-            hypoelasticity, &
+            hypoelasticity, diffusion, &
             ib, num_ibs, patch_ib, &
             fluid_pp, probe_wrt, prim_vars_wrt, &
             fd_order, probe, num_probes, t_step_old, &
@@ -1436,6 +1438,10 @@ contains
 
         if (viscous) then
             call s_initialize_viscous_module()
+        end if
+
+        if (diffusion) then
+            call s_initialize_diffusion_module()
         end if
 
         call s_initialize_rhs_module()
