@@ -166,12 +166,12 @@ MPI topology is automatically optimized to maximize the parallel efficiency for 
 | `vel(i)` *           | Real    | Supported             | Velocity in direction $i$.                                   |
 | `hcid` *             | Integer | N/A                   | Hard coded patch id                                          |
 | `cf_val` *           | Real    | Supported             | Surface tension color function value                         |
-| `model%%filepath`     | String  | Not Supported         | Path to an STL or OBJ file (not all OBJs are supported).     |
-| `model%%scale(i)`     | Real    | Not Supported         | Model's (applied) scaling factor for component $i$.          |
-| `model%%rotate(i)`    | Real    | Not Supported         | Model's (applied) angle of rotation about axis $i$.          |
-| `model%%translate(i)` | Real    | Not Supported         | Model's $i$-th component of (applied) translation.           |
-| `model%%spc`          | Integer | Not Supported         | Number of samples per cell when discretizing the model into the grid. |
-| `model%%threshold`    | Real    | Not Supported         | Ray fraction inside the model patch above which the fraction is set to one.|
+| `model_filepath`     | String  | Not Supported         | Path to an STL or OBJ file (not all OBJs are supported).     |
+| `model_scale(i)`     | Real    | Not Supported         | Model's (applied) scaling factor for component $i$.          |
+| `model_rotate(i)`    | Real    | Not Supported         | Model's (applied) angle of rotation about axis $i$.          |
+| `model_translate(i)` | Real    | Not Supported         | Model's $i$-th component of (applied) translation.           |
+| `model_spc`          | Integer | Not Supported         | Number of samples per cell when discretizing the model into the grid. |
+| `model_threshold`    | Real    | Not Supported         | Ray fraction inside the model patch above which the fraction is set to one.|
 
 *: These parameters should be prepended with `patch_icpp(j)%` where $j$ is the patch index.
 
@@ -263,7 +263,11 @@ Optimal choice of the value of `smooth_coeff` is case-dependent and left to the 
 - `patch_icpp(j)alpha(i)`, `patch_icpp(j)alpha_rho(i)`, `patch_icpp(j)pres`, and `patch_icpp(j)vel(i)` define for $j$-th patch the void fraction of `fluid(i)`, partial density of `fluid(i)`, the pressure, and the velocity in the $i$-th coordinate direction.
 These physical parameters must be consistent with fluid material's parameters defined in the next subsection.
 
-- `model%%scale`, `model%%rotate` and `model%%translate` define how the model should be transformed to domain-space by first scaling by `model%%scale`, then rotating about the Z, X, and Y axes (using `model%%rotate`), and finally translating by `model%%translate`.
+- `model_filepath` defines the root directory of the STL or OBJ model file.
+
+- `model_scale`, `model_rotate` and `model_translate` define how the model should be transformed to domain-space by first scaling by `model_scale`, then rotating about the Z, X, and Y axes (using `model_rotate`), and finally translating by `model_translate`.
+
+- `model_spc` and `model_threshold` are ray-tracing parameters. `model_spc` defines the number of rays per cell to render the model. `model_threshold` defines the ray-tracing threshold at which the cell is marked as the model.
 
 ### 4. Immersed Boundary Patches
 
@@ -279,6 +283,12 @@ These physical parameters must be consistent with fluid material's parameters de
 | `m`                    | Real    | NACA airfoil parameters (see below) |
 | `p`                    | Real    | NACA airfoil parameters (see below) |
 | `slip`                 | Logical | Apply a slip boundary |
+| `model_filepath`      | String  | Path to an STL or OBJ file (not all OBJs are supported).     |
+| `model_scale(i)`      | Real    | Model's (applied) scaling factor for component $i$.          |
+| `model_rotate(i)`     | Real    | Model's (applied) angle of rotation about axis $i$.          |
+| `model_translate(i)`  | Real    | Model's $i$-th component of (applied) translation.           |
+| `model_spc`           | Integer | Number of samples per cell when discretizing the model into the grid. |
+| `model_threshold`     | Real    | Ray fraction inside the model patch above which the fraction is set to one.|
 
 These parameters should be prepended with `patch_ib(j)%` where $j$ is the patch index.
 
@@ -300,6 +310,8 @@ Definitions for currently implemented patch types are list in table [Immersed Bo
 Additional details on this specification can be found in [The Naca Airfoil Series](https://web.stanford.edu/~cantwell/AA200_Course_Material/The%20NACA%20airfoil%20series.pdf)
 
 - `slip` applies a slip boundary to the surface of the patch if true and a no-slip boundary condition to the surface if false.
+
+- Please see [Patch Parameters](#3-patches) for the descriptions of `model_filepath`, `model_scale`, `model_rotate`, `model_translate`, `model_spc`, and `model_threshold`.
 
 ### 5. Fluid Material’s
 
@@ -510,6 +522,9 @@ To restart the simulation from $k$-th time step, see [Restarting Cases](running.
 | `probe_wrt`          | Logical | Write the flow chosen probes data files for each time step	|
 | `num_probes`         | Integer | Number of probes	|
 | `probe(i)%[x,y,z]`   | Real	 | Coordinates of probe $i$	|
+| `output_partial_domain` | Logical | Output part of the domain |
+| `[x,y,z]_output%beg` | Real    | Beginning of the output domain in the [x,y,z]-direction |
+| `[x,y,z]_output%end` | Real    | End of the output domain in the [x,y,z]-direction |
 
 The table lists formatted database output parameters. The parameters define variables that are outputted from simulation and file types and formats of data as well as options for post-processing.
 
@@ -536,6 +551,11 @@ If `file_per_process` is true, then pre_process, simulation, and post_process mu
 `fd_order = 1`, `2`, and `4` correspond to the first, second, and fourth-order finite difference schemes.
 
 - `probe_wrt` activates the output of state variables at coordinates specified by `probe(i)%[x;y,z]`.
+
+- `output_partial_domain` activates the output of part of the domain specified by `[x,y,z]_output%beg` and `[x,y,z]_output%end`.
+This is useful for large domains where only a portion of the domain is of interest.
+It is not supported when `precision = 1` and `format = 1`. 
+It also cannot be enabled with `flux_wrt`, `heat_ratio_wrt`, `pres_inf_wrt`, `c_wrt`, `omega_wrt`, `ib`, `schlieren_wrt`, or `qm_wrt`.
 
 ### 8. Acoustic Source {#acoustic-source}
 
@@ -618,34 +638,21 @@ Details of the transducer acoustic source model can be found in [Maeda and Colon
 
 - `%%bb_lowest_freq` specifies the lower frequency bound of the broadband acoustic wave. The upper frequency bound will be calculated as `%%bb_lowest_freq + %%bb_num_freq * %%bb_bandwidth`. The wave is no longer broadband below the lower bound and above the upper bound.
 
-### 9. Ensemble-Averaged Bubble Model
+### 9. Sub-grid Bubble Models
 
-| Parameter      | Type    | Description                                    |
-| ---:           | :----:  |          :---                                  |
-| `bubbles` 		 | Logical	| Ensemble-averaged bubble modeling	 |
-| `bubble_model` | Integer	| [1] Gilmore; [2] Keller--Miksis |
-| `polytropic`   | Logical	| Polytropic gas compression |
-| `thermal` 		 | Integer	| Thermal model: [1] Adiabatic; [2] Isothermal; [3] Transfer |
-| `R0ref` 			 | Real		  | Reference bubble radius |
-| `polydisperse`   | Logical	| Polydispersity in equilibrium bubble radius R0|
-| `nb` 			     | Integer	| Number of bins: [1] Monodisperse; [$>1$] Polydisperse |
-| `poly_sigma` 	       | Real 		|	Standard deviation for probability density function of polydisperse bubble populations |
-| `R0_type` 	       | Integer 		|	Quadrature rule for probability density function of polydisperse bubble populations |
-| `Ca` 			     | Real		  | Cavitation number |
-| `Web` 			   | Real		  | Weber number |
-| `Re_inv` 		   | Real		  | Inverse Reynolds number |
-| `mu_l0` *	     | Real 		|	Liquid viscosity (only specify in liquid phase)  |
-| `ss` *		     | Real 		|	Surface tension (only specify in liquid phase) |
-| `pv` *		     | Real 		|	Vapor pressure (only specify in liquid phase) |
-| `gamma_v` † 	 | Real 	  |	Specific heat ratio |
-| `M_v` †     	 | Real 		| Molecular weight |
-| `mu_v` †	     | Real 		|	Viscosity |
-| `k_v` †	       | Real 		|	Thermal conductivity |
-| `qbmm` 	       | Logical 		|	Quadrature by  method of moments|
-| `dist_type` 	       | Integer 		|	Joint probability density function for bubble radius and velocity (only for ``qbmm = 'T'``)|
-| `sigR` 	       | Real 		|	Standard deviation for the probability density function of bubble radius (only for ``qbmm = 'T'``) |
-| `sigV` 	       | Real 		|	Standard deviation for the probability density function of bubble velocity (only for ``qbmm = 'T'``) |
-| `rhoRV`	       | Real 		|	Correlation coefficient for the joint probability density function of bubble radius and velocity (only for ``qbmm = 'T'``) |
+| Parameter         | Type    | Description                                    |
+| ---:              | :----:  |          :---                                  |
+| `bubbles_euler`   | Logical	| Ensemble-averaged bubble modeling	|
+| `bubbles_lagrange`| Logical	| Volume-averaged bubble modeling	|
+| `bubble_model`    | Integer	| [1] Gilmore; [2] Keller--Miksis |
+| `mu_l0` *	        | Real 		|	Liquid viscosity (only specify in liquid phase)  |
+| `ss` *		        | Real 		|	Surface tension (only specify in liquid phase) |
+| `pv` *		        | Real 		|	Vapor pressure (only specify in liquid phase) |
+| `gamma_v` † 	    | Real 	  |	Specific heat ratio |
+| `M_v` †     	    | Real 		| Molecular weight |
+| `mu_v` †	        | Real 		|	Viscosity |
+| `k_v` †	          | Real 		|	Thermal conductivity |
+| `cp_v` †	        | Real 		|	Specific heat capacity |
 
 These options work only for gas-liquid two-component flows.
 Component indexes are required to be 1 for liquid and 2 for gas.
@@ -653,20 +660,50 @@ Component indexes are required to be 1 for liquid and 2 for gas.
 - \* These parameters should be prepended with patch index $1$ that is filled with liquid: `fluid_pp(1)%`.
 - †  These parameters should be prepended with patch indexes filled with liquid and gas: `fluid_pp(1)%` and `fluid_pp(2)%`.
 
-This table lists the ensemble-averaged bubble model parameters.
+This table lists the sub-grid bubble model parameters, which can be utilized in both the ensemble-averaged and volume-averaged bubble models.
 
-- `bubbles` activates the ensemble-averaged bubble model.
+- `bubbles_euler` activates the ensemble-averaged bubble model.
+
+- `bubbles_lagrange` activates the volume-averaged bubble model.
 
 - `bubble_model` specified a model for spherical bubble dynamics by an integer of 1 and 2.
 `bubble_model = 1`, `2`, and `3` correspond to the Gilmore, Keller-Miksis, and Rayleigh-Plesset models.
 
+- `mu_l0`, `ss`, and `pv`, `gamma_v`, `M_v`, `mu_v`, `k_v`, and `cp_v` specify simulation parameters for the non-polytropic gas compression model.
+`mu_l0`, `ss`, and `pv` correspond to the liquid viscosity, surface tension, and vapor pressure, respectively.
+`gamma_v`, `M_v`, `mu_v`, `k_v`, and `cp_v` specify the specific heat ratio, molecular weight, viscosity, thermal conductivity and specific heat capacity of a chosen component (`cp_v` only for ``bubbles_lagrange = 'T'``).
+Implementation of the parameters into the model follow [Ando (2010)](references.md#Ando10).
+
+#### 9.1 Ensemble-Averaged Bubble Model
+
+| Parameter      | Type    | Description                                    |
+| ---:           | :----:  |          :---                                  |
+| `bubbles_euler`| Logical	| Ensemble-averaged bubble modeling	|
+| `polytropic`      | Logical	| Polytropic gas compression |
+| `thermal` 		    | Integer	| Thermal model: [1] Adiabatic; [2] Isothermal; [3] Transfer |
+| `R0ref` 			 | Real		  | Reference bubble radius |
+| `polydisperse`   | Logical	| Polydispersity in equilibrium bubble radius R0 |
+| `nb` 			     | Integer	| Number of bins: [1] Monodisperse; [$>1$] Polydisperse |
+| `poly_sigma` 	       | Real 		|	Standard deviation for probability density function of polydisperse bubble populations |
+| `R0_type` 	       | Integer 		|	Quadrature rule for probability density function of polydisperse bubble populations |
+| `Ca` 			     | Real		  | Cavitation number |
+| `Web` 			   | Real		  | Weber number |
+| `Re_inv` 		   | Real		  | Inverse Reynolds number |
+| `qbmm` 	       | Logical 		|	Quadrature by  method of moments |
+| `dist_type` 	       | Integer 		|	Joint probability density function for bubble radius and velocity (only for ``qbmm = 'T'``) |
+| `sigR` 	       | Real 		|	Standard deviation for the probability density function of bubble radius (only for ``qbmm = 'T'``) (EE)|
+| `sigV` 	       | Real 		|	Standard deviation for the probability density function of bubble velocity (only for ``qbmm = 'T'``) (EE)|
+| `rhoRV`	       | Real 		|	Correlation coefficient for the joint probability density function of bubble radius and velocity (only for ``qbmm = 'T'``) |
+
+This table lists the ensemble-averaged bubble model parameters.
+
 - `polytropic` activates polytropic gas compression in the bubble.
 When ``polytropic = 'F'``, the gas compression is modeled as non-polytropic due to heat and mass transfer across the bubble wall with constant heat and mass transfer coefficients based on ([Preston et al., 2007](references.md#Preston07)).
 
-- `polydisperse` activates polydispersity in the bubble model through a probability density function (PDF) of the equilibrium bubble radius.
-
 - `thermal` specifies a model for heat transfer across the bubble interface by an integer from 1 through 3.
 `thermal = 1`, `2`, and `3` correspond to no heat transfer (adiabatic gas compression), isothermal heat transfer, and heat transfer with a constant heat transfer coefficient based on [Preston et al., 2007](references.md#Preston07), respectively.
+
+- `polydisperse` activates polydispersity in the bubble model through a probability density function (PDF) of the equilibrium bubble radius.
 
 - `R0ref` specifies the reference bubble radius.
 
@@ -679,11 +716,6 @@ When ``polytropic = 'F'``, the gas compression is modeled as non-polytropic due 
 
 - `Ca`, `Web`, and `Re_inv` respectively specify the Cavitation number, Weber number, and the inverse Reynolds number that characterize the offset of the gas pressure from the vapor pressure, surface tension, and liquid viscosity when the polytropic gas compression model is used.
 
-- `mu_l0`, `ss`, and `pv`, `gamma_v`, `M_v`, `mu_v`, and `k_v` specify simulation parameters for the non-polytropic gas compression model.
-`mu_l0`, `ss`, and `pv` correspond to the liquid viscosity, surface tension, and vapor pressure, respectively.
-`gamma_v`, `M_v`, `mu_v`, and `k_v` specify the specific heat ratio, molecular weight, viscosity, and thermal conductivity of a chosen component.
-Implementation of the parameters into the model follow [Ando (2010)](references.md#Ando10).
-
 - `qbmm` activates quadrature by method of moments, which assumes a PDF for bubble radius and velocity.
 
 - `dist_type` specifies the initial joint PDF of initial bubble radius and bubble velocity required in qbmm. `dist_type = 1`  and `2` correspond to binormal and lognormal-normal distributions respectively.
@@ -693,6 +725,46 @@ Implementation of the parameters into the model follow [Ando (2010)](references.
 - `sigV` specifies the standard deviation of the PDF of bubble velocity required in the QBMM feature.
 
 - `rhoRV` specifies the correlation coefficient of the joint PDF of bubble radius and bubble velocity required in the QBMM feature.
+
+#### 9.2 Volume-Averaged Bubble Model
+
+| Parameter             | Type    | Description                                               |
+| ---:                  | :---:   | :---                                                      |
+| `bubbles_lagrange`    | Logical | Lagrangian subgrid bubble model switch                    |
+| `nBubs_glb`           | Integer | Global number of bubbles                                  |
+| `solver_approach`     | Integer | 1: One-way coupling, 2: two-way coupling                  |
+| `cluster_type`        | Integer | Method to find p_inf                                      |
+| `pressure_corrector`  | Logical | Cell pressure correction term                             |
+| `smooth_type`         | Integer | Smoothing function. 1: Gaussian, 2:Delta 3x3              |
+| `heatTransfer_model`  | Logical | Activates the interface heat transfer model               |
+| `massTransfer_model`  | Logical | Activates the interface mass transfer model               |
+| `write_bubbles`       | Logical | Write files to track the bubble evolution each time step  |
+| `write_bubbles_stats` | Logical | Write the maximum and minimum radius of each bubble       |
+| `epsilonb`            | Real    | Standard deviation scaling for the gaussian function      |
+| `charwidth`           | Real    | Domain virtual depth (z direction, for 2D simulations)    |
+| `valmaxvoid`          | Real    | Maximum void fraction permitted                           |
+| `c0`                  | Real    | Reference speed                                           |
+| `rho0`                | Real    | Reference density                                         |
+| `T0`                  | Real    | Reference temperature                                     |
+| `x0`                  | Real    | Reference length                                          |
+| `Thost`               | Real    | Temperature of the surrounding liquid (host)              |
+| `diffcoefvap`         | Real    | Vapor diffusivity in the gas                              |
+| `rkck_adap_dt`        | Logical | Activates the adaptive rkck time stepping algorithm       |
+| `rkck_tolerance`      | Real    | Admissible error truncation tolerance in the rkck stepper  |
+
+- `nBubs_glb` Total number of bubbles. Their initial conditions need to be specified in the ./input/lag_bubbles.dat file. See the example cases for additional information.
+
+- `solver_approach` Specifies the Euler-Lagrange coupling method: [1] enables a one-way coupling approach, where the bubbles do not influence the Eulerian field. [2] activates the two-way coupling approach based on [Maeda and Colonius (2018)](references.md#Maeda18), where the effect of the bubbles is added in the Eulerian field as source terms.
+
+- `cluster_type` Specifies method to find p_inf (pressure that drives the bubble dynamics): [1] activates the bilinear interpolation of the pressure field, while [2] enables the bubble dynamic closure based on [Maeda and Colonius (2018)](references.md#Maeda18), the full model is obtained when `pressure_corrector` is true.
+
+- `smooth_type` Specifies the smoothening method of projecting the lagrangian bubbles in the Eulerian field: [1] activates the gaussian kernel function described in  [Maeda and Colonius (2018)](references.md#Maeda18), while [2] activates the delta kernel function where the effect of the bubble is only seen in the specific bubble location cell.
+
+- `heatTransfer_model` Activates the heat transfer model at the bubble's interface based on ([Preston et al., 2007](references.md#Preston07)).
+
+- `massTransfer_model` Activates the mass transfer model at the bubble's interface based on ([Preston et al., 2007](references.md#Preston07)).
+
+- `rkck_adap_dt` Activates the adaptive 4th/5th order Runge—Kutta–Cash–Karp (RKCK) time-stepping algorithm (requires `time_stepper ==4`). A maximum error between the 4th and 5th order Runge-Kutta-Cash-Karp solutions for the same time step size is calculated. If the error is smaller than a tolerance (`rkck_tolerance`), then the algorithm employs the 5th order solution, while if not, both eulerian/lagrangian variables are re-calculated with a smaller time step size.
 
 ### 10. Velocity Field Setup
 
