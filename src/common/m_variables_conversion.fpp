@@ -1047,6 +1047,71 @@ contains
 
     end subroutine s_convert_conservative_to_primitive_variables
 
+    !> The following procedure handles the conversion between
+        !!      the conservative variables and the diffusion (mass fraction) variables.
+        !! @param qK_cons_vf Conservative variables
+        !! @param jK_prim_vf mass fraction variable
+        !! @param ix Index bounds in first coordinate direction
+        !! @param iy Index bounds in second coordinate direction
+        !! @param iz Index bounds in third coordinate direction
+    subroutine s_convert_conservative_to_diffusion_variables(qK_cons_vf, &
+                                                             jK_prim_vf, &
+                                                             ibounds)
+
+
+        type(scalar_field), dimension(sys_size), intent(in) :: qK_cons_vf
+        type(scalar_field), dimension(sys_size), intent(inout) :: qK_prim_vf
+        type(int_bounds_info), dimension(1:3), intent(in) :: ibounds
+        type(scalar_field), &
+
+        real(kind(0d0)), dimension(num_fluids) :: alpha_K, alpha_rho_K
+        real(kind(0d0)), dimension(2) :: Re_K
+        real(kind(0d0)) :: rho_K, gamma_K, pi_inf_K, qv_K
+
+
+T
+
+        integer :: i, j, k, l !< Generic loop iterators
+
+        real(kind(0.d0)) :: ntmp
+
+        !$acc parallel loop collapse(3) gang vector default(present) &
+        !$acc private(alpha_K, alpha_rho_K, Re_K, nRtmp, rho_K, gamma_K, &
+        !$acc pi_inf_K, qv_K, dyn_pres_K, R3tmp, rhoYks)
+        do l = ibounds(3)%beg, ibounds(3)%end
+            do k = ibounds(2)%beg, ibounds(2)%end
+                do j = ibounds(1)%beg, ibounds(1)%end
+
+                    !$acc loop seq
+                    do i = 1, num_fluids
+                        alpha_rho_K(i) = qK_cons_vf(i)%sf(j, k, l)
+                        alpha_K(i) = qK_cons_vf(advxb + i - 1)%sf(j, k, l)
+                    end do
+
+                    !$acc loop seq
+                    do i = contxb, contxe
+                        jK_prim_vf(i)%sf(j, k, l) = qK_cons_vf(i)%sf(j, k, l)
+                    end do
+
+                    call s_convert_species_to_mixture_variables_acc(rho_K, gamma_K, pi_inf_K, qv_K, &
+                                                                            alpha_K, alpha_rho_K, Re_K, j, k, l)
+
+                    !$acc loop seq
+                    do i = contxb, contxe
+                        
+                        jK_prim_vf(i)%sf(j, k, l) = jK_prim_vf(i)%sf(j, k, l) &
+                                                        /rho_K
+                    
+                    end do
+
+                end do
+            end do
+        end do
+        !$acc end parallel loop
+        
+    end subroutine s_convert_conservative_to_diffusion_variables
+
+
     !>  The following procedure handles the conversion between
         !!      the primitive variables and the conservative variables.
         !!  @param qK_prim_vf Primitive variables

@@ -703,7 +703,7 @@ contains
                                      + s_M*s_P*(E_L - E_R)) &
                                     /(s_M - s_P)
                             else if (hypoelasticity) then
-                                !TODO: simplify this so it's not split into 3
+                                !TODO: simplify this so it is not split into 3
                                 if (num_dims == 1) then
                                     flux_rs${XYZ}$_vf(j, k, l, E_idx) = &
                                         (s_M*(vel_R(dir_idx(1))*(E_R + pres_R) &
