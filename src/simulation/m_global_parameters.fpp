@@ -521,6 +521,7 @@ contains
         mp_weno = .false.
         weno_avg = .false.
         weno_Re_flux = .false.
+        weno_Dif_flux = .false.
         riemann_solver = dflt_int
         low_Mach = 0
         wave_speeds = dflt_int
@@ -536,7 +537,7 @@ contains
         palpha_eps = dflt_real
         ptgalpha_eps = dflt_real
         hypoelasticity = .false.
-        diffusion = .true.
+        diffusion = .false.
         hyperelasticity = .false.
         elasticity = .false.
         hyper_model = dflt_int
@@ -768,8 +769,6 @@ contains
         ! Initializing the number of fluids for which diffusion will be calculated
         Dif_size = 0
 
-        ! Initializing the number of fluids for which diffusion will be calculated
-        Dif_size = 0
 
         ! Gamma/Pi_inf Model
         if (model_eqns == 1) then

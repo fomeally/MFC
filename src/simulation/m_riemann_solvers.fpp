@@ -2788,7 +2788,7 @@ contains
 
         if (diffusion) then
             do i = 1, Dif_size
-                Ds(i) = fluid_pp(Dif_idx(i))%Dif
+                Ds(i) = fluid_pp(Dif_idx(i))%D
             end do
             !$acc update device(Ds, Dif_idx, Dif_size)
         end if

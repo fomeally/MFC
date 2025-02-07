@@ -309,7 +309,7 @@ contains
         weno_order = dflt_int
 
         hypoelasticity = .false.
-        diffusion = .true.
+        diffusion = .false.
         hyperelasticity = .false.
         elasticity = .false.
         pre_stress = .false.

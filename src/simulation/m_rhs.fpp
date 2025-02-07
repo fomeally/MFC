@@ -175,9 +175,6 @@ module m_rhs
     real(wp), allocatable, dimension(:, :) :: Res
     !$acc declare create(Res)
 
-    real(kind(0d0)), allocatable, dimension(:) :: Ds
-    !$acc declare create(Ds)
-
     real(wp), allocatable, dimension(:) :: Ds
     !$acc declare create(Ds)
 
@@ -236,11 +233,16 @@ contains
         end do
 
         if (diffusion) then 
-            @:ALLOCATE(j_vf_qp%vf(1:cont_idx%end))
+            @:ALLOCATE(j_vf_qp%vf(1:sys_size))
+            !These will be mass fractions and specific enthalpy
             do l = 1, cont_idx%end
                 @:ALLOCATE(j_vf_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
-                !$acc enter data copyin(j_vf_qp%vf(l)%sf)
-                !$acc enter data attach(j_vf_qp%vf(l)%sf)
+            end do
+
+            !Maybe make a new variable instead
+            !These will be enthalpies stored in volume fraction slots
+            do l = adv_idx%beg, adv_idx%end
+                @:ALLOCATE(j_vf_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
             end do
      
         end if
@@ -460,9 +462,9 @@ contains
 
         if (diffusion) then
 
-            @:ALLOCATE(dj_prim_dx_qp(1)%vf(1:cont_idx%end))
-            @:ALLOCATE(dj_prim_dy_qp(1)%vf(1:cont_idx%end))
-            @:ALLOCATE(dj_prim_dz_qp(1)%vf(1:cont_idx%end))
+            @:ALLOCATE(dj_prim_dx_qp(1)%vf(cont_idx%beg:cont_idx%end))
+            @:ALLOCATE(dj_prim_dy_qp(1)%vf(cont_idx%beg:cont_idx%end))
+            @:ALLOCATE(dj_prim_dz_qp(1)%vf(cont_idx%beg:cont_idx%end))
 
             do l = 1, Dif_size
                 @:ALLOCATE(dj_prim_dx_qp(1)%vf(Dif_idx(l))%sf(idwbuff(1)%beg:idwbuff(1)%end, &
@@ -898,7 +900,7 @@ contains
 
         if (diffusion) then
             do i = 1, Dif_size
-                Ds(i) = fluid_pp(Dif_idx(i))%Dif
+                Ds(i) = fluid_pp(Dif_idx(i))%D
             end do
             !$acc update device(Ds, Dif_idx, Dif_size)
         end if
@@ -980,17 +982,20 @@ contains
             q_prim_qp%vf, &
             idwint, &
             gm_alpha_qp%vf)
-
-        if (diffusion) then
-            call s_convert_conservative_to_diffusion_variables( &
-                q_cons_qp%vf, &
-                j_vf_qp%vf, &
-                idwint)
-        end if
         call nvtxEndRange
 
         call nvtxStartRange("RHS-COMMUNICATION")
         call s_populate_variables_buffers(q_prim_qp%vf, pb, mv)
+        call nvtxEndRange
+
+        !Gets the buffer region
+        call nvtxStartRange("RHS-DIFFUSION-COMMUNICATION")
+        if (diffusion) then
+            call s_convert_conservative_to_diffusion_variables( &
+                q_prim_qp%vf, &
+                j_vf_qp%vf, &
+                idwbuff)
+        end if
         call nvtxEndRange
 
         call nvtxStartRange("RHS-ELASTIC")
@@ -1019,7 +1024,7 @@ contains
             call nvtxEndRange
         end if
 
-        if (diffusion) then
+        if (diffusion .and. weno_Dif_flux) then
             call nvtxStartRange("RHS-DIFFUSION")
             call s_get_diffusion(jL_rsx_vf, jL_rsy_vf, jL_rsz_vf, &
                                  djL_prim_dx_n, djL_prim_dy_n, djL_prim_dz_n, &
@@ -1105,7 +1110,7 @@ contains
             end if
 
             if (diffusion) then
-                if (weno_Re_flux) then
+                if (weno_Dif_flux) then
                     iv%beg = 1; iv%end = cont_idx%end
                     call s_reconstruct_cell_boundary_values_diff_deriv( &
                         dj_prim_dx_qp(1)%vf(iv%beg:iv%end), &
@@ -1178,6 +1183,19 @@ contains
                                                                q_prim_qp%vf, &
                                                                rhs_vf)
             call nvtxEndRange
+
+            ! RHS additions for diffusion
+            if (diffusion) then
+                call nvtxStartRange("RHS-DIFFUSION")
+                call s_compute_diffusion_rhs(id, &
+                                             q_prim_qp%vf, &
+                                             j_vf_qp%vf, &
+                                             rhs_vf, &                                             
+                                             dj_prim_dx_qp(1)%vf, &
+                                             dj_prim_dy_qp(1)%vf, &
+                                             dj_prim_dz_qp(1)%vf)
+                call nvtxEndRange
+            end if
 
             ! RHS additions for viscosity
             if (viscous .or. surface_tension) then
@@ -2483,15 +2501,31 @@ contains
             @:DEALLOCATE(q_prim_qp%vf(j)%sf)
         end do
 
+        if (diffusion)
+            do j = cont_idx%beg, cont_idx%end
+                @:DEALLOCATE(j_vf_qp%vf(j)%sf)
+            end do
+
+            do j = adv_idx%beg, adv_idx%end
+                @:DEALLOCATE(j_vf_qp%vf(j)%sf)
+            end do
+        end if
+
         @:DEALLOCATE(q_cons_qp%vf, q_prim_qp%vf)
         @:DEALLOCATE(qL_rsx_vf, qR_rsx_vf)
+        @:DEALLOCATE(jL_rsx_vf, jR_rsx_vf)
+        if (diffusion) then
+            @:DEALLOCATE(j_vf_qp%vf)
+        end if
 
         if (n > 0) then
             @:DEALLOCATE(qL_rsy_vf, qR_rsy_vf)
+            @:DEALLOCATE(jL_rsy_vf, jR_rsy_vf)
         end if
 
         if (p > 0) then
             @:DEALLOCATE(qL_rsz_vf, qR_rsz_vf)
+            @:DEALLOCATE(jL_rsz_vf, jR_rsz_vf)
         end if
 
         if (viscous .and. weno_Re_flux) then
@@ -2503,6 +2537,18 @@ contains
 
             if (p > 0) then
                 @:DEALLOCATE(dqL_rsz_vf, dqR_rsz_vf)
+            end if
+        end if
+
+        if (diffusion .and. weno_Re_flux) then
+            @:DEALLOCATE(djL_rsx_vf, djR_rsx_vf)
+
+            if (n > 0) then
+                @:DEALLOCATE(djL_rsy_vf, djR_rsy_vf)
+            end if
+
+            if (p > 0) then
+                @:DEALLOCATE(djL_rsz_vf, djR_rsz_vf)
             end if
         end if
 
@@ -2533,6 +2579,30 @@ contains
             @:DEALLOCATE(dq_prim_dx_qp(1)%vf)
             @:DEALLOCATE(dq_prim_dy_qp(1)%vf)
             @:DEALLOCATE(dq_prim_dz_qp(1)%vf)
+        end if
+
+        if (diffusion) then
+            do l = cont_idx%beg, cont_idx%end
+                @:DEALLOCATE(dj_prim_dx_qp%vf(l)%sf)
+            end do
+
+            if (n > 0) then
+
+                do l = cont_idx%beg, cont_idx%end
+                    @:DEALLOCATE(dj_prim_dy_qp%vf(l)%sf)
+                end do
+
+                if (p > 0) then
+                    do l = cont_idx%beg, cont_idx%end
+                        @:DEALLOCATE(dj_prim_dz_qp%vf(l)%sf)
+                    end do
+                end if
+
+            end if
+
+            @:DEALLOCATE(dj_prim_dx_qp%vf)
+            @:DEALLOCATE(dj_prim_dy_qp%vf)
+            @:DEALLOCATE(dj_prim_dz_qp%vf)
         end if
 
         if (viscous) then
@@ -2569,6 +2639,43 @@ contains
         @:DEALLOCATE(dqL_prim_dx_n, dqL_prim_dy_n, dqL_prim_dz_n)
         @:DEALLOCATE(dqR_prim_dx_n, dqR_prim_dy_n, dqR_prim_dz_n)
 
+
+        if (diffusion) then
+            do i = num_dims, 1, -1
+
+                    do l = cont_idx%beg, cont_idx%end
+                        @:DEALLOCATE(djL_prim_dx_n(i)%vf(l)%sf)
+                        @:DEALLOCATE(djR_prim_dx_n(i)%vf(l)%sf)
+                    end do
+
+                    if (n > 0) then
+                        do l = cont_idx%beg, cont_idx%end
+                            @:DEALLOCATE(djL_prim_dy_n(i)%vf(l)%sf)
+                            @:DEALLOCATE(djR_prim_dy_n(i)%vf(l)%sf)
+                        end do
+                    end if
+
+                    if (p > 0) then
+                        do l = cont_idx%beg, cont_idx%end
+                            @:DEALLOCATE(djL_prim_dz_n(i)%vf(l)%sf)
+                            @:DEALLOCATE(djR_prim_dz_n(i)%vf(l)%sf)
+                        end do
+                    end if
+
+                end if
+
+                @:DEALLOCATE(djL_prim_dx_n(i)%vf)
+                @:DEALLOCATE(djL_prim_dy_n(i)%vf)
+                @:DEALLOCATE(djL_prim_dz_n(i)%vf)
+                @:DEALLOCATE(djR_prim_dx_n(i)%vf)
+                @:DEALLOCATE(djR_prim_dy_n(i)%vf)
+                @:DEALLOCATE(djR_prim_dz_n(i)%vf)
+            end do
+        end if
+        
+        @:DEALLOCATE(djL_prim_dx_n, djL_prim_dy_n, djL_prim_dz_n)
+        @:DEALLOCATE(djR_prim_dx_n, djR_prim_dy_n, djR_prim_dz_n)
+
         do i = num_dims, 1, -1
             if (i /= 1) then
                 do l = 1, sys_size
@@ -2576,16 +2683,34 @@ contains
                     nullify (flux_src_n(i)%vf(l)%sf)
                     @:DEALLOCATE(flux_gsrc_n(i)%vf(l)%sf)
                 end do
+                if (diffusion) then
+                    do l = cont_idx%beg, cont_idx%end
+                        @:DEALLOCATE(j_src_vf(i)%vf(l)%sf)
+                    end do
+                end if
             else
                 do l = 1, sys_size
                     @:DEALLOCATE(flux_n(i)%vf(l)%sf)
                     @:DEALLOCATE(flux_gsrc_n(i)%vf(l)%sf)
                 end do
 
+                if (diffusion) then
+                    @:DEALLOCATE(j_src_vf(i)%vf(l)%sf)
+                end if
+
                 if (viscous) then
                     do l = mom_idx%beg, E_idx
                         @:DEALLOCATE(flux_src_n(i)%vf(l)%sf)
                     end do
+                end if
+
+                if (diffusion) then
+                    do l = cont_idx%beg, cont_idx%end
+                        @:DEALLOCATE(flux_src_n(i)%vf(l)%sf)
+                    end do
+                    if (.NOT. viscous) then
+                        @:DEALLOCATE(flux_src_n(i)%vf(E_idx)%sf)
+                    end if
                 end if
 
                 if (riemann_solver == 1) then
@@ -2602,9 +2727,15 @@ contains
             end if
 
             @:DEALLOCATE(flux_n(i)%vf, flux_src_n(i)%vf, flux_gsrc_n(i)%vf)
+            if (diffusion) then
+                @:DEALLOCATE(j_src_vf(i)%vf)
+            end if
         end do
 
         @:DEALLOCATE(flux_n, flux_src_n, flux_gsrc_n)
+        if (diffusion) then
+            @:DEALLOCATE(j_src_vf)
+        end if
 
         if (viscous .and. cyl_coord) then
             do i = 1, num_dims

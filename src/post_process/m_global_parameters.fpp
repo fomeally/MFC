@@ -107,6 +107,7 @@ module m_global_parameters
     logical :: hypoelasticity  !< Turn hypoelasticity on
     logical :: hyperelasticity !< Turn hyperelasticity on
     logical :: elasticity      !< elasticity modeling, true for hyper or hypo
+    integer :: diffusion       !< Turn diffusion on
     integer :: b_size          !< Number of components in the b tensor
     integer :: tensor_size     !< Number of components in the nonsymmetric tensor
     logical, parameter :: chemistry = .${chemistry}$. !< Chemistry modeling
@@ -343,6 +344,7 @@ contains
         hypoelasticity = .false.
         hyperelasticity = .false.
         elasticity = .false.
+        diffusion = .false.
         b_size = dflt_int
         tensor_size = dflt_int
 

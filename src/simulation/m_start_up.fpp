@@ -151,7 +151,7 @@ contains
             ib, num_ibs, patch_ib, &
             fluid_pp, probe_wrt, prim_vars_wrt, &
             fd_order, probe, num_probes, t_step_old, &
-            alt_soundspeed, mixture_err, weno_Re_flux, &
+            alt_soundspeed, mixture_err, weno_Re_flux, weno_Dif_flux, &
             null_weights, precision, parallel_io, cyl_coord, &
             rhoref, pref, bubbles_euler, bubble_model, &
             R0ref, chem_params, &
@@ -1635,6 +1635,7 @@ contains
         call s_finalize_time_steppers_module()
         if (hypoelasticity) call s_finalize_hypoelastic_module() 
         if (hyperelasticity) call s_finalize_hyperelastic_module() 
+        if (diffusion) call s_finalize_diffusion_module()
         call s_finalize_derived_variables_module()
         call s_finalize_data_output_module()
         call s_finalize_rhs_module()
