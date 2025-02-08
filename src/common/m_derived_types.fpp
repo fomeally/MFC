@@ -305,6 +305,7 @@ module m_derived_types
         real(wp) :: k_v     !< Bubble constants (see Preston (2007), Ando (2010))
         real(wp) :: cp_v
         real(wp) :: G
+        real(wp) :: D       !< Binary diffusion coefficient
     end type physical_parameters
 
     !> Derived type annexing the flow probe location

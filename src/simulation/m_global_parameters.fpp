@@ -134,6 +134,7 @@ module m_global_parameters
     logical :: mp_weno        !< Monotonicity preserving (MP) WENO
     logical :: weno_avg       ! Average left/right cell-boundary states
     logical :: weno_Re_flux   !< WENO reconstruct velocity gradients for viscous stress tensor
+    logical :: weno_Dif_flux  !< WENO reconstruct mass fraction gradients for mass diffusion flux
     integer :: riemann_solver !< Riemann solver algorithm
     integer :: low_Mach       !< Low Mach number fix to HLLC Riemann solver
     integer :: wave_speeds    !< Wave speeds estimation method
@@ -263,7 +264,7 @@ module m_global_parameters
     !> @name The number of fluids, along with their identifying indexes, respectively,
     !! for which binary diffusion effects will be non-negligible.
     !> @{
-    integer, dimension( ) :: Dif_size
+    integer :: Dif_size
     integer, allocatable, dimension(:) :: Dif_idx
     !> @}
 

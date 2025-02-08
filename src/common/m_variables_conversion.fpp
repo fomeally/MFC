@@ -41,6 +41,7 @@ module m_variables_conversion
               s_convert_primitive_to_conservative_variables, &
               s_convert_primitive_to_flux_variables, &
               s_compute_pressure, &
+              s_convert_conservative_to_diffusion_variables, &
 #ifndef MFC_PRE_PROCESS
               s_compute_speed_of_sound, &
 #endif
@@ -1087,9 +1088,6 @@ contains
         real(kind(0d0)), dimension(2) :: Re_K
         real(kind(0d0)) :: rho_K, gamma_K, pi_inf_K, qv_K
 
-
-T
-
         integer :: i, j, k, l !< Generic loop iterators
 
         real(kind(0.d0)) :: ntmp
@@ -1105,11 +1103,6 @@ T
                     do i = 1, num_fluids
                         alpha_rho_K(i) = qK_prim_vf(i)%sf(j, k, l)
                         alpha_K(i) = qK_prim_vf(advxb + i - 1)%sf(j, k, l)
-                    end do
-
-                    !$acc loop seq
-                    do i = contxb, contxe
-                        jK_prim_vf(i)%sf(j, k, l) = qK_cons_vf(i)%sf(j, k, l)
                     end do
 
                     call s_convert_species_to_mixture_variables_acc(rho_K, gamma_K, pi_inf_K, qv_K, &

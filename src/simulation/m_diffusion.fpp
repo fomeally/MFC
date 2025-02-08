@@ -13,6 +13,8 @@ module m_diffusion
 
     use m_global_parameters    !< Definitions of the global parameters
 
+    use m_finite_differences   !< Finite difference module
+
     use m_mpi_proxy            !< Message passing interface (MPI) module proxy
 
     use m_weno                 !< WENO module
@@ -44,11 +46,11 @@ s_finalize_diffusion_module
     real(wp), allocatable, dimension(:) :: Ds
     !$acc declare create(Ds)
 
-    real(wp), allocatable, dimension(:, :, :, :) :: dj_dx, dj_dy, dj_dz, djh_dx, djh_dy, djh_dz, alpha_K_dif, alpharho_K_dif, dF_KdP, F_K_dif, F_dif
-    !$acc declare create(dj_dx, dj_dy, dj_dz, djh_dx, djh_dy, djh_dz, alpha_K_dif, alpharho_K_dif, dF_KdP, F_K_dif, F_dif)
+    real(wp), allocatable, dimension(:, :, :, :) :: dj_dx, dj_dy, dj_dz, djh_dx, djh_dy, djh_dz, dY_dx, dY_dy, dY_dz, alpha_K_dif, alpharho_K_dif, dF_KdP, F_K_dif
+    !$acc declare create(dj_dx, dj_dy, dj_dz, djh_dx, djh_dy, djh_dz, dY_dx, dY_dy, dY_dz, alpha_K_dif, alpharho_K_dif, dF_KdP, F_K_dif)
 
-    real(wp), allocatable, dimension(:, :, :) :: Gamma_dif, Pi_inf_dif, dYda, dYdP, dPdt, rho_dif, dvel_dx, dvel_dy, dvel_dz
-    !$acc declare create(Gamma_dif, Pi_inf_dif, dYda, dYdP, dPdt, rho_dif)
+    real(wp), allocatable, dimension(:, :, :) :: Gamma_dif, Pi_inf_dif, F_dif, dYda, dYdP, dPdt, rho_dif, dvel_dx, dvel_dy, dvel_dz
+    !$acc declare create(Gamma_dif, Pi_inf_dif, F_dif, dYda, dYdP, dPdt, rho_dif, dvel_dx, dvel_dy, dvel_dz)
 
 contains
 
@@ -58,7 +60,7 @@ contains
 
         @:ALLOCATE(Ds(1:Dif_size))
 
-        $acc loop seq
+        !$acc loop seq
         do i = 1, Dif_size
             Ds(i) = fluid_pp(Dif_idx(i))%D
         end do
@@ -87,13 +89,13 @@ contains
         @:ALLOCATE(alpharho_K_dif(0:m, 0:n, 0:p, 1:Dif_size))
         @:ALLOCATE(dF_KdP(0:m, 0:n, 0:p, 1:Dif_size))
         @:ALLOCATE(F_K_dif(0:m, 0:n, 0:p, 1:Dif_size))
-        @:ALLOCATE(F_dif(0:m, 0:n, 0:p, 1:Dif_size))
 
         @:ALLOCATE(Gamma_dif(0:m, 0:n, 0:p))
         @:ALLOCATE(Pi_inf_dif(0:m, 0:n, 0:p))
         @:ALLOCATE(dYda(0:m, 0:n, 0:p))
         @:ALLOCATE(dYdP(0:m, 0:n, 0:p))
         @:ALLOCATE(dPdt(0:m, 0:n, 0:p))
+        @:ALLOCATE(F_dif(0:m, 0:n, 0:p))
         @:ALLOCATE(rho_dif(0:m, 0:n, 0:p))
 
 
@@ -447,7 +449,7 @@ contains
                     !$acc parallel loop collapse(3) gang vector default(present)
                     do l = is3_diffusion%beg + 1, is3_diffusion%end - 1
                         do j = is2_diffusion%beg, is2_diffusion%end - 1
-                            do k = is1_viscous%beg, is1_diffusion%end
+                            do k = is1_diffusion%beg, is1_diffusion%end
                                 !$acc loop seq
                                 do i = iv%beg, iv%end
 
@@ -547,7 +549,7 @@ contains
                     end do
 
                     do i = iv%beg, iv%end
-                        call s_compute_fd_gradient(q_prim_qp%vf(i), &
+                        call s_compute_fd_gradient_diffusion(q_prim_qp%vf(i), &
                                                    dq_prim_dx_qp(1)%vf(i), &
                                                    dq_prim_dy_qp(1)%vf(i), &
                                                    dq_prim_dz_qp(1)%vf(i))
@@ -556,7 +558,7 @@ contains
                 else
 
                     do i = iv%beg, iv%end
-                        call s_compute_fd_gradient(q_prim_qp%vf(i), &
+                        call s_compute_fd_gradient_diffusion(q_prim_qp%vf(i), &
                                                    dq_prim_dx_qp(1)%vf(i), &
                                                    dq_prim_dy_qp(1)%vf(i), &
                                                    dq_prim_dy_qp(1)%vf(i))
@@ -585,7 +587,7 @@ contains
         !!  @param grad_y Second coordinate direction component of the derivative
         !!  @param grad_z Third coordinate direction component of the derivative
         !!  @param norm Norm of the gradient vector
-    subroutine s_compute_fd_gradient(var, grad_x, grad_y, grad_z)
+    subroutine s_compute_fd_gradient_diffusion(var, grad_x, grad_y, grad_z)
 
         type(scalar_field), intent(in) :: var
         type(scalar_field), intent(inout) :: grad_x
@@ -678,7 +680,7 @@ contains
                     do j = idwbuff(1)%beg, idwbuff(1)%end
                         grad_z%sf(j, k, idwbuff(3)%beg) = &
                             (-3d0*var%sf(j, k, idwbuff(3)%beg) + 4d0*var%sf(j, k, idwbuff(3)%beg + 1) - var%sf(j, k, idwbuff(3)%beg + 2))/ &
-                            (z_cc(idwbuff(3)%beg + 2) - z_cc(is3_viscous%beg))
+                            (z_cc(idwbuff(3)%beg + 2) - z_cc(idwbuff(3)%beg))
                         grad_z%sf(j, k, idwbuff(3)%end) = &
                             (+3d0*var%sf(j, k, idwbuff(3)%end) - 4d0*var%sf(j, k, idwbuff(3)%end - 1) + var%sf(j, k, idwbuff(3)%end - 2))/ &
                             (z_cc(idwbuff(3)%end) - z_cc(idwbuff(3)%end - 2))
@@ -1068,10 +1070,10 @@ contains
 
     end subroutine s_reconstruct_cell_boundary_values_diff_deriv
 
-    subroutine s_compute_diffusion_rhs(idir, j_prim_vf, q_prim_vf, rhs_vf, dj_prim_dx_vf, dj_prim_dy_vf, dj_prim_dz_vf)
+    subroutine s_compute_diffusion_rhs(idir, j_prim_vf, q_prim_vf, rhs_vf)
 
         integer, intent(in) :: idir
-        type(scalar_field), dimension(sys_size), intent(in) :: dj_prim_dx_qp, dj_prim_dy_qp, dj_prim_dz_qp
+        !type(scalar_field), dimension(sys_size), intent(in) :: dj_prim_dx_qp, dj_prim_dy_qp, dj_prim_dz_qp
         type(scalar_field), dimension(sys_size), intent(inout) :: j_prim_vf, q_prim_vf, rhs_vf
 
         integer :: i, k, l, q, r !< Loop variables
@@ -1082,8 +1084,8 @@ contains
                 do k = 0, m
                     do i = 1, Dif_size
 
-                        alpha_K_dif(k, l, q, i) = alpha_K_dif + q_prim_vf(E_idx + Dif_idx(i))%sf(l, k, q)
-                        alpharho_K_dif(k, l, q, i) = alpharho_K_dif + q_prim_vf(Dif_idx(i))%sf(l, k, q)
+                        alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + Dif_idx(i))%sf(k, l, q)
+                        alpharho_K_dif(k, l, q, i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
                         F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(Dif_idx(i)) + &
                                                 (pi_infs(Dif_idx(i))*gammas(Dif_idx(i))) / (1._wp + gammas(Dif_idx(i))) ) / cvs(Dif_idx(i))
                         dF_KdP(k, l, q, i) = gammas(Dif_idx(i)) / cvs(Dif_idx(i))                 
@@ -1140,7 +1142,7 @@ contains
                     dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
                     dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (dF_KdP(k, l, q, 1)*F_K_dif(k, l, q, 1) - &
                                         F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
-                    dPdt(k, l, q) = -(q_prim_vf(E_idx%sf(k, l, q))*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q)) / Gamma_dif(k, l, q)
+                    dPdt(k, l, q) = -((q_prim_vf(E_idx)%sf(k, l, q))*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q)) / Gamma_dif(k, l, q)
                 
                 end do
             end do
@@ -1215,7 +1217,7 @@ contains
                                 dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
                                     + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(i)*fd_coeff_x_d(r, k)
                                 djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                    + dY_dx(k + r, l, q, i)%sf(k + r, l, q)*rho_dif(k + r, l, q)*j_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + r, l, q)*Ds(i)*fd_coeff_x_h(r, k)
+                                    + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*j_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + r, l, q)*Ds(i)*fd_coeff_x_h(r, k)
 
                             end do
                         end do
@@ -1248,8 +1250,8 @@ contains
                     do k = 0, m
                         do i = 1, Dif_size
 
-                            rhs_vf(advxb + Dif_idx(i) - 1) = rhs_vf(advxb + Dif_idx(i) - 1) &
-                                + ( dj_dx(k, l, q, i) / rho_dif(k, l, q) - dYdP(k, l, q)*dPdt(k, l, q)dvel_dx(k, l, q) )/ dYda(k, l, q)
+                            rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
+                                + ( dj_dx(k, l, q, i) / rho_dif(k, l, q) - dYdP(k, l, q)*dPdt(k, l, q)*dvel_dx(k, l, q) )/ dYda(k, l, q)
 
                         end do
                     end do
@@ -1265,7 +1267,7 @@ contains
                     do k = 0, m
                         do i = 1, Dif_size
 
-                            rhs_vf(E_idx) = rhs_vf(E_idx) &
+                            rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
                                 + djh_dx(k, l, q, i)
 
                         end do
@@ -1373,7 +1375,7 @@ contains
                     do k = 0, m
                         do i = 1, Dif_size
 
-                            rhs_vf(advxb + Dif_idx(i) - 1) = rhs_vf(advxb + Dif_idx(i) - 1) &
+                            rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
                                 + ( dj_dy(k, l, q, i) / rho_dif(k, l, q) - dYdP(k, l, q)*dPdt(k, l, q)*dvel_dy(k, l, q))/ dYda(k, l, q)
 
                         end do
@@ -1390,7 +1392,7 @@ contains
                     do k = 0, m
                         do i = 1, Dif_size
 
-                            rhs_vf(E_idx) = rhs_vf(E_idx) &
+                            rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
                                 + djh_dy(k, l, q, i)
 
                         end do
@@ -1467,7 +1469,7 @@ contains
                                     + dY_dz(k, l, q + r, i)*rho_dif(k, l, q + r)*Ds(i)*fd_coeff_z_d(r, q)
                                 djh_dz(k, l, q, i) = djh_dz(k, l, q, i) &
                                     + dY_dz(k, l, q + r, i)*rho_dif(k, l, q + r)*j_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q + r)*Ds(i)*fd_coeff_z_h(r, q)
-
+                            end do
                         end do
                     end do
                 end do
@@ -1498,7 +1500,7 @@ contains
                     do k = 0, m
                         do i = 1, Dif_size
 
-                            rhs_vf(advxb + Dif_idx(i) - 1) = rhs_vf(advxb + Dif_idx(i) - 1) &
+                            rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
                                 + ( dj_dz(k, l, q, i) / rho_dif(k, l, q) - dYdP(k, l, q)*dPdt(k, l, q)*dvel_dz(k, l, q) )/ dYda(k, l, q)
 
                         end do
@@ -1515,7 +1517,7 @@ contains
                     do k = 0, m
                         do i = 1, Dif_size
 
-                            rhs_vf(E_idx) = rhs_vf(E_idx) &
+                            rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
                                 + djh_dz(k, l, q, i)
 
                         end do

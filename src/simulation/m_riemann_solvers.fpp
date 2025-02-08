@@ -110,6 +110,9 @@ module m_riemann_solvers
     real(wp), allocatable, dimension(:, :) :: Res
     !$acc declare create(Res)
 
+    real(wp), allocatable, dimension(:) :: Ds
+    !$acc declare create(Ds)
+    
 contains
 
     !> Dispatch to the subroutines that are utilized to compute the
