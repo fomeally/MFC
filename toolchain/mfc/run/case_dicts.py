@@ -24,6 +24,7 @@ class ParamType(Enum):
 COMMON = {
     'hypoelasticity': ParamType.LOG,
     'hyperelasticity': ParamType.LOG,
+    'diffuion': ParamType.LOG,
     'cyl_coord': ParamType.LOG,
     'pref': ParamType.REAL,
     'p': ParamType.INT,
@@ -213,6 +214,7 @@ SIMULATION.update({
     'mp_weno': ParamType.LOG,
     'weno_avg': ParamType.LOG,
     'weno_Re_flux': ParamType.LOG,
+    'weno_Dif_flux': ParamType.LOG,
     'riemann_solver': ParamType.INT,
     'wave_speeds': ParamType.INT,
     'avg_state': ParamType.INT,
@@ -314,7 +316,7 @@ for probe_id in range(1,3+1):
 
 for f_id in range(1,10+1):
     for real_attr in ["gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
-                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp" ]:
+                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "D" ]:
         SIMULATION[f"fluid_pp({f_id})%{real_attr}"] = ParamType.REAL
 
     for re_id in [1, 2]:
