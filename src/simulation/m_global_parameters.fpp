@@ -1067,6 +1067,14 @@ contains
 
             end if
 
+            @:ALLOCATE(Dif_idx(1:Dif_size))
+            k = 0
+            do i = 1, num_fluids
+                if (fluid_pp(i)%D > 0._wp) then
+                    k = k + 1; Dif_idx(k) = i
+                end if
+            end do
+
         end if
         ! END: Volume Fraction Model
 
@@ -1119,17 +1127,23 @@ contains
         if (ib) allocate (MPI_IO_IB_DATA%var%sf(0:m, 0:n, 0:p))
         Np = 0
 
-        !$acc update device(Re_size)
+        !$acc update device(Re_size, Dif_size)
         ! Determining the number of cells that are needed in order to store
         ! sufficient boundary conditions data as to iterate the solution in
         ! the physical computational domain from one time-step iteration to
         ! the next one
         if (viscous) then
             buff_size = 2*weno_polyn + 2
-        else if (diffusion) then
-            buff_size = 2*weno_polyn + 2
         else
             buff_size = weno_polyn + 2
+        end if
+
+        if (diffusion) then
+            if (weno_Dif_flux) then
+                buff_size = 2*weno_polyn + 2
+            else
+                fd_number = max(1, fd_order/2)
+            end if
         end if
 
         if (elasticity) then

@@ -94,7 +94,7 @@ contains
         if (allocated(fd_coeff_s)) deallocate (fd_coeff_s)
         allocate (fd_coeff_s(-fd_number_in:fd_number_in, lb:lE))
 #endif
-
+        print *, buff_size
         ! Computing the 1st order finite-difference coefficients
         if (fd_order_in == 1) then
             do i = lB, lE
@@ -106,9 +106,12 @@ contains
             ! Computing the 2nd order finite-difference coefficients
         elseif (fd_order_in == 2) then
             do i = lB, lE
+                print *, i
+                print *, s_cc(i + 1), s_cc(i - 1)
                 fd_coeff_s(-1, i) = -1._wp/(s_cc(i + 1) - s_cc(i - 1))
                 fd_coeff_s(0, i) = 0._wp
                 fd_coeff_s(1, i) = -fd_coeff_s(-1, i)
+                print *, fd_coeff_s(-1, i), fd_coeff_s(0, i), fd_coeff_s(1, i)
             end do
 
             ! Computing the 4th order finite-difference coefficients

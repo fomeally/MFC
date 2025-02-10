@@ -724,7 +724,6 @@ contains
             if (diffusion) then
                 
                 do l = 1, Dif_size
-                    @:ALLOCATE(j_src_vf(i)%vf(Dif_idx(1)))
 
                     @:ALLOCATE(j_src_vf(i)%vf(Dif_idx(l))%sf( &
                              & idwbuff(1)%beg:idwbuff(1)%end, &
@@ -1145,8 +1144,8 @@ contains
             if (diffusion) then
                 call nvtxStartRange("RHS-DIFFUSION")
                 call s_compute_diffusion_rhs(id, &
-                                             q_prim_qp%vf, &
                                              j_vf_qp%vf, &
+                                             q_prim_qp%vf, &
                                              rhs_vf)
                 !call s_compute_diffusion_rhs(id, &
                                              !q_prim_qp%vf, &

@@ -25,6 +25,8 @@ W_n2 = 28.02
 Gamma_n2 = 1.0 / (gamma_n2 - 1.0)
 cv_n2 = Rbar * Gamma_n2 / W_n2
 
+D_ab = 1.0e-1
+
 Nx = 499
 
 # Configuring case dictionary
@@ -41,7 +43,7 @@ print(
             "m": Nx,
             "n": 0,
             "p": 0,
-            "dt": 1.e-6,
+            "dt": 1.0e-6,
             "t_step_start": 0,
             "t_step_stop": 20000000,
             "t_step_save": 25000,
@@ -104,13 +106,13 @@ print(
             "fluid_pp(1)%gamma": Gamma_co2,
             "fluid_pp(1)%pi_inf": 0.0,
             "fluid_pp(1)%cv": cv_co2,
-            "fluid_pp(1)%D": 0.1,
+            "fluid_pp(1)%D": D_ab,
             
             # N2
             "fluid_pp(2)%gamma": Gamma_n2,
             "fluid_pp(2)%pi_inf": 0.0,
             "fluid_pp(2)%cv": cv_n2,
-            "fluid_pp(2)%D": 0.1,
+            "fluid_pp(2)%D": D_ab,
             
         }
     )

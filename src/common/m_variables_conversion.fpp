@@ -1111,7 +1111,7 @@ contains
                     !$acc loop seq
                     do i = contxb, contxe
                         
-                        jK_prim_vf(i)%sf(j, k, l) = jK_prim_vf(i)%sf(j, k, l) &
+                        jK_prim_vf(i)%sf(j, k, l) = alpha_rho_K(i) &
                                                         /rho_K
                     
                     end do

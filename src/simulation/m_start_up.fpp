@@ -973,6 +973,7 @@ contains
         ! the coordinate direction, from the cell-width distribution buffer
         do i = 1, buff_size
             x_cc(-i) = x_cc(1 - i) - (dx(1 - i) + dx(-i))/2._wp
+            print *, 'i', i, 'x_cc(-i)', x_cc(-i)
         end do
 
         ! Populating the cell-width distribution buffer, at the end of the
@@ -1463,10 +1464,6 @@ contains
             call s_initialize_viscous_module()
         end if
 
-        if (diffusion) then
-            call s_initialize_diffusion_module()
-        end if
-
         call s_initialize_rhs_module()
 
         if (surface_tension) call s_initialize_surface_tension_module()
@@ -1515,6 +1512,7 @@ contains
 
         if (hypoelasticity) call s_initialize_hypoelastic_module()
         if (hyperelasticity) call s_initialize_hyperelastic_module()
+        if (diffusion) call s_initialize_diffusion_module()
 
     end subroutine s_initialize_modules
 
