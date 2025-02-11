@@ -973,7 +973,6 @@ contains
         ! the coordinate direction, from the cell-width distribution buffer
         do i = 1, buff_size
             x_cc(-i) = x_cc(1 - i) - (dx(1 - i) + dx(-i))/2._wp
-            print *, 'i', i, 'x_cc(-i)', x_cc(-i)
         end do
 
         ! Populating the cell-width distribution buffer, at the end of the

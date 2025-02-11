@@ -27,7 +27,7 @@ cv_n2 = Rbar * Gamma_n2 / W_n2
 
 D_ab = 1.0e-1
 
-Nx = 499
+Nx = 199
 
 # Configuring case dictionary
 print(
@@ -43,10 +43,10 @@ print(
             "m": Nx,
             "n": 0,
             "p": 0,
-            "dt": 1.0e-6,
+            "dt": 1.0e-5,
             "t_step_start": 0,
-            "t_step_stop": 20000000,
-            "t_step_save": 25000,
+            "t_step_stop": 200000,
+            "t_step_save": 250,
             # Simulation Algorithm Parameters
             "num_patches": 2,
             "model_eqns": 2,

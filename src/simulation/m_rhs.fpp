@@ -2652,10 +2652,6 @@ contains
                     @:DEALLOCATE(flux_gsrc_n(i)%vf(l)%sf)
                 end do
 
-                if (diffusion) then
-                    @:DEALLOCATE(j_src_vf(i)%vf(l)%sf)
-                end if
-
                 if (viscous) then
                     do l = mom_idx%beg, E_idx
                         @:DEALLOCATE(flux_src_n(i)%vf(l)%sf)
