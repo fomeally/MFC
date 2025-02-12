@@ -540,7 +540,7 @@ contains
 
             if (model_eqns == 2) then
                 do i = 1, sys_size
-                    write (file_path, '(A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/prim.', i, '.', proc_rank, '.', t_step, '.dat'
+                    write (file_path, '(A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/prim.', i, '.', proc_rank, '.', t_step, '.dat'
 
                     open (2, FILE=trim(file_path))
                     do j = 0, m
@@ -556,7 +556,7 @@ contains
             end if
 
             do i = 1, sys_size
-                write (file_path, '(A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/cons.', i, '.', proc_rank, '.', t_step, '.dat'
+                write (file_path, '(A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/cons.', i, '.', proc_rank, '.', t_step, '.dat'
 
                 open (2, FILE=trim(file_path))
                 do j = 0, m
@@ -568,7 +568,7 @@ contains
             if (qbmm .and. .not. polytropic) then
                 do i = 1, nb
                     do r = 1, nnode
-                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/pres.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
+                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/pres.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
 
                         open (2, FILE=trim(file_path))
                         do j = 0, m
@@ -579,7 +579,7 @@ contains
                 end do
                 do i = 1, nb
                     do r = 1, nnode
-                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/mv.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
+                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/mv.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
 
                         open (2, FILE=trim(file_path))
                         do j = 0, m
@@ -600,7 +600,7 @@ contains
         ! 2D
         if ((n > 0) .and. (p == 0)) then
             do i = 1, sys_size
-                write (file_path, '(A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/cons.', i, '.', proc_rank, '.', t_step, '.dat'
+                write (file_path, '(A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/cons.', i, '.', proc_rank, '.', t_step, '.dat'
                 open (2, FILE=trim(file_path))
                 do j = 0, m
                     do k = 0, n
@@ -612,7 +612,7 @@ contains
             end do
 
             if (present(beta)) then
-                write (file_path, '(A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/beta.', i, '.', proc_rank, '.', t_step, '.dat'
+                write (file_path, '(A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/beta.', i, '.', proc_rank, '.', t_step, '.dat'
                 open (2, FILE=trim(file_path))
                 do j = 0, m
                     do k = 0, n
@@ -626,7 +626,7 @@ contains
             if (qbmm .and. .not. polytropic) then
                 do i = 1, nb
                     do r = 1, nnode
-                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/pres.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
+                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/pres.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
 
                         open (2, FILE=trim(file_path))
                         do j = 0, m
@@ -639,7 +639,7 @@ contains
                 end do
                 do i = 1, nb
                     do r = 1, nnode
-                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/mv.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
+                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/mv.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
 
                         open (2, FILE=trim(file_path))
                         do j = 0, m
@@ -654,7 +654,7 @@ contains
 
             if (prim_vars_wrt) then
                 do i = 1, sys_size
-                    write (file_path, '(A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/prim.', i, '.', proc_rank, '.', t_step, '.dat'
+                    write (file_path, '(A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/prim.', i, '.', proc_rank, '.', t_step, '.dat'
 
                     open (2, FILE=trim(file_path))
 
@@ -687,7 +687,7 @@ contains
         ! 3D
         if (p > 0) then
             do i = 1, sys_size
-                write (file_path, '(A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/cons.', i, '.', proc_rank, '.', t_step, '.dat'
+                write (file_path, '(A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/cons.', i, '.', proc_rank, '.', t_step, '.dat'
                 open (2, FILE=trim(file_path))
                 do j = 0, m
                     do k = 0, n
@@ -702,7 +702,7 @@ contains
             end do
 
             if (present(beta)) then
-                write (file_path, '(A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/beta.', i, '.', proc_rank, '.', t_step, '.dat'
+                write (file_path, '(A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/beta.', i, '.', proc_rank, '.', t_step, '.dat'
                 open (2, FILE=trim(file_path))
                 do j = 0, m
                     do k = 0, n
@@ -719,7 +719,7 @@ contains
             if (qbmm .and. .not. polytropic) then
                 do i = 1, nb
                     do r = 1, nnode
-                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/pres.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
+                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/pres.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
 
                         open (2, FILE=trim(file_path))
                         do j = 0, m
@@ -734,7 +734,7 @@ contains
                 end do
                 do i = 1, nb
                     do r = 1, nnode
-                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/mv.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
+                        write (file_path, '(A,I0,A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/mv.', i, '.', r, '.', proc_rank, '.', t_step, '.dat'
 
                         open (2, FILE=trim(file_path))
                         do j = 0, m
@@ -751,7 +751,7 @@ contains
 
             if (prim_vars_wrt) then
                 do i = 1, sys_size
-                    write (file_path, '(A,I0,A,I2.2,A,I6.6,A)') trim(t_step_dir)//'/prim.', i, '.', proc_rank, '.', t_step, '.dat'
+                    write (file_path, '(A,I0,A,I2.2,A,I9.9,A)') trim(t_step_dir)//'/prim.', i, '.', proc_rank, '.', t_step, '.dat'
 
                     open (2, FILE=trim(file_path))
 
