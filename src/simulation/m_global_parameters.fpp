@@ -261,15 +261,6 @@ module m_global_parameters
 
     !$acc declare create(Re_size, Re_idx)
 
-    !> @name The number of fluids, along with their identifying indexes, respectively,
-    !! for which binary diffusion effects will be non-negligible.
-    !> @{
-    integer :: Dif_size
-    integer, allocatable, dimension(:) :: Dif_idx
-    !> @}
-
-    !$acc declare create(Dif_size, Dif_idx)
-
     ! The WENO average (WA) flag regulates whether the calculation of any cell-
     ! average spatial derivatives is carried out in each cell by utilizing the
     ! arithmetic mean of the left and right, WENO-reconstructed, cell-boundary
@@ -594,6 +585,7 @@ contains
             fluid_pp(i)%k_v = dflt_real
             fluid_pp(i)%cp_v = dflt_real
             fluid_pp(i)%G = 0._wp
+            fluid_pp(i)%W = 0._wp
             fluid_pp(i)%D = 0._wp
         end do
 
@@ -766,9 +758,6 @@ contains
         ! of fluids for which the physical and geometric curvatures of the
         ! interfaces will be computed
         Re_size = 0
-
-        ! Initializing the number of fluids for which diffusion will be calculated
-        Dif_size = 0
 
 
         ! Gamma/Pi_inf Model
@@ -1036,14 +1025,7 @@ contains
             if (Re_size(1) > 0._wp) shear_stress = .true.
             if (Re_size(2) > 0._wp) bulk_stress = .true.
 
-            ! Determining the number of fluids for which diffusion will be calculated
-            do i = 1, num_fluids
-                if (fluid_pp(i)%D > 0._wp) Dif_size = Dif_size + 1
-            end do
-
-            if (Dif_size > 0._wp) diffusion = .true.
-
-            !$acc update device(Re_size, viscous, shear_stress, bulk_stress, Dif_size, diffusion)
+            !$acc update device(Re_size, viscous, shear_stress, bulk_stress)
 
             ! Bookkeeping the indexes of any viscous fluids and any pairs of
             ! fluids whose interface will support effects of surface tension
@@ -1066,14 +1048,6 @@ contains
                 end do
 
             end if
-
-            @:ALLOCATE(Dif_idx(1:Dif_size))
-            k = 0
-            do i = 1, num_fluids
-                if (fluid_pp(i)%D > 0._wp) then
-                    k = k + 1; Dif_idx(k) = i
-                end if
-            end do
 
         end if
         ! END: Volume Fraction Model
@@ -1127,7 +1101,7 @@ contains
         if (ib) allocate (MPI_IO_IB_DATA%var%sf(0:m, 0:n, 0:p))
         Np = 0
 
-        !$acc update device(Re_size, Dif_size)
+        !$acc update device(Re_size)
         ! Determining the number of cells that are needed in order to store
         ! sufficient boundary conditions data as to iterate the solution in
         ! the physical computational domain from one time-step iteration to

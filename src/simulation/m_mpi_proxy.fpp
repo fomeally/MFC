@@ -256,9 +256,11 @@ contains
 
         do i = 1, num_fluids_max
             #:for VAR in [ 'gamma','pi_inf','mul0','ss','pv','gamma_v','M_v',  &
-                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp', 'D' ]
+                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp', 'W' ]
                 call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
+
+            call MPI_BCAST(fluid_pp(i)%D(1), num_fluids, mpi_p, 0, MPI_COMM_WORLD, ierr)
             call MPI_BCAST(fluid_pp(i)%Re(1), 2, mpi_p, 0, MPI_COMM_WORLD, ierr)
         end do
 

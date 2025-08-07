@@ -110,7 +110,7 @@ module m_riemann_solvers
     real(wp), allocatable, dimension(:, :) :: Res
     !$acc declare create(Res)
 
-    real(wp), allocatable, dimension(:) :: Ds
+    real(wp), allocatable, dimension(:, :) :: Ds
     !$acc declare create(Ds)
     
 contains
@@ -2786,14 +2786,16 @@ contains
         end if
 
         if (diffusion) then
-            @:ALLOCATE(Ds(1:Dif_size))
+            @:ALLOCATE(Ds(1:num_fluids, 1:num_fluids))
         end if
 
         if (diffusion) then
-            do i = 1, Dif_size
-                Ds(i) = fluid_pp(Dif_idx(i))%D
+            do i = 1, num_fluids
+                do j = 1, num_fluids
+                    Ds(i, j) = fluid_pp(i)%D(j)
+                end do
             end do
-            !$acc update device(Ds, Dif_idx, Dif_size)
+            !$acc update device(Ds)
         end if
 
         !$acc enter data copyin(is1, is2, is3, isx, isy, isz)

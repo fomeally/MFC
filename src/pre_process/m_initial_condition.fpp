@@ -336,6 +336,10 @@ contains
                     ! 1d tanh patch
                 elseif (patch_icpp(i)%geometry == 23) then
                     call s_1d_tanh(i, patch_id_fp, q_prim_vf)
+
+                elseif (patch_icpp(i)%geometry == 24) then
+                    call s_1d_ntanh(i, patch_id_fp, q_prim_vf)
+                    
                 end if
 
             end do

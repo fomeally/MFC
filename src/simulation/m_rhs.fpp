@@ -176,7 +176,7 @@ module m_rhs
     real(wp), allocatable, dimension(:, :) :: Res
     !$acc declare create(Res)
 
-    real(wp), allocatable, dimension(:) :: Ds
+    real(wp), allocatable, dimension(:, :) :: Ds
     !$acc declare create(Ds)
 
     real(wp), allocatable, dimension(:, :, :) :: nbub !< Bubble number density
@@ -458,8 +458,8 @@ contains
             @:ALLOCATE(dj_prim_dy_qp(1)%vf(cont_idx%beg:cont_idx%end))
             @:ALLOCATE(dj_prim_dz_qp(1)%vf(cont_idx%beg:cont_idx%end))
 
-            do l = 1, Dif_size
-                @:ALLOCATE(dj_prim_dx_qp(1)%vf(Dif_idx(l))%sf(idwbuff(1)%beg:idwbuff(1)%end, &
+            do l = 1, num_fluids
+                @:ALLOCATE(dj_prim_dx_qp(1)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, &
                         & idwbuff(2)%beg:idwbuff(2)%end, &
                         & idwbuff(3)%beg:idwbuff(3)%end))
             end do
@@ -468,8 +468,8 @@ contains
 
             if (n > 0) then
 
-                do l = 1, Dif_size
-                    @:ALLOCATE(dj_prim_dy_qp(1)%vf(Dif_idx(l))%sf(idwbuff(1)%beg:idwbuff(1)%end, &
+                do l = 1, num_fluids
+                    @:ALLOCATE(dj_prim_dy_qp(1)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, &
                             & idwbuff(2)%beg:idwbuff(2)%end, &
                             & idwbuff(3)%beg:idwbuff(3)%end))
                 end do
@@ -478,8 +478,8 @@ contains
 
                 if (p > 0) then
 
-                    do l = 1, Dif_size
-                        @:ALLOCATE(dj_prim_dz_qp(1)%vf(Dif_idx(l))%sf(idwbuff(1)%beg:idwbuff(1)%end, &
+                    do l = 1, num_fluids
+                        @:ALLOCATE(dj_prim_dz_qp(1)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, &
                                 & idwbuff(2)%beg:idwbuff(2)%end, &
                                 & idwbuff(3)%beg:idwbuff(3)%end))
                     end do
@@ -493,14 +493,14 @@ contains
             @:ALLOCATE(dj_prim_dy_qp(1)%vf(1:cont_idx%end))
             @:ALLOCATE(dj_prim_dz_qp(1)%vf(1:cont_idx%end))
 
-            do l = 1, Dif_size
-                @:ALLOCATE(dj_prim_dx_qp(1)%vf(Dif_idx(l))%sf(0, 0, 0))
+            do l = 1, num_fluids
+                @:ALLOCATE(dj_prim_dx_qp(1)%vf(l)%sf(0, 0, 0))
                 @:ACC_SETUP_VFs(dj_prim_dx_qp(1))
                 if (n > 0) then
-                    @:ALLOCATE(dj_prim_dy_qp(1)%vf(Dif_idx(l))%sf(0, 0, 0))
+                    @:ALLOCATE(dj_prim_dy_qp(1)%vf(l)%sf(0, 0, 0))
                     @:ACC_SETUP_VFs(dj_prim_dy_qp(1))
                     if (p > 0) then
-                        @:ALLOCATE(dj_prim_dz_qp(1)%vf(Dif_idx(l))%sf(0, 0, 0))
+                        @:ALLOCATE(dj_prim_dz_qp(1)%vf(l)%sf(0, 0, 0))
                         @:ACC_SETUP_VFs(dj_prim_dz_qp(1))
                     end if
                 end if
@@ -588,45 +588,45 @@ contains
                 @:ALLOCATE(djR_prim_dy_n(i)%vf(1:cont_idx%end))
                 @:ALLOCATE(djR_prim_dz_n(i)%vf(1:cont_idx%end))
 
-                do l = 1, Dif_size
-                    @:ALLOCATE(djL_prim_dx_n(1)%vf(Dif_idx(l))%sf( &
+                do l = 1, num_fluids
+                    @:ALLOCATE(djL_prim_dx_n(i)%vf(l)%sf( &
                             & idwbuff(1)%beg:idwbuff(1)%end, &
                             & idwbuff(2)%beg:idwbuff(2)%end, &
                             & idwbuff(3)%beg:idwbuff(3)%end))
-                    @:ALLOCATE(djR_prim_dx_n(1)%vf(Dif_idx(l))%sf( &
+                    @:ALLOCATE(djR_prim_dx_n(i)%vf(l)%sf( &
                             & idwbuff(1)%beg:idwbuff(1)%end, &
                             & idwbuff(2)%beg:idwbuff(2)%end, &
                             & idwbuff(3)%beg:idwbuff(3)%end))
                 end do
 
                 if (n > 0) then
-                    do l = 1, Dif_size
-                        @:ALLOCATE(djL_prim_dy_n(1)%vf(Dif_idx(l))%sf( &
+                    do l = 1, num_fluids
+                        @:ALLOCATE(djL_prim_dy_n(i)%vf(l)%sf( &
                                 & idwbuff(1)%beg:idwbuff(1)%end, &
                                 & idwbuff(2)%beg:idwbuff(2)%end, &
                                 & idwbuff(3)%beg:idwbuff(3)%end))
-                        @:ALLOCATE(djR_prim_dy_n(1)%vf(Dif_idx(l))%sf( &
-                                & idwbuff(1)%beg:idwbuff(1)%end, &
+                        @:ALLOCATE(djR_prim_dy_n(i)%vf(l)%sf( &
+                                & idwbuff(1)%beg:idwbuff(1)%end, &      
                                 & idwbuff(2)%beg:idwbuff(2)%end, &
                                 & idwbuff(3)%beg:idwbuff(3)%end))
                     end do
                 end if
 
                 if (p > 0) then
-                    do l = 1, Dif_size
-                        @:ALLOCATE(djL_prim_dz_n(1)%vf(Dif_idx(l))%sf( &
+                    do l = 1, num_fluids
+                        @:ALLOCATE(djL_prim_dz_n(i)%vf(l)%sf( &
                                 & idwbuff(1)%beg:idwbuff(1)%end, &
                                 & idwbuff(2)%beg:idwbuff(2)%end, &
                                 & idwbuff(3)%beg:idwbuff(3)%end))
-                        @:ALLOCATE(djR_prim_dz_n(1)%vf(Dif_idx(l))%sf( &
+                        @:ALLOCATE(djR_prim_dz_n(i)%vf(l)%sf( &
                                 & idwbuff(1)%beg:idwbuff(1)%end, &
                                 & idwbuff(2)%beg:idwbuff(2)%end, &
                                 & idwbuff(3)%beg:idwbuff(3)%end))
                     end do
                 end if
 
-                @:ACC_SETUP_VFs(djL_prim_dx_n(1), djL_prim_dy_n(1), djL_prim_dz_n(1))
-                @:ACC_SETUP_VFs(djR_prim_dx_n(1), djR_prim_dy_n(1), djR_prim_dz_n(1))
+                @:ACC_SETUP_VFs(djL_prim_dx_n(i), djL_prim_dy_n(i), djL_prim_dz_n(i))
+                @:ACC_SETUP_VFs(djR_prim_dx_n(i), djR_prim_dy_n(i), djR_prim_dz_n(i))
             end do 
         end if
 
@@ -723,9 +723,9 @@ contains
 
             if (diffusion) then
                 
-                do l = 1, Dif_size
+                do l = 1, num_fluids
 
-                    @:ALLOCATE(j_src_vf(i)%vf(Dif_idx(l))%sf( &
+                    @:ALLOCATE(j_src_vf(i)%vf(l)%sf( &
                              & idwbuff(1)%beg:idwbuff(1)%end, &
                              & idwbuff(2)%beg:idwbuff(2)%end, &
                              & idwbuff(3)%beg:idwbuff(3)%end))
@@ -764,8 +764,8 @@ contains
                 end if
 
                 if (diffusion) then
-                    do l = 1, Dif_size
-                        @:ALLOCATE(flux_src_n(i)%vf(Dif_idx(l))%sf( &
+                    do l = 1, num_fluids
+                        @:ALLOCATE(flux_src_n(i)%vf(l)%sf( &
                                  & idwbuff(1)%beg:idwbuff(1)%end, &
                                  & idwbuff(2)%beg:idwbuff(2)%end, &
                                  & idwbuff(3)%beg:idwbuff(3)%end))
@@ -850,14 +850,16 @@ contains
         end if
 
         if (diffusion) then
-            @:ALLOCATE(Ds(1:Dif_size))
+            @:ALLOCATE(Ds(1:num_fluids, 1:num_fluids))
         end if
 
         if (diffusion) then
-            do i = 1, Dif_size
-                Ds(i) = fluid_pp(Dif_idx(i))%D
+            do i = 1, num_fluids
+                do j = 1, num_fluids
+                    Ds(i, j) = fluid_pp(i)%D(j)
+                end do
             end do
-            !$acc update device(Ds, Dif_idx, Dif_size)
+            !$acc update device(Ds)
         end if
 
         !$acc parallel loop collapse(4) gang vector default(present)
@@ -1147,15 +1149,9 @@ contains
                                              j_vf_qp%vf, &
                                              q_prim_qp%vf, &
                                              rhs_vf)
-                !call s_compute_diffusion_rhs(id, &
-                                             !q_prim_qp%vf, &
-                                             !j_vf_qp%vf, &
-                                             !rhs_vf, &                                             
-                                             !dj_prim_dx_qp(1)%vf, &
-                                             !dj_prim_dy_qp(1)%vf, &
-                                             !dj_prim_dz_qp(1)%vf)
                 call nvtxEndRange
             end if
+
 
             ! RHS additions for viscosity
             if (viscous .or. surface_tension) then
@@ -1344,7 +1340,7 @@ contains
                 end do
             end if
 
-            if (riemann_solver == 1) then
+            if ((riemann_solver == 1) .and. (alt_soundspeed .neqv. .true.)) then
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do j = advxb, advxe
                     do q = 0, p
@@ -2542,19 +2538,19 @@ contains
         end if
 
         if (diffusion) then
-            do l = 1, Dif_size
-                @:DEALLOCATE(dj_prim_dx_qp(1)%vf(Dif_idx(l))%sf)
+            do l = 1, num_fluids
+                @:DEALLOCATE(dj_prim_dx_qp(1)%vf(l)%sf)
             end do
 
             if (n > 0) then
 
-                do l = 1, Dif_size
-                    @:DEALLOCATE(dj_prim_dy_qp(1)%vf(Dif_idx(l))%sf)
+                do l = 1, num_fluids
+                    @:DEALLOCATE(dj_prim_dy_qp(1)%vf(l)%sf)
                 end do
 
                 if (p > 0) then
-                    do l = 1, Dif_size
-                        @:DEALLOCATE(dj_prim_dz_qp(1)%vf(Dif_idx(l))%sf)
+                    do l = 1, num_fluids
+                        @:DEALLOCATE(dj_prim_dz_qp(1)%vf(l)%sf)
                     end do
                 end if
 

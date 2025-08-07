@@ -315,9 +315,15 @@ for probe_id in range(1,3+1):
         SIMULATION[f'probe({probe_id})%{cmp}'] = ParamType.REAL
 
 for f_id in range(1,10+1):
-    for real_attr in ["gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
-                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "D" ]:
-        SIMULATION[f"fluid_pp({f_id})%{real_attr}"] = ParamType.REAL
+    for real_attr in [
+        "gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
+        "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "W", "D"
+    ]:
+        if real_attr == "D":
+            for j in range(1, 10+1):
+                SIMULATION[f"fluid_pp({f_id})%D({j})"] = ParamType.REAL
+        else:
+            SIMULATION[f"fluid_pp({f_id})%{real_attr}"] = ParamType.REAL
 
     for re_id in [1, 2]:
         SIMULATION[f"fluid_pp({f_id})%Re({re_id})"] = ParamType.REAL

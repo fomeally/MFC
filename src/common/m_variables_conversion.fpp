@@ -56,7 +56,7 @@ module m_variables_conversion
     real(wp), allocatable, dimension(:) :: Gs
     integer, allocatable, dimension(:) :: bubrs
     real(wp), allocatable, dimension(:, :) :: Res
-    real(wp), allocatable, dimension(:) :: Ds
+    real(wp), allocatable, dimension(:, :) :: Ds
     !$acc declare create(bubrs, Gs, Res, Ds)
 
     integer :: is1b, is2b, is3b, is1e, is2e, is3e
@@ -668,13 +668,14 @@ contains
             !$acc update device(Res, Re_idx, Re_size)
         end if
 
-        iF (diffusion) then
-            @:ALLOCATE(Ds(1:Dif_size))
-            do j = 1, Dif_size
-                Ds(j) = fluid_pp(Dif_idx(j))%D
+        if (diffusion) then
+            @:ALLOCATE(Ds(1:num_fluids, 1:num_fluids))
+            do i = 1, num_fluids
+                do j = 1, num_fluids
+                    Ds(i, j) = fluid_pp(i)%D(j)
+                end do
             end do
-
-            !$acc update device(Ds, Dif_idx, Dif_size)
+            !$acc update device(Ds)
         end if
 #endif
 

@@ -43,8 +43,11 @@ s_finalize_diffusion_module
     real(wp), allocatable, dimension(:, :) :: fd_coeff_z_d
     !$acc declare create(fd_coeff_x_d,fd_coeff_y_d,fd_coeff_z_d)
 
-    real(wp), allocatable, dimension(:) :: Ds
+    real(wp), allocatable, dimension(:, :) :: Ds
     !$acc declare create(Ds)
+
+    real(wp), allocatable, dimension(:) :: Ws
+    !$acc declare create(Ws)
 
     real(wp), allocatable, dimension(:, :, :, :) :: dj_dx, dj_dy, dj_dz, djh_dx, djh_dy, djh_dz, dY_dx, dY_dy, dY_dz, alpha_K_dif, alpharho_K_dif, dF_KdP, F_K_dif
     !$acc declare create(dj_dx, dj_dy, dj_dz, djh_dx, djh_dy, djh_dz, dY_dx, dY_dy, dY_dz, alpha_K_dif, alpharho_K_dif, dF_KdP, F_K_dif)
@@ -76,39 +79,49 @@ contains
             offset_s(3)%end = 0
         end if
         m_end = m + fd_number; n_end = n + fd_number; p_end = p + fd_number
-        
 
-        @:ALLOCATE(Ds(1:Dif_size))
+        @:ALLOCATE(Ds(1:num_fluids, 1:num_fluids))
 
         !$acc loop seq
-        do i = 1, Dif_size
-            Ds(i) = fluid_pp(Dif_idx(i))%D
+        do i = 1, num_fluids
+            do j = 1, num_fluids
+                Ds(i, j) = fluid_pp(i)%D(j)
+            end do
         end do
-        
-        !$acc update device(Ds, Dif_idx, Dif_size)
+
+        !$acc update device(Ds)
         !$acc enter data copyin(is1_diffusion, is2_diffusion, is3_diffusion, iv)
 
-        @:ALLOCATE(dj_dx(-fd_number:m_end, 0:n, 0:p, 1:Dif_size))
-        @:ALLOCATE(djh_dx(-fd_number:m_end, 0:n, 0:p, 1:Dif_size))
-        @:ALLOCATE(dY_dx(-fd_number:m_end, 0:n, 0:p, 1:Dif_size))
+
+        @:ALLOCATE(Ws(1:num_fluids))
+
+        !$acc loop seq
+        do i = 1, num_fluids
+            Ws(i) = fluid_pp(i)%W
+        end do
+        !$acc update device(Ws)
+
+        @:ALLOCATE(dj_dx(-fd_number:m_end, 0:n, 0:p, 1:num_fluids))
+        @:ALLOCATE(djh_dx(-fd_number:m_end, 0:n, 0:p, 1:num_fluids))
+        @:ALLOCATE(dY_dx(-fd_number:m_end, 0:n, 0:p, 1:num_fluids))
         @:ALLOCATE(dvel_dx(0:m, 0:n, 0:p))
-        if (n > 0) then 
-            @:ALLOCATE(dj_dy(0:m, -fd_number:n_end, 0:p, 1:Dif_size))
-            @:ALLOCATE(djh_dy(0:m, -fd_number:n_end, 0:p, 1:Dif_size))
-            @:ALLOCATE(dY_dy(0:m, -fd_number:n_end, 0:p, 1:Dif_size))
+        if (n > 0) then
+            @:ALLOCATE(dj_dy(0:m, -fd_number:n_end, 0:p, 1:num_fluids))
+            @:ALLOCATE(djh_dy(0:m, -fd_number:n_end, 0:p, 1:num_fluids))
+            @:ALLOCATE(dY_dy(0:m, -fd_number:n_end, 0:p, 1:num_fluids))
             @:ALLOCATE(dvel_dy(0:m, 0:n, 0:p))
             if (p > 0) then
-                @:ALLOCATE(dj_dz(0:m, 0:n, -fd_number:p_end, 1:Dif_size))
-                @:ALLOCATE(djh_dz(0:m, 0:n, -fd_number:p_end, 1:Dif_size))
-                @:ALLOCATE(dY_dz(0:m, 0:n, -fd_number:p_end, 1:Dif_size))
+                @:ALLOCATE(dj_dz(0:m, 0:n, -fd_number:p_end, 1:num_fluids))
+                @:ALLOCATE(djh_dz(0:m, 0:n, -fd_number:p_end, 1:num_fluids))
+                @:ALLOCATE(dY_dz(0:m, 0:n, -fd_number:p_end, 1:num_fluids))
                 @:ALLOCATE(dvel_dz(0:m, 0:n, 0:p))
             end if
         end if
 
-        @:ALLOCATE(alpha_K_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end, 1:Dif_size))
-        @:ALLOCATE(alpharho_K_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end, 1:Dif_size))
-        @:ALLOCATE(dF_KdP(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end, 1:Dif_size))
-        @:ALLOCATE(F_K_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end, 1:Dif_size))
+        @:ALLOCATE(alpha_K_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end, 1:num_fluids))
+        @:ALLOCATE(alpharho_K_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end, 1:num_fluids))
+        @:ALLOCATE(dF_KdP(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end, 1:num_fluids))
+        @:ALLOCATE(F_K_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end, 1:num_fluids))
         @:ALLOCATE(Pi_inf_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end))
         @:ALLOCATE(Gamma_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end))
         @:ALLOCATE(F_dif(-fd_number:m_end, -fd_number:n_end, -fd_number:p_end))
@@ -1095,532 +1108,1252 @@ contains
 
         integer :: i, k, l, q, r !< Loop variables
         real(wp), dimension(2) :: dif_flg
+        real(wp) :: W1, W2, W3, D12, D13, D23, W_dif, W_fac, inv_denom
         dif_flg(1) = 1._wp; dif_flg(2) = -1._wp
+
+        if (cyl_coord) then
+            if (idir == 1) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -fd_number, m + fd_number
+                            do i = 1, num_fluids
+                                alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + i)%sf(k, l, q)
+                                alpharho_K_dif(k, l, q, i) = q_prim_vf(i)%sf(k, l, q)
+                                F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(i) + &
+                                                        (pi_infs(i)*gammas(i) / ( 1._wp + gammas(i) )) ) / cvs(i)
+                                dF_KdP(k, l, q, i) = gammas(i) / cvs(i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -fd_number, m + fd_number
+                            do i = 1, num_fluids
+                                Gamma_dif(k, l, q) = 0._wp
+                                Pi_inf_dif(k, l, q) = 0._wp
+                                F_dif(k, l, q) = 0._wp
+                                rho_dif(k, l, q) = 0._wp
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -fd_number, m + fd_number
+                            do i = 1, num_fluids
+                                Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(i)
+                                Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(i)
+                                F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
+                                rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
+                            dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
+                                                F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
+                            dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -fd_number, m + fd_number
+                            do i = 1, num_fluids
+                                dj_dx(k, l, q, i) = 0._wp
+                                djh_dx(k, l, q, i) = 0._wp
+                                dY_dx(k, l, q, i) = 0._wp
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            dvel_dx(k, l, q) = 0._wp               
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do r = -fd_number, fd_number
+                                dvel_dx(k, l, q) = dvel_dx(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k + r, l, q)*fd_coeff_x_d(r, k)               
+                            end do               
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(5) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -fd_number, m + fd_number
+                            do i = 1, num_fluids
+                                do r = -fd_number, fd_number
+                                    dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
+                                        + j_prim_vf(i)%sf(k + r, l, q)*fd_coeff_x_d(r, k)
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(5) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                do r = -fd_number, fd_number
+                                    dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                        + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1, 2)*fd_coeff_x_d(r, k)
+                                    djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                        + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*j_prim_vf(advxb + i - 1)%sf(k + r, l, q)*Ds(1, 2)*fd_coeff_x_d(r, k)
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Valid for any number of species
+                ! species continuity
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids                           
+                                rhs_vf(i)%sf(k, l, q) = rhs_vf(i)%sf(k, l, q) &
+                                    + dj_dx(k, l, q, i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Only valid for binary diffusion
+                !volume fraction
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                    + ( dj_dx(k, l, q, i) / rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dx(k, l, q) )/ dYda(k, l, q)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Valid for any number of species
+                !energy
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
+                                    + djh_dx(k, l, q, i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+            elseif (idir == 2) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = -fd_number, n + fd_number
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + i)%sf(k, l, q)
+                                alpharho_K_dif(k, l, q, i) = q_prim_vf(i)%sf(k, l, q)
+                                F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(i) + &
+                                                        (pi_infs(i)*gammas(i) / ( 1._wp + gammas(i) )) ) / cvs(i)
+                                dF_KdP(k, l, q, i) = gammas(i) / cvs(i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = -fd_number, n + fd_number
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                Gamma_dif(k, l, q) = 0._wp
+                                Pi_inf_dif(k, l, q) = 0._wp
+                                F_dif(k, l, q) = 0._wp
+                                rho_dif(k, l, q) = 0._wp
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = -fd_number, n + fd_number
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(i)
+                                Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(i)
+                                F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
+                                rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
+                            dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
+                                                F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
+                            dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = -fd_number, n + fd_number
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                dj_dy(k, l, q, i) = 0._wp
+                                djh_dy(k, l, q, i) = 0._wp
+                                dY_dy(k, l, q, i) = 0._wp
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            dvel_dy(k, l, q) = 0._wp               
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do r = -fd_number, fd_number
+                                dvel_dy(k, l, q) = dvel_dy(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k, l + r, q)*fd_coeff_y_d(r, l) + &
+                                    q_prim_vf(momyb + idir - 1)%sf(k, l, q) / y_cc(l)         
+                            end do               
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(5) gang vector default(present)
+                do q = 0, p
+                    do l = -fd_number, n + fd_number
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                do r = -fd_number, fd_number
+                                    dY_dy(k, l, q, i) = dY_dy(k, l, q, i) &
+                                        + j_prim_vf(i)%sf(k, l + r, q)*fd_coeff_y_d(r, l)
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(5) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                do r = -fd_number, fd_number
+                                    dj_dy(k, l, q, i) = dj_dy(k, l, q, i) &
+                                        + dY_dy(k, l + r, q, i)*rho_dif(k, l + r, q)*Ds(1, 2)*fd_coeff_y_d(r, l)
+                                    djh_dy(k, l, q, i) = djh_dy(k, l, q, i) &
+                                        + dY_dy(k, l + r, q, i)*rho_dif(k, l + r, q)*j_prim_vf(advxb + i - 1)%sf(k, l + r, q)*Ds(1, 2)*fd_coeff_y_d(r, l)
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Valid for any number of species
+                ! species continuity
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids                           
+                                rhs_vf(i)%sf(k, l, q) = rhs_vf(i)%sf(k, l, q) &
+                                    + dj_dy(k, l, q, i) + rho_dif(k, l, q)*Ds(1, 2)*dY_dy(k, l, q, i) / y_cc(l)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Only valid for binary diffusion
+                !volume fraction
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+
+                                rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                    + ( (dj_dy(k, l, q, i) + rho_dif(k, l, q)*Ds(1, 2)*dY_dy(k, l, q, i) / y_cc(l)) / rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dy(k, l, q) )/ dYda(k, l, q)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Valid for any number of species
+                !energy
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
+                                    + djh_dy(k, l, q, i) + rho_dif(k, l, q)*Ds(1, 2)*dY_dy(k, l, q, i) / y_cc(l)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop     
+
+            elseif (idir == 3) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = -fd_number, p + fd_number
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + i)%sf(k, l, q)
+                                alpharho_K_dif(k, l, q, i) = q_prim_vf(i)%sf(k, l, q)
+                                F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(i) + &
+                                                        (pi_infs(i)*gammas(i) / ( 1._wp + gammas(i) )) ) / cvs(i)
+                                dF_KdP(k, l, q, i) = gammas(i) / cvs(i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = -fd_number, p + fd_number
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                Gamma_dif(k, l, q) = 0._wp
+                                Pi_inf_dif(k, l, q) = 0._wp
+                                F_dif(k, l, q) = 0._wp
+                                rho_dif(k, l, q) = 0._wp
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = -fd_number, p + fd_number
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(i)
+                                Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(i)
+                                F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
+                                rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
+                            dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
+                                                F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
+                            dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = -fd_number, p + fd_number
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                dj_dz(k, l, q, i) = 0._wp
+                                djh_dz(k, l, q, i) = 0._wp
+                                dY_dz(k, l, q, i) = 0._wp
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            dvel_dz(k, l, q) = 0._wp               
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do r = -fd_number, fd_number
+                                dvel_dz(k, l, q) = dvel_dz(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k, l, q + r)*fd_coeff_z_d(r, q) / y_cc(l)               
+                            end do               
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !$acc parallel loop collapse(5) gang vector default(present)
+                do q = -fd_number, p + fd_number
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                do r = -fd_number, fd_number
+                                    dY_dz(k, l, q, i) = dY_dz(k, l, q, i) &
+                                        + j_prim_vf(i)%sf(k, l, q + r)*fd_coeff_z_d(r, q) / y_cc(l)
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+    
+                !$acc parallel loop collapse(5) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                do r = -fd_number, fd_number
+                                    dj_dz(k, l, q, i) = dj_dz(k, l, q, i) &
+                                        + dY_dz(k, l, q + r, i)*rho_dif(k, l, q + r)*Ds(1, 2)*fd_coeff_z_d(r, p)
+                                    djh_dz(k, l, q, i) = djh_dz(k, l, q, i) &
+                                        + dY_dz(k, l, q + r, i)*rho_dif(k, l, q + r)*j_prim_vf(advxb + i - 1)%sf(k, l, q + r)*Ds(1, 2)*fd_coeff_z_d(r, p)
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Valid for any number of species
+                ! species continuity
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                rhs_vf(i)%sf(k, l, q) = rhs_vf(i)%sf(k, l, q) &
+                                    + dj_dz(k, l, q, i) / y_cc(l)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Only valid for binary diffusion
+                !volume fraction
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                    + ( ( dj_dz(k, l, q, i) / y_cc(l) )/ rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dz(k, l, q) )/ dYda(k, l, q)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+                !Valid for any number of species
+                !energy
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            do i = 1, num_fluids
+                                rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
+                                    + djh_dz(k, l, q, i) / y_cc(l)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+
+            end if
+
+        else !cartesian coordinates
+            if (num_fluids == 2) then
+                if (idir == 1) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + i)%sf(k, l, q)
+                                    alpharho_K_dif(k, l, q, i) = q_prim_vf(i)%sf(k, l, q)
+                                    F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(i) + &
+                                                            (pi_infs(i)*gammas(i) / ( 1._wp + gammas(i) )) ) / cvs(i)
+                                    dF_KdP(k, l, q, i) = gammas(i) / cvs(i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                    
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    Gamma_dif(k, l, q) = 0._wp
+                                    Pi_inf_dif(k, l, q) = 0._wp
+                                    F_dif(k, l, q) = 0._wp
+                                    rho_dif(k, l, q) = 0._wp
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                    
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(i)
+                                    Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(i)
+                                    F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
+                                    rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
+                                dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
+                                                    F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
+                                dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    dj_dx(k, l, q, i) = 0._wp
+                                    djh_dx(k, l, q, i) = 0._wp
+                                    dY_dx(k, l, q, i) = 0._wp
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                dvel_dx(k, l, q) = 0._wp               
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do r = -fd_number, fd_number
+                                    dvel_dx(k, l, q) = dvel_dx(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k + r, l, q)*fd_coeff_x_d(r, k)               
+                                end do               
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    do r = -fd_number, fd_number
+                                        dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
+                                            + j_prim_vf(i)%sf(k + r, l, q)*fd_coeff_x_d(r, k)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
         
-        if (idir == 1) then
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = -fd_number, m + fd_number
-                        do i = 1, Dif_size
-                            alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + Dif_idx(i))%sf(k, l, q)
-                            alpharho_K_dif(k, l, q, i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-                            F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(Dif_idx(i)) + &
-                                                    (pi_infs(Dif_idx(i))*gammas(Dif_idx(i)) / ( 1._wp + gammas(Dif_idx(i)) )) ) / cvs(Dif_idx(i))
-                            dF_KdP(k, l, q, i) = gammas(Dif_idx(i)) / cvs(Dif_idx(i))
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-            
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = -fd_number, m + fd_number
-                        do i = 1, Dif_size
-                            Gamma_dif(k, l, q) = 0._wp
-                            Pi_inf_dif(k, l, q) = 0._wp
-                            F_dif(k, l, q) = 0._wp
-                            rho_dif(k, l, q) = 0._wp
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-            
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = -fd_number, m + fd_number
-                        do i = 1, Dif_size
-                            Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(Dif_idx(i))
-                            Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(Dif_idx(i))
-                            F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
-                            rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
-                        dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
-                                            F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
-                        dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = -fd_number, m + fd_number
-                        do i = 1, Dif_size
-                            dj_dx(k, l, q, i) = 0._wp
-                            djh_dx(k, l, q, i) = 0._wp
-                            dY_dx(k, l, q, i) = 0._wp
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        dvel_dx(k, l, q) = 0._wp               
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do r = -fd_number, fd_number
-                            dvel_dx(k, l, q) = dvel_dx(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k + r, l, q)*fd_coeff_x_d(r, k)               
-                        end do               
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(5) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = -fd_number, m + fd_number
-                        do i = 1, Dif_size
-                            do r = -fd_number, fd_number
-                                dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
-                                    + j_prim_vf(Dif_idx(i))%sf(k + r, l, q)*fd_coeff_x_d(r, k)
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    do r = -fd_number, fd_number
+                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                            + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1, 2)*fd_coeff_x_d(r, k)
+                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                            + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*j_prim_vf(advxb + i - 1)%sf(k + r, l, q)*Ds(1, 2)*fd_coeff_x_d(r, k)
+                                    end do
+                                end do
                             end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
-  
-            !$acc parallel loop collapse(5) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            do r = -fd_number, fd_number
-                                dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                    + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(i)*fd_coeff_x_d(r, k)
-                                djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                    + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*j_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + r, l, q)*Ds(i)*fd_coeff_x_d(r, k)
+                    !$acc end parallel loop
+
+                    !Valid for any number of species
+                    ! species continuity
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(i)%sf(k, l, q) = rhs_vf(i)%sf(k, l, q) &
+                                        + dj_dx(k, l, q, i)
+                                end do
                             end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
+                    !$acc end parallel loop
 
-            !Valid for any number of species
-            ! species continuity
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size                           
-                            rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) &
-                                + dj_dx(k, l, q, i)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
+                    !Only valid for binary diffusion
+                    !volume fraction
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
 
-            !Only valid for binary diffusion
-            !volume fraction
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-
-                            rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-                                + ( dj_dx(k, l, q, i) / rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dx(k, l, q) )/ dYda(k, l, q)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !Valid for any number of species
-            !energy
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
-                                + djh_dx(k, l, q, i)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-        elseif (idir == 2) then
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = -fd_number, n + fd_number
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + Dif_idx(i))%sf(k, l, q)
-                            alpharho_K_dif(k, l, q, i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-                            F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(Dif_idx(i)) + &
-                                                    (pi_infs(Dif_idx(i))*gammas(Dif_idx(i)) / ( 1._wp + gammas(Dif_idx(i)) )) ) / cvs(Dif_idx(i))
-                            dF_KdP(k, l, q, i) = gammas(Dif_idx(i)) / cvs(Dif_idx(i))
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-            
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = -fd_number, n + fd_number
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            Gamma_dif(k, l, q) = 0._wp
-                            Pi_inf_dif(k, l, q) = 0._wp
-                            F_dif(k, l, q) = 0._wp
-                            rho_dif(k, l, q) = 0._wp
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-            
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = -fd_number, n + fd_number
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(Dif_idx(i))
-                            Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(Dif_idx(i))
-                            F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
-                            rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
-                        dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
-                                            F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
-                        dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = -fd_number, n + fd_number
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            dj_dy(k, l, q, i) = 0._wp
-                            djh_dy(k, l, q, i) = 0._wp
-                            dY_dy(k, l, q, i) = 0._wp
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        dvel_dy(k, l, q) = 0._wp               
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do r = -fd_number, fd_number
-                            dvel_dy(k, l, q) = dvel_dy(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k, l + r, q)*fd_coeff_y_d(r, l)               
-                        end do               
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(5) gang vector default(present)
-            do q = 0, p
-                do l = -fd_number, n + fd_number
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            do r = -fd_number, fd_number
-                                dY_dy(k, l, q, i) = dY_dy(k, l, q, i) &
-                                    + j_prim_vf(Dif_idx(i))%sf(k, l + r, q)*fd_coeff_y_d(r, l)
+                                    rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                        + ( dj_dx(k, l, q, i) / rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dx(k, l, q) )/ dYda(k, l, q)
+                                end do
                             end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
-  
-            !$acc parallel loop collapse(5) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            do r = -fd_number, fd_number
-                                dj_dy(k, l, q, i) = dj_dy(k, l, q, i) &
-                                    + dY_dy(k, l + r, q, i)*rho_dif(k, l + r, q)*Ds(i)*fd_coeff_y_d(r, l)
-                                djh_dy(k, l, q, i) = djh_dy(k, l, q, i) &
-                                    + dY_dy(k, l + r, q, i)*rho_dif(k, l + r, q)*j_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l + r, q)*Ds(i)*fd_coeff_y_d(r, l)
+                    !$acc end parallel loop
+
+                    !Valid for any number of species
+                    !energy
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
+                                        + djh_dx(k, l, q, i)
+                                end do
                             end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !Valid for any number of species
-            ! species continuity
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size                           
-                            rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) &
-                                + dj_dy(k, l, q, i)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !Only valid for binary diffusion
-            !volume fraction
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-
-                            rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-                                + ( dj_dy(k, l, q, i) / rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dy(k, l, q) )/ dYda(k, l, q)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !Valid for any number of species
-            !energy
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
-                                + djh_dy(k, l, q, i)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop           
-        elseif (idir == 3) then
-           !$acc parallel loop collapse(4) gang vector default(present)
-            do q = -fd_number, p + fd_number
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + Dif_idx(i))%sf(k, l, q)
-                            alpharho_K_dif(k, l, q, i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-                            F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(Dif_idx(i)) + &
-                                                    (pi_infs(Dif_idx(i))*gammas(Dif_idx(i)) / ( 1._wp + gammas(Dif_idx(i)) )) ) / cvs(Dif_idx(i))
-                            dF_KdP(k, l, q, i) = gammas(Dif_idx(i)) / cvs(Dif_idx(i))
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-            
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = -fd_number, p + fd_number
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            Gamma_dif(k, l, q) = 0._wp
-                            Pi_inf_dif(k, l, q) = 0._wp
-                            F_dif(k, l, q) = 0._wp
-                            rho_dif(k, l, q) = 0._wp
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-            
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = -fd_number, p + fd_number
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(Dif_idx(i))
-                            Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(Dif_idx(i))
-                            F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
-                            rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
-                        dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
-                                            F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
-                        dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = -fd_number, p + fd_number
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            dj_dz(k, l, q, i) = 0._wp
-                            djh_dz(k, l, q, i) = 0._wp
-                            dY_dz(k, l, q, i) = 0._wp
-                        end do
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        dvel_dz(k, l, q) = 0._wp               
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do r = -fd_number, fd_number
-                            dvel_dz(k, l, q) = dvel_dz(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k, l, q + r)*fd_coeff_z_d(r, q)               
-                        end do               
-                    end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(5) gang vector default(present)
-            do q = -fd_number, p + fd_number
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            do r = -fd_number, fd_number
-                                dY_dz(k, l, q, i) = dY_dz(k, l, q, i) &
-                                    + j_prim_vf(Dif_idx(i))%sf(k, l, q + r)*fd_coeff_z_d(r, q)
+                    !$acc end parallel loop
+                elseif (idir == 2) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = -fd_number, n + fd_number
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + i)%sf(k, l, q)
+                                    alpharho_K_dif(k, l, q, i) = q_prim_vf(i)%sf(k, l, q)
+                                    F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(i) + &
+                                                            (pi_infs(i)*gammas(i) / ( 1._wp + gammas(i) )) ) / cvs(i)
+                                    dF_KdP(k, l, q, i) = gammas(i) / cvs(i)
+                                end do
                             end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
-  
-            !$acc parallel loop collapse(5) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            do r = -fd_number, fd_number
-                                dj_dz(k, l, q, i) = dj_dz(k, l, q, i) &
-                                    + dY_dz(k, l, q + r, i)*rho_dif(k, l, q + r)*Ds(i)*fd_coeff_z_d(r, p)
-                                djh_dz(k, l, q, i) = djh_dz(k, l, q, i) &
-                                    + dY_dz(k, l, q + r, i)*rho_dif(k, l, q + r)*j_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q + r)*Ds(i)*fd_coeff_z_d(r, p)
+                    !$acc end parallel loop
+                    
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = -fd_number, n + fd_number
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    Gamma_dif(k, l, q) = 0._wp
+                                    Pi_inf_dif(k, l, q) = 0._wp
+                                    F_dif(k, l, q) = 0._wp
+                                    rho_dif(k, l, q) = 0._wp
+                                end do
                             end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
-
-            !Valid for any number of species
-            ! species continuity
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size                           
-                            rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) &
-                                + dj_dz(k, l, q, i)
+                    !$acc end parallel loop
+                    
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = -fd_number, n + fd_number
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(i)
+                                    Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(i)
+                                    F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
+                                    rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
+                                end do
+                            end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
+                    !$acc end parallel loop
 
-            !Only valid for binary diffusion
-            !volume fraction
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-                                + ( dj_dz(k, l, q, i) / rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dz(k, l, q) )/ dYda(k, l, q)
+                    ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
+                                dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
+                                                    F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
+                                dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
+                            end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
+                    !$acc end parallel loop
 
-            !Valid for any number of species
-            !energy
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do q = 0, p
-                do l = 0, n
-                    do k = 0, m
-                        do i = 1, Dif_size
-                            rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
-                                + djh_dz(k, l, q, i)
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = -fd_number, n + fd_number
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    dj_dy(k, l, q, i) = 0._wp
+                                    djh_dy(k, l, q, i) = 0._wp
+                                    dY_dy(k, l, q, i) = 0._wp
+                                end do
+                            end do
                         end do
                     end do
-                end do
-            end do
-            !$acc end parallel loop
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                dvel_dy(k, l, q) = 0._wp               
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do r = -fd_number, fd_number
+                                    dvel_dy(k, l, q) = dvel_dy(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k, l + r, q)*fd_coeff_y_d(r, l)               
+                                end do               
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = -fd_number, n + fd_number
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    do r = -fd_number, fd_number
+                                        dY_dy(k, l, q, i) = dY_dy(k, l, q, i) &
+                                            + j_prim_vf(i)%sf(k, l + r, q)*fd_coeff_y_d(r, l)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+        
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    do r = -fd_number, fd_number
+                                        dj_dy(k, l, q, i) = dj_dy(k, l, q, i) &
+                                            + dY_dy(k, l + r, q, i)*rho_dif(k, l + r, q)*Ds(1, 2)*fd_coeff_y_d(r, l)
+                                        djh_dy(k, l, q, i) = djh_dy(k, l, q, i) &
+                                            + dY_dy(k, l + r, q, i)*rho_dif(k, l + r, q)*j_prim_vf(advxb + i - 1)%sf(k, l + r, q)*Ds(1, 2)*fd_coeff_y_d(r, l)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !Valid for any number of species
+                    ! species continuity
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(i)%sf(k, l, q) = rhs_vf(i)%sf(k, l, q) &
+                                        + dj_dy(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !Only valid for binary diffusion
+                    !volume fraction
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+
+                                    rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                        + ( dj_dy(k, l, q, i) / rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dy(k, l, q) )/ dYda(k, l, q)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !Valid for any number of species
+                    !energy
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
+                                        + djh_dy(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop           
+                elseif (idir == 3) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = -fd_number, p + fd_number
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + i)%sf(k, l, q)
+                                    alpharho_K_dif(k, l, q, i) = q_prim_vf(i)%sf(k, l, q)
+                                    F_K_dif(k, l, q, i) = ( q_prim_vf(E_idx)%sf(k, l, q)*gammas(i) + &
+                                                            (pi_infs(i)*gammas(i) / ( 1._wp + gammas(i) )) ) / cvs(i)
+                                    dF_KdP(k, l, q, i) = gammas(i) / cvs(i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                    
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = -fd_number, p + fd_number
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    Gamma_dif(k, l, q) = 0._wp
+                                    Pi_inf_dif(k, l, q) = 0._wp
+                                    F_dif(k, l, q) = 0._wp
+                                    rho_dif(k, l, q) = 0._wp
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                    
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = -fd_number, p + fd_number
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    Gamma_dif(k, l, q) = Gamma_dif(k, l, q) + alpha_K_dif(k, l, q, i)*gammas(i)
+                                    Pi_inf_dif(k, l, q) = Pi_inf_dif(k, l, q) + alpha_K_dif(k, l, q, i)*pi_infs(i)
+                                    F_dif(k, l, q) = F_dif(k, l, q) + alpha_K_dif(k, l, q, i)*F_K_dif(k, l, q, i)
+                                    rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    ! For now, only computes for BINARY diffusion. Computed dPdt without viscous term and velocity divergence
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                dYda(k, l, q) = F_K_dif(k, l, q, 1)*F_K_dif(k, l, q, 2) / (F_dif(k, l, q) ** 2._wp)
+                                dYdP(k, l, q) = ( alpha_K_dif(k, l, q, 1)*alpha_k_dif(k, l, q, 2) ) * (F_K_dif(k, l, q, 2)*dF_KdP(k, l, q, 1) - &
+                                                    F_K_dif(k, l, q, 1)*dF_KdP(k, l, q, 2)) / (F_dif(k, l, q) ** 2._wp)
+                                dPdt(k, l, q) = -( q_prim_vf(E_idx)%sf(k, l, q)*(Gamma_dif(k, l, q) + 1._wp) + Pi_inf_dif(k, l, q) ) / Gamma_dif(k, l, q)                   
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = -fd_number, p + fd_number
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    dj_dz(k, l, q, i) = 0._wp
+                                    djh_dz(k, l, q, i) = 0._wp
+                                    dY_dz(k, l, q, i) = 0._wp
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                dvel_dz(k, l, q) = 0._wp               
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do r = -fd_number, fd_number
+                                    dvel_dz(k, l, q) = dvel_dz(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k, l, q + r)*fd_coeff_z_d(r, q)               
+                                end do               
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = -fd_number, p + fd_number
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    do r = -fd_number, fd_number
+                                        dY_dz(k, l, q, i) = dY_dz(k, l, q, i) &
+                                            + j_prim_vf(i)%sf(k, l, q + r)*fd_coeff_z_d(r, q)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+        
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    do r = -fd_number, fd_number
+                                        dj_dz(k, l, q, i) = dj_dz(k, l, q, i) &
+                                            + dY_dz(k, l, q + r, i)*rho_dif(k, l, q + r)*Ds(1, 2)*fd_coeff_z_d(r, p)
+                                        djh_dz(k, l, q, i) = djh_dz(k, l, q, i) &
+                                            + dY_dz(k, l, q + r, i)*rho_dif(k, l, q + r)*j_prim_vf(advxb + i - 1)%sf(k, l, q + r)*Ds(1, 2)*fd_coeff_z_d(r, p)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !Valid for any number of species
+                    ! species continuity
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(i)%sf(k, l, q) = rhs_vf(i)%sf(k, l, q) &
+                                        + dj_dz(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !Only valid for binary diffusion
+                    !volume fraction
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                        + ( dj_dz(k, l, q, i) / rho_dif(k, l, q) - dif_flg(i)*dYdP(k, l, q)*dPdt(k, l, q)*dvel_dz(k, l, q) )/ dYda(k, l, q)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !Valid for any number of species
+                    !energy
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
+                                        + djh_dz(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                end if
+            elseif (num_fluids == 3) then
+                ! For 3 fluids, we need to compute the diffusion terms for each pair of species
+                ! 1 is N2, 2 is CO2, 3 is H2
+                W1 = Ws(1)
+                W2 = Ws(2)
+                W3 = Ws(3)
+                D12 = Ds(1,2)
+                D13 = Ds(1,3)
+                D23 = Ds(2,3)
+                if (idir == 1) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    alpha_K_dif(k, l, q, i) = q_prim_vf(E_idx + i)%sf(k, l, q)
+                                    alpharho_K_dif(k, l, q, i) = q_prim_vf(i)%sf(k, l, q)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                    
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    rho_dif(k, l, q) = 0._wp
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                    
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    dj_dx(k, l, q, i) = 0._wp
+                                    djh_dx(k, l, q, i) = 0._wp
+                                    dY_dx(k, l, q, i) = 0._wp
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = -fd_number, m + fd_number
+                                do i = 1, num_fluids
+                                    do r = -fd_number, fd_number
+                                        dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
+                                            + j_prim_vf(i)%sf(k + r, l, q)*fd_coeff_x_d(r, k)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+        
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do r = -fd_number, fd_number
+                                    inv_denom = 1._wp / ( j_prim_vf(1)%sf(k + r, l, q)*D23 + j_prim_vf(2)%sf(k + r, l, q)*D13 + j_prim_vf(3)%sf(k + r, l, q)*D12 )
+                                    do i = 1, num_fluids
+                                        select case (i)
+                                            case (1)
+                                                dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                    + rho_dif(k + r, l, q)*(D12*D13*(1._wp - j_prim_vf(1)%sf(k + r, l, q))*dY_dx(k + r, l, q, 1) &
+                                                    - j_prim_vf(1)%sf(k + r, l, q)*D23*(D12*dY_dx(k + r, l, q, 2) + D13*dY_dx(k + r, l, q, 3))) &
+                                                    * inv_denom*fd_coeff_x_d(r, k)
+
+                                                djh_dx(k, l, q, i) = djh_dx(k, l, q, 1) &
+                                                    + j_prim_vf(advxb)%sf(k + r, l, q)*rho_dif(k + r, l, q)*(D12*D13*(1._wp - j_prim_vf(1)%sf(k + r, l, q))*dY_dx(k + r, l, q, 1) &
+                                                    - j_prim_vf(1)%sf(k + r, l, q)*D23*(D12*dY_dx(k + r, l, q, 2) + D13*dY_dx(k + r, l, q, 3))) &
+                                                    * inv_denom*fd_coeff_x_d(r, k)
+
+                                            case (2)
+                                                dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                    + rho_dif(k + r, l, q)*(D12*D23*(1._wp - j_prim_vf(2)%sf(k + r, l, q))*dY_dx(k + r, l, q, 2) &
+                                                    - j_prim_vf(2)%sf(k + r, l, q)*D13*(D12*dY_dx(k + r, l, q, 1) + D23*dY_dx(k + r, l, q, 3))) &
+                                                    * inv_denom*fd_coeff_x_d(r, k)
+
+                                                djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                    + j_prim_vf(advxb + 1)%sf(k + r, l, q)*rho_dif(k + r, l, q)*(D12*D23*(1._wp - j_prim_vf(2)%sf(k + r, l, q))*dY_dx(k + r, l, q, 2) &
+                                                    - j_prim_vf(2)%sf(k + r, l, q)*D13*(D12*dY_dx(k + r, l, q, 1) + D23*dY_dx(k + r, l, q, 3))) &
+                                                    * inv_denom*fd_coeff_x_d(r, k)
+
+                                            case (3)
+                                                dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                    + rho_dif(k + r, l, q)*(D23*D13*(1._wp - j_prim_vf(3)%sf(k + r, l, q))*dY_dx(k + r, l, q, 3) &
+                                                    - j_prim_vf(3)%sf(k + r, l, q)*D12*(D13*dY_dx(k + r, l, q, 1) + D23*dY_dx(k + r, l, q, 2))) &
+                                                    * inv_denom*fd_coeff_x_d(r, k)
+
+                                                djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                    + j_prim_vf(advxb + 2)%sf(k + r, l, q)*rho_dif(k + r, l, q)*(D23*D13*(1._wp - j_prim_vf(3)%sf(k + r, l, q))*dY_dx(k + r, l, q, 3) &
+                                                    - j_prim_vf(3)%sf(k + r, l, q)*D12*(D13*dY_dx(k + r, l, q, 1) + D23*dY_dx(k + r, l, q, 2))) &
+                                                    * inv_denom*fd_coeff_x_d(r, k)
+                                        end select
+                                    end do
+                                    
+                                end do 
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !Valid for any number of species
+                    ! species continuity
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(i)%sf(k, l, q) = rhs_vf(i)%sf(k, l, q) &
+                                        + dj_dx(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !volume fraction
+                    !ideal gas only (3-component diffusion)
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m                        
+                                W_dif = alpha_K_dif(k, l, q, 1)*W1 + alpha_K_dif(k, l, q, 2)*W2 + alpha_K_dif(k, l, q, 3)*W3
+                                W_fac = W_dif / (W1*W2*W3*rho_dif(k, l, q))
+                                do i = 1, num_fluids
+                                    select case (i)
+                                        case (1)
+                                            rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                                + W_fac & 
+                                                * ( dj_dx(k, l, q, 1)*(1._wp - alpha_K_dif(k, l, q, 1))*W2*W3 - alpha_K_dif(k, l, q, 1)*W1*( W2*dj_dx(k, l, q, 3) + W3*dj_dx(k, l, q, 2) ) )
+
+                                        case (2)
+                                            rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                                + W_fac &
+                                                * ( dj_dx(k, l, q, 2)*(1._wp - alpha_K_dif(k, l, q, 2))*W1*W3 - alpha_K_dif(k, l, q, 2)*W2*( W1*dj_dx(k, l, q, 3) + W3*dj_dx(k, l, q, 1) ) )
+
+                                        case (3)
+                                            rhs_vf(advxb + i - 1)%sf(k, l, q) = rhs_vf(advxb + i - 1)%sf(k, l, q) &
+                                                + W_fac &
+                                                * ( dj_dx(k, l, q, 3)*(1._wp - alpha_K_dif(k, l, q, 3))*W1*W2 - alpha_K_dif(k, l, q, 3)*W3*( W1*dj_dx(k, l, q, 2) + W2*dj_dx(k, l, q, 1) ) )
+                                    end select
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+
+                    !Valid for any number of species
+                    !energy
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                do i = 1, num_fluids
+                                    rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
+                                        + djh_dx(k, l, q, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                end if
+            end if
         end if
 
 
@@ -1629,6 +2362,7 @@ contains
     subroutine s_finalize_diffusion_module
 
         @:DEALLOCATE(Ds)
+        @:DEALLOCATE(Ws)
         @:DEALLOCATE(alpha_K_dif, alpharho_K_dif, dF_KdP, F_K_dif, F_dif)
         @:DEALLOCATE(Gamma_dif, Pi_inf_dif, dYda, dYdP, dPdt, rho_dif)
         @:DEALLOCATE(fd_coeff_x_d)

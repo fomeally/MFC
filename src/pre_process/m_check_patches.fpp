@@ -95,11 +95,13 @@ contains
                     call s_check_gaussian_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == 23) then
                     call s_check_tanh_patch_geometry(i)
+                elseif (patch_icpp(i)%geometry == 24) then
+                    call s_check_tanh_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == dflt_int) then
                     call s_prohibit_abort("Active patch undefined", "patch_icpp("//trim(iStr)//")%geometry must be set")
                 else
                     call s_prohibit_abort("Invalid patch geometry number", "patch_icpp("//trim(iStr)//")%geometry "// &
-                                          "must be between 1 and 21")
+                                          "must be between 1 and 24")
                 end if
             else
                 if (patch_icpp(i)%geometry == dflt_int) then
