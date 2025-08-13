@@ -58,7 +58,7 @@ module m_variables_conversion
     integer, allocatable, dimension(:) :: bubrs
     real(wp), allocatable, dimension(:, :) :: Res
     real(wp), allocatable, dimension(:, :) :: Ds
-    $:GPU_DECLARE(create='[bubrs,Gs,Res,Ds]', Ds)
+    $:GPU_DECLARE(create='[bubrs,Gs,Res,Ds]')
 
     integer :: is1b, is2b, is3b, is1e, is2e, is3e
     $:GPU_DECLARE(create='[is1b,is2b,is3b,is1e,is2e,is3e]')

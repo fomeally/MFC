@@ -747,20 +747,6 @@ contains
             call nvtxEndRange
         end if
 
-        if (diffusion .and. weno_Dif_flux) then
-            call nvtxStartRange("RHS-DIFFUSION")
-            call s_get_diffusion(jL_rsx_vf, jL_rsy_vf, jL_rsz_vf, &
-                                 djL_prim_dx_n, djL_prim_dy_n, djL_prim_dz_n, &
-                                 jL_prim, &
-                                 jR_rsx_vf, jR_rsy_vf, jR_rsz_vf, &
-                                 djR_prim_dx_n, djR_prim_dy_n, djR_prim_dz_n, &
-                                 jR_prim, &
-                                 j_vf_qp, &
-                                 dj_prim_dx_qp, dj_prim_dy_qp, dj_prim_dz_qp, &
-                                 idwbuff(1), idwbuff(2), idwbuff(3))
-            call nvtxEndRange
-        end if
-
         if (surface_tension) then
             call nvtxStartRange("RHS-SURFACE-TENSION")
             call s_get_capillary(q_prim_qp%vf, bc_type)
