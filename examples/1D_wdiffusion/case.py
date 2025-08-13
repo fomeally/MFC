@@ -26,6 +26,10 @@ Gamma_n2 = 1.0 / (gamma_n2 - 1.0)
 cv_n2 = Rbar * Gamma_n2 / W_n2
 
 D_ab = 1.0e-1
+D11 = 0.0e0
+D12 = D_ab
+D21 = D12
+D22 = 0.0e0
 
 Nx = 199
 
@@ -50,7 +54,7 @@ print(
             # Simulation Algorithm Parameters
             "num_patches": 2,
             "model_eqns": 2,
-            "alt_soundspeed": "T",
+            "alt_soundspeed": "F",
             "diffusion": "T",
             "num_fluids": 2,
             "mpp_lim": "F",
@@ -64,7 +68,7 @@ print(
             "mapped_weno": "T",
             "null_weights": "F",
             "mp_weno": "F",
-            "riemann_solver": 2,
+            "riemann_solver": 1,
             "wave_speeds": 1,
             "avg_state": 2,
             "bc_x%beg": -2,
@@ -106,13 +110,15 @@ print(
             "fluid_pp(1)%gamma": Gamma_co2,
             "fluid_pp(1)%pi_inf": 0.0,
             "fluid_pp(1)%cv": cv_co2,
-            "fluid_pp(1)%D": D_ab,
-            
+            "fluid_pp(1)%D(1)": D11,
+            "fluid_pp(1)%D(2)": D12,
+
             # N2
             "fluid_pp(2)%gamma": Gamma_n2,
             "fluid_pp(2)%pi_inf": 0.0,
             "fluid_pp(2)%cv": cv_n2,
-            "fluid_pp(2)%D": D_ab,
+            "fluid_pp(2)%D(1)": D21,
+            "fluid_pp(2)%D(2)": D22,
             
         }
     )

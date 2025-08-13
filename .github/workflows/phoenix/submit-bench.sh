@@ -20,14 +20,14 @@ sbatch_cpu_opts="\
 "
 
 sbatch_gpu_opts="\
-#SBATCH -CV100
+#SBATCH -CL40S
 #SBATCH --ntasks-per-node=4       # Number of cores per node required
 #SBATCH -G2\
 "
 
-if [ "$2" == "cpu" ]; then
+if [ "$2" = "cpu" ]; then
     sbatch_device_opts="$sbatch_cpu_opts"
-elif [ "$2" == "gpu" ]; then
+elif [ "$2" = "gpu" ]; then
     sbatch_device_opts="$sbatch_gpu_opts"
 else
     usage

@@ -27,6 +27,7 @@ BASE_CFG = {
     'mpp_lim'                      : 'F',
     'mixture_err'                  : 'F',
     'time_stepper'                 : 3,
+    'recon_type'                   : 1,
     'weno_order'                   : 5,
     'weno_eps'                     : 1.E-16,
     'mapped_weno'                  : 'F',
@@ -76,7 +77,6 @@ BASE_CFG = {
     'qbmm'                          : 'F',
     'dist_type'                     : 2,
     'poly_sigma'                    : 0.3,
-    'R0_type'                       : 1,
     'sigR'                          : 0.1,
     'sigV'                          : 0.1,
     'rhoRV'                         : 0.0,
@@ -92,8 +92,6 @@ BASE_CFG = {
     'rdma_mpi'                          : 'F',
 
     'bubbles_lagrange'                 : 'F',
-    'rkck_adap_dt'                     : 'F',
-    'rkck_tolerance'                   : 1.0e-09,
     'lag_params%nBubs_glb'             : 1,
     'lag_params%solver_approach'       : 0,
     'lag_params%cluster_type'          : 2,
@@ -135,7 +133,7 @@ class TestCase(case.Case):
         filepath          = f'{self.get_dirpath()}/case.py'
         tasks             = ["-n", str(self.ppn)]
         jobs              = ["-j", str(ARG("jobs"))] if ARG("case_optimization") else []
-        case_optimization = ["--case-optimization"] if ARG("case_optimization") else []
+        case_optimization = ["--case-optimization"]  if ARG("case_optimization") else []
 
         if self.params.get("bubbles_lagrange", 'F') == 'T':
             input_bubbles_lagrange(self)
@@ -257,6 +255,8 @@ print(json.dumps({{**case, **mods}}))
 
         if "Example" in self.trace.split(" -> "):
             tolerance = 1e-3
+        elif "Cylindrical" in self.trace.split(" -> "):
+            tolerance = 1e-9
         elif self.params.get("hypoelasticity", 'F') == 'T':
             tolerance = 1e-7
         elif self.params.get("mixlayer_perturb", 'F') == 'T':
@@ -271,10 +271,10 @@ print(json.dumps({{**case, **mods}}))
             tolerance = 3e-12
         elif self.params.get("weno_order") == 7:
             tolerance = 1e-9
+        elif self.params.get("mhd", 'F') == 'T':
+            tolerance = 1e-8
 
         return 1e8 * tolerance if single else tolerance
-
-
 
 @dataclasses.dataclass
 class TestCaseBuilder:

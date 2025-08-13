@@ -70,6 +70,26 @@ module m_derived_types
         type(scalar_field), allocatable, dimension(:) :: vf !< Vector field
     end type vector_field
 
+    !> Generic 3-component vector (e.g., spatial coordinates or field components)
+    !! Named _dt (derived types: x,y,z) to differentiate from t_vec3 (3-component vector)
+    type vec3_dt ! dt for derived types
+        real(wp) :: x
+        real(wp) :: y
+        real(wp) :: z
+    end type vec3_dt
+
+    !> Left and right Riemann states
+    type riemann_states
+        real(wp) :: L
+        real(wp) :: R
+    end type riemann_states
+
+    !> Left and right Riemann states for 3-component vectors
+    type riemann_states_vec3
+        real(wp) :: L(3)
+        real(wp) :: R(3)
+    end type riemann_states_vec3
+
     !> Integer bounds for variables
     type int_bounds_info
         integer :: beg
@@ -87,6 +107,16 @@ module m_derived_types
         logical :: grcbc_in, grcbc_out, grcbc_vel_out
 
     end type int_bounds_info
+
+    type bc_patch_parameters
+        integer :: geometry
+        integer :: type
+        integer :: dir
+        integer :: loc
+        real(wp), dimension(3) :: centroid
+        real(wp), dimension(3) :: length
+        real(wp) :: radius
+    end type bc_patch_parameters
 
     !> Derived type adding beginning (beg) and end bounds info as attributes
     type bounds_info
@@ -111,13 +141,13 @@ module m_derived_types
         character(LEN=pathlen_max) :: filepath !<
         !! Path the STL file relative to case_dir.
 
-        t_vec3 :: translate !<
+        real(wp), dimension(1:3) :: translate !<
         !! Translation of the STL object.
 
-        t_vec3 :: scale !<
+        real(wp), dimension(1:3) :: scale !<
         !! Scale factor for the STL object.
 
-        t_vec3 :: rotate !<
+        real(wp), dimension(1:3) :: rotate !<
         !! Angle to rotate the STL object along each cartesian coordinate axis,
         !! in radians.
 
@@ -130,17 +160,17 @@ module m_derived_types
 
     type :: t_triangle
         real(wp), dimension(1:3, 1:3) :: v ! Vertices of the triangle
-        t_vec3 :: n ! Normal vector
+        real(wp), dimension(1:3) :: n ! Normal vector
     end type t_triangle
 
     type :: t_ray
-        t_vec3 :: o ! Origin
-        t_vec3 :: d ! Direction
+        real(wp), dimension(1:3) :: o ! Origin
+        real(wp), dimension(1:3) :: d ! Direction
     end type t_ray
 
     type :: t_bbox
-        t_vec3 :: min ! Minimum coordinates
-        t_vec3 :: max ! Maximum coordinates
+        real(wp), dimension(1:3) :: min ! Minimum coordinates
+        real(wp), dimension(1:3) :: max ! Maximum coordinates
     end type t_bbox
 
     type :: t_model
@@ -213,6 +243,9 @@ module m_derived_types
         !! the partial densities, density, velocity, pressure, volume fractions,
         !! specific heat ratio function and the liquid stiffness function.
 
+        real(wp) :: Bx, By, Bz !<
+        !! Magnetic field components; B%x is not used for 1D
+
         real(wp), dimension(6) :: tau_e !<
         !! Elastic stresses added to primitive variables if hypoelasticity = True
 
@@ -232,13 +265,13 @@ module m_derived_types
         character(LEN=pathlen_max) :: model_filepath !<
         !! Path the STL file relative to case_dir.
 
-        t_vec3 :: model_translate !<
+        real(wp), dimension(1:3) :: model_translate !<
         !! Translation of the STL object.
 
-        t_vec3 :: model_scale !<
+        real(wp), dimension(1:3) :: model_scale !<
         !! Scale factor for the STL object.
 
-        t_vec3 :: model_rotate !<
+        real(wp), dimension(1:3) :: model_rotate !<
         !! Angle to rotate the STL object along each cartesian coordinate axis,
         !! in radians.
 
@@ -270,13 +303,13 @@ module m_derived_types
         character(LEN=pathlen_max) :: model_filepath !<
         !! Path the STL file relative to case_dir.
 
-        t_vec3 :: model_translate !<
+        real(wp), dimension(1:3) :: model_translate !<
         !! Translation of the STL object.
 
-        t_vec3 :: model_scale !<
+        real(wp), dimension(1:3) :: model_scale !<
         !! Scale factor for the STL object.
 
-        t_vec3 :: model_rotate !<
+        real(wp), dimension(1:3) :: model_rotate !<
         !! Angle to rotate the STL object along each cartesian coordinate axis,
         !! in radians.
 
@@ -309,16 +342,9 @@ module m_derived_types
         real(wp), dimension(num_fluids_max) :: D      !< Binary diffusion coefficients
     end type physical_parameters
 
-    !> Derived type annexing the flow probe location
-    type probe_parameters
-        real(wp) :: x !< First coordinate location
-        real(wp) :: y !< Second coordinate location
-        real(wp) :: z !< Third coordinate location
-    end type probe_parameters
-
     type mpi_io_airfoil_ib_var
         integer, dimension(2) :: view
-        type(probe_parameters), allocatable, dimension(:) :: var
+        type(vec3_dt), allocatable, dimension(:) :: var
     end type mpi_io_airfoil_ib_var
 
     !> Derived type annexing integral regions
@@ -418,5 +444,11 @@ module m_derived_types
         real(wp) :: diffcoefvap      !< Vapor diffusivity in the gas
 
     end type bubbles_lagrange_parameters
+
+    !> Max and min number of cells in a direction of each combination of x-,y-, and z-
+    type cell_num_bounds
+        integer :: mn_max, np_max, mp_max, mnp_max
+        integer :: mn_min, np_min, mp_min, mnp_min
+    end type cell_num_bounds
 
 end module m_derived_types
