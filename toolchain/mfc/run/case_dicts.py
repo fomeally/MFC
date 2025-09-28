@@ -317,11 +317,14 @@ for probe_id in range(1,3+1):
 for f_id in range(1,10+1):
     for real_attr in [
         "gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
-        "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "W", "D"
+        "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "W", "D", "cp", 
+        "T0", "h0", "gas_mixture"
     ]:
         if real_attr == "D":
             for j in range(1, 10+1):
                 SIMULATION[f"fluid_pp({f_id})%D({j})"] = ParamType.REAL
+        elif real_attr == "gas_mixture":
+            SIMULATION[f"fluid_pp({f_id})%{real_attr}"] = ParamType.LOG
         else:
             SIMULATION[f"fluid_pp({f_id})%{real_attr}"] = ParamType.REAL
 

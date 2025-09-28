@@ -1462,7 +1462,7 @@ contains
         if (viscous) then
             call s_initialize_viscous_module()
         end if
-
+        
         call s_initialize_rhs_module()
 
         if (surface_tension) call s_initialize_surface_tension_module()

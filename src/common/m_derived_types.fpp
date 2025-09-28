@@ -293,7 +293,7 @@ module m_derived_types
         real(wp) :: gamma   !< Sp. heat ratio
         real(wp) :: pi_inf  !< Liquid stiffness
         real(wp), dimension(2) :: Re      !< Reynolds number
-        real(wp) :: cv      !< heat capacity
+        real(wp) :: cv      !< heat capacity constant volume
         real(wp) :: qv      !< reference energy per unit mass for SGEOS, q (see Le Metayer (2004))
         real(wp) :: qvp     !< reference entropy per unit mass for SGEOS, q' (see Le Metayer (2004))
         real(wp) :: mul0    !< Bubble viscosity
@@ -307,6 +307,10 @@ module m_derived_types
         real(wp) :: G
         real(wp) :: W       !< Molecular weight
         real(wp), dimension(num_fluids_max) :: D      !< Binary diffusion coefficients
+        real(wp) :: cp      !< heat capacity constant pressure
+        real(wp) :: T0      !< Reference temperature
+        real(wp) :: h0      !< Reference enthalpy
+        logical  :: gas_mixture !< Whether the fluid is part of the gas mixture
     end type physical_parameters
 
     !> Derived type annexing the flow probe location

@@ -223,7 +223,7 @@ contains
         integer, intent(INOUT), dimension(0:m, 0:n, 0:p) :: patch_id_fp
         type(scalar_field), dimension(1:sys_size) :: q_prim_vf
 
-        real(kind(0d0)) :: pi_inf, gamma, lit_gamma, b, c, d
+        real(wp) :: pi_inf, gamma, lit_gamma, b, c, d
 
         integer :: i, j, k !< Generic loop operators
 
@@ -231,9 +231,9 @@ contains
         gamma = fluid_pp(1)%gamma
         lit_gamma = (1d0 + gamma)/gamma
 
-        b = 30d0
-        c = 0.25d0
-        d = 0.25d0
+        b = 15._wp
+        c = 0.5_wp
+        d = 0.5_wp
 
         ! Transferring the line segment's centroid and length information
         x_centroid = patch_icpp(patch_id)%x_centroid

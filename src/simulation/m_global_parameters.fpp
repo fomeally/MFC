@@ -261,6 +261,19 @@ module m_global_parameters
 
     !$acc declare create(Re_size, Re_idx)
 
+    !> @name The number of fluids, along with their identifying indexes, respectively,
+    !! for which we will compute as a mixture gas
+    !> @{
+    integer :: Dif_size
+    integer, allocatable, dimension(:) :: Dif_idx
+    !> @}
+
+    !$acc declare create(Dif_size, Dif_idx)
+
+
+    integer :: liq_idx
+    !$acc declare create(liq_idx)
+
     ! The WENO average (WA) flag regulates whether the calculation of any cell-
     ! average spatial derivatives is carried out in each cell by utilizing the
     ! arithmetic mean of the left and right, WENO-reconstructed, cell-boundary
@@ -586,7 +599,11 @@ contains
             fluid_pp(i)%cp_v = dflt_real
             fluid_pp(i)%G = 0._wp
             fluid_pp(i)%W = 0._wp
-            fluid_pp(i)%D = 0._wp
+            fluid_pp(i)%D(:) = 0._wp
+            fluid_pp(i)%cp = 0._wp
+            fluid_pp(i)%T0 = 0._wp
+            fluid_pp(i)%h0 = 0._wp
+            fluid_pp(i)%gas_mixture = .false.
         end do
 
         ! Tait EOS
@@ -758,6 +775,9 @@ contains
         ! of fluids for which the physical and geometric curvatures of the
         ! interfaces will be computed
         Re_size = 0
+        
+
+        Dif_size = 0
 
 
         ! Gamma/Pi_inf Model
@@ -1049,6 +1069,30 @@ contains
 
             end if
 
+            ! Determining the number of fluids in the gas mixture
+            do i = 1, num_fluids
+                if (fluid_pp(i)%gas_mixture) Dif_size = Dif_size + 1
+            end do
+
+            !$acc update device(Dif_size)
+
+            ! Bookkeeping the indexes of any gas mixture fluids 
+            if (diffusion) then
+
+                @:ALLOCATE(Dif_idx(1:Dif_size))
+
+                k = 0
+                do i = 1, num_fluids
+                    if (fluid_pp(i)%gas_mixture) then
+                        k = k + 1; Dif_idx(k) = i
+                    else
+                        liq_idx = i
+                    end if
+
+                end do
+
+            end if
+
         end if
         ! END: Volume Fraction Model
 
@@ -1101,7 +1145,7 @@ contains
         if (ib) allocate (MPI_IO_IB_DATA%var%sf(0:m, 0:n, 0:p))
         Np = 0
 
-        !$acc update device(Re_size)
+        !$acc update device(Re_size, Dif_size)
         ! Determining the number of cells that are needed in order to store
         ! sufficient boundary conditions data as to iterate the solution in
         ! the physical computational domain from one time-step iteration to
@@ -1113,10 +1157,10 @@ contains
         end if
 
         if (diffusion) then
-            if (weno_Dif_flux) then
-                buff_size = 2*weno_polyn + 2
-            else
-                fd_number = max(1, fd_order/2)
+            
+            fd_number = max(1, fd_order/2)
+            if (buff_size < 2*fd_number) then
+                buff_size = 2*fd_number
             end if
         end if
 
@@ -1271,6 +1315,10 @@ contains
         ! of surface tension
         if (viscous) then
             @:DEALLOCATE(Re_idx)
+        end if
+
+        if (diffusion) then
+            @:DEALLOCATE(Dif_idx)
         end if
 
         deallocate (proc_coords)

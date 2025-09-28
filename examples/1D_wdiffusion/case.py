@@ -106,14 +106,18 @@ print(
             "fluid_pp(1)%gamma": Gamma_co2,
             "fluid_pp(1)%pi_inf": 0.0,
             "fluid_pp(1)%cv": cv_co2,
-            "fluid_pp(1)%D": D_ab,
+            "fluid_pp(1)%W": W_co2,
+            "fluid_pp(1)%D(1)": 0.0,
+            "fluid_pp(1)%D(2)": D_ab,
             
             # N2
             "fluid_pp(2)%gamma": Gamma_n2,
             "fluid_pp(2)%pi_inf": 0.0,
             "fluid_pp(2)%cv": cv_n2,
-            "fluid_pp(2)%D": D_ab,
-            
+            "fluid_pp(2)%W": W_n2,
+            "fluid_pp(2)%D(1)": 0.0,
+            "fluid_pp(2)%D(2)": D_ab,
+
         }
     )
 )

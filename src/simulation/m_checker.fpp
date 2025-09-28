@@ -283,7 +283,7 @@ contains
     !> Checks constraints on alternative sound speed parameters (alt_soundspeed)
     subroutine s_check_inputs_alt_soundspeed
         @:PROHIBIT(alt_soundspeed .and. model_eqns /= 2, "5-equation model (model_eqns = 2) is required for alt_soundspeed")
-        @:PROHIBIT(alt_soundspeed .and. riemann_solver /= 2, "alt_soundspeed requires HLLC Riemann solver (riemann_solver = 2)")
+        !@:PROHIBIT(alt_soundspeed .and. riemann_solver /= 2, "alt_soundspeed requires HLLC Riemann solver (riemann_solver = 2)")
         @:PROHIBIT(alt_soundspeed .and. num_fluids /= 2 .and. num_fluids /= 3)
     end subroutine s_check_inputs_alt_soundspeed
 

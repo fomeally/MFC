@@ -6,7 +6,7 @@
 #:include 'macros.fpp'
 
 !> @brief The module serves as a proxy to the parameters and subroutines
-!!          available in the MPI implementation's MPI module. Specifically,
+!!          available in the MPI implementations MPI module. Specifically,
 !!          the purpose of the proxy is to harness basic MPI commands into
 !!          more complicated procedures as to accomplish the communication
 !!          goals for the simulation.
@@ -256,10 +256,10 @@ contains
 
         do i = 1, num_fluids_max
             #:for VAR in [ 'gamma','pi_inf','mul0','ss','pv','gamma_v','M_v',  &
-                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp', 'W' ]
+                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp', 'W', 'cp', 'T0', 'h0']
                 call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
-
+            call MPI_BCAST(fluid_pp(i)%gas_mixture, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
             call MPI_BCAST(fluid_pp(i)%D(1), num_fluids, mpi_p, 0, MPI_COMM_WORLD, ierr)
             call MPI_BCAST(fluid_pp(i)%Re(1), 2, mpi_p, 0, MPI_COMM_WORLD, ierr)
         end do
