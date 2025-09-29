@@ -96,6 +96,7 @@ module m_global_parameters
     type(int_bounds_info) :: cont_idx              !< Indexes of first & last continuity eqns.
     type(int_bounds_info) :: mom_idx               !< Indexes of first & last momentum eqns.
     integer :: E_idx                               !< Index of total energy equation
+    integer :: advg_idx                            !< Index of gas mixture advection equation
     integer :: alf_idx                             !< Index of void fraction
     integer :: n_idx                               !< Index of number density
     type(int_bounds_info) :: adv_idx               !< Indexes of first & last advection eqns.
@@ -144,6 +145,15 @@ module m_global_parameters
 
     integer, allocatable, dimension(:) :: start_idx !<
     !! Starting cell-center index of local processor in global grid
+
+    !> @name The number of fluids, along with their identifying indexes, respectively,
+    !! for which we will compute as a mixture gas
+    !> @{
+    integer :: Dif_size
+    integer, allocatable, dimension(:) :: Dif_idx
+    !> @}
+
+    !$acc declare create(Dif_size, Dif_idx)
 
 #ifdef MFC_MPI
 
@@ -486,7 +496,7 @@ contains
             fluid_pp(i)%qv = 0._wp
             fluid_pp(i)%qvp = 0._wp
             fluid_pp(i)%G = 0._wp
-            fluid_pp(i)%D = 0._wp
+            fluid_pp(i)%gas_mixture = .false.
         end do
 
         ! Lagrangian solver
@@ -498,7 +508,7 @@ contains
         !! any other tasks needed to properly setup the module
     subroutine s_initialize_global_parameters_module
 
-        integer :: i, j, fac
+        integer :: i, j, k, fac
 
         ! Determining the layout of the state vectors and overall size of
         ! the system of equations, given the dimensionality and choice of
@@ -659,6 +669,36 @@ contains
             if (surface_tension) then
                 c_idx = sys_size + 1
                 sys_size = c_idx
+            end if
+
+
+
+            ! Bookkeeping the indexes of any gas mixture fluids 
+            if (diffusion) then
+                advg_idx = sys_size + 1
+                sys_size = advg_idx
+
+                ! Bookkeeping the indexes of any gas mixture fluids 
+            
+                ! Determining the number of fluids in the gas mixture
+                do i = 1, num_fluids
+                    if (fluid_pp(i)%gas_mixture) Dif_size = Dif_size + 1
+                end do
+
+                !$acc update device(Dif_size)
+
+                @:ALLOCATE(Dif_idx(1:Dif_size))
+
+                k = 0
+                do i = 1, num_fluids
+                    if (fluid_pp(i)%gas_mixture) then
+                        k = k + 1; Dif_idx(k) = i
+                    else
+                        liq_idx = i
+                    end if
+
+                end do
+
             end if
 
             ! Volume Fraction Model (6-equation model)

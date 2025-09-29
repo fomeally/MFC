@@ -121,9 +121,10 @@ contains
         ! Fluids physical parameters
         do i = 1, num_fluids_max
             #:for VAR in [ 'gamma','pi_inf','mul0','ss','pv','gamma_v','M_v',  &
-                & 'mu_v','k_v', 'G', 'cv', 'qv', 'qvp', 'D' ]
+                & 'mu_v','k_v', 'G', 'cv', 'qv', 'qvp' ]
                 call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
+            call MPI_BCAST(fluid_pp(i)%gas_mixture, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
         end do
 #endif
 

@@ -1069,15 +1069,16 @@ contains
 
             end if
 
-            ! Determining the number of fluids in the gas mixture
-            do i = 1, num_fluids
-                if (fluid_pp(i)%gas_mixture) Dif_size = Dif_size + 1
-            end do
-
-            !$acc update device(Dif_size)
 
             ! Bookkeeping the indexes of any gas mixture fluids 
             if (diffusion) then
+                ! Determining the number of fluids in the gas mixture
+                do i = 1, num_fluids
+                    if (fluid_pp(i)%gas_mixture) Dif_size = Dif_size + 1
+                end do
+
+                !$acc update device(Dif_size)
+
 
                 @:ALLOCATE(Dif_idx(1:Dif_size))
 
