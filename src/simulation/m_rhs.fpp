@@ -133,8 +133,8 @@ module m_rhs
     type(vector_field), allocatable, dimension(:) :: flux_n
     type(vector_field), allocatable, dimension(:) :: flux_src_n
     type(vector_field), allocatable, dimension(:) :: flux_gsrc_n
-    type(vector_field), allocatable, dimension(:) :: j_src_n
-    !$acc declare create(flux_n, flux_src_n, flux_gsrc_n, j_src_n)
+    type(vector_field), allocatable, dimension(:) :: j_src_vf
+    !$acc declare create(flux_n, flux_src_n, flux_gsrc_n, j_src_vf)
     !> @}
 
     type(vector_field), allocatable, dimension(:) :: qL_prim, qR_prim
@@ -712,34 +712,24 @@ contains
         @:ALLOCATE(flux_n(1:num_dims))
         @:ALLOCATE(flux_src_n(1:num_dims))
         @:ALLOCATE(flux_gsrc_n(1:num_dims))
-        @:ALLOCATE(j_src_n(1:num_dims))
+        @:ALLOCATE(j_src_vf(1:num_dims))
 
         do i = 1, num_dims
 
             @:ALLOCATE(flux_n(i)%vf(1:sys_size))
             @:ALLOCATE(flux_src_n(i)%vf(1:sys_size))
             @:ALLOCATE(flux_gsrc_n(i)%vf(1:sys_size))
-            @:ALLOCATE(j_src_n(i)%vf(1:sys_size))
+            @:ALLOCATE(j_src_vf(i)%vf(1:cont_idx%end))
 
             if (diffusion) then
                 
-                do l = 1, Dif_size
+                do l = 1, num_fluids
 
-                    @:ALLOCATE(j_src_n(i)%vf(Dif_idx(l))%sf( &
-                             & idwbuff(1)%beg:idwbuff(1)%end, &
-                             & idwbuff(2)%beg:idwbuff(2)%end, &
-                             & idwbuff(3)%beg:idwbuff(3)%end))
-
-                    @:ALLOCATE(j_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf( &
+                    @:ALLOCATE(j_src_vf(i)%vf(l)%sf( &
                              & idwbuff(1)%beg:idwbuff(1)%end, &
                              & idwbuff(2)%beg:idwbuff(2)%end, &
                              & idwbuff(3)%beg:idwbuff(3)%end))
                 end do
-
-                @:ALLOCATE(j_src_n(i)%vf(E_idx)%sf( &
-                         & idwbuff(1)%beg:idwbuff(1)%end, &
-                         & idwbuff(2)%beg:idwbuff(2)%end, &
-                         & idwbuff(3)%beg:idwbuff(3)%end))
                 
             end if
 
@@ -764,6 +754,23 @@ contains
                     end do
                 end if
 
+                if (diffusion .and. .not. (viscous .or. surface_tension)) then
+                    
+                    @:ALLOCATE(flux_src_n(i)%vf(E_idx)%sf( &
+                                & idwbuff(1)%beg:idwbuff(1)%end, &
+                                & idwbuff(2)%beg:idwbuff(2)%end, &
+                                & idwbuff(3)%beg:idwbuff(3)%end))
+                    
+                end if
+
+                if (diffusion) then
+                    do l = 1, num_fluids
+                        @:ALLOCATE(flux_src_n(i)%vf(l)%sf( &
+                                 & idwbuff(1)%beg:idwbuff(1)%end, &
+                                 & idwbuff(2)%beg:idwbuff(2)%end, &
+                                 & idwbuff(3)%beg:idwbuff(3)%end))
+                    end do
+                end if
 
                 @:ALLOCATE(flux_src_n(i)%vf(adv_idx%beg)%sf( &
                          & idwbuff(1)%beg:idwbuff(1)%end, &
@@ -797,7 +804,7 @@ contains
                 end do
             end if
 
-            @:ACC_SETUP_VFs(flux_n(i), flux_src_n(i), flux_gsrc_n(i), j_src_n(i))
+            @:ACC_SETUP_VFs(flux_n(i), flux_src_n(i), flux_gsrc_n(i), j_src_vf(i))
 
             if (i == 1) then
                 if (riemann_solver /= 1) then
@@ -1097,35 +1104,23 @@ contains
             if (diffusion) then
                 call nvtxStartRange("RHS-DIFFUSION")
                 call s_compute_diffusion_rhs(id, &
-                                             j_src_n(id)%vf, &
-                                             rhs_vf, &
+                                             j_vf_qp%vf, &
                                              q_prim_qp%vf, &
-                                             irx, iry, irz)
+                                             rhs_vf)
                 call nvtxEndRange
             end if
 
 
             ! RHS additions for viscosity
-            if (viscous .or. surface_tension .or. diffusion) then
+            if (viscous .or. surface_tension) then
                 call nvtxStartRange("RHS-ADD-PHYSICS")
-                if (diffusion) then 
-                    call s_compute_additional_physics_rhs(id, &
-                                                        q_prim_qp%vf, &
-                                                        rhs_vf, &
-                                                        flux_src_n(id)%vf, &
-                                                        dq_prim_dx_qp(1)%vf, &
-                                                        dq_prim_dy_qp(1)%vf, &
-                                                        dq_prim_dz_qp(1)%vf, &
-                                                        j_src_n(id)%vf)
-                else 
-                    call s_compute_additional_physics_rhs(id, &
-                                                        q_prim_qp%vf, &
-                                                        rhs_vf, &
-                                                        flux_src_n(id)%vf, &
-                                                        dq_prim_dx_qp(1)%vf, &
-                                                        dq_prim_dy_qp(1)%vf, &
-                                                        dq_prim_dz_qp(1)%vf)
-                end if
+                call s_compute_additional_physics_rhs(id, &
+                                                      q_prim_qp%vf, &
+                                                      rhs_vf, &
+                                                      flux_src_n(id)%vf, &
+                                                      dq_prim_dx_qp(1)%vf, &
+                                                      dq_prim_dy_qp(1)%vf, &
+                                                      dq_prim_dz_qp(1)%vf)
                 call nvtxEndRange
             end if
 
@@ -1782,13 +1777,12 @@ contains
     end subroutine s_compute_advection_source_term
 
     subroutine s_compute_additional_physics_rhs(idir, q_prim_vf, rhs_vf, flux_src_n, &
-                                                dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf, j_src_n)
+                                                dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf)
 
         integer, intent(in) :: idir
         type(scalar_field), dimension(sys_size), intent(in) :: q_prim_vf
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
         type(scalar_field), dimension(sys_size), intent(in) :: flux_src_n
-        type(scalar_field), dimension(sys_size), intent(in), optional :: j_src_n
         type(scalar_field), dimension(sys_size), intent(in) :: dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf
 
         integer :: i, j, k, l
@@ -1810,48 +1804,20 @@ contains
                 end do
             end if
 
-            if (viscous .or. surface_tension) then
-                !$acc parallel loop collapse(3) gang vector default(present)
-                do l = 0, p
-                    do k = 0, n
-                        do j = 0, m
-                            !$acc loop seq
-                            do i = momxb, E_idx
-                                rhs_vf(i)%sf(j, k, l) = &
-                                    rhs_vf(i)%sf(j, k, l) + 1._wp/dx(j)* &
-                                    (flux_src_n(i)%sf(j - 1, k, l) &
-                                    - flux_src_n(i)%sf(j, k, l))
-                            end do
+            !$acc parallel loop collapse(3) gang vector default(present)
+            do l = 0, p
+                do k = 0, n
+                    do j = 0, m
+                        !$acc loop seq
+                        do i = momxb, E_idx
+                            rhs_vf(i)%sf(j, k, l) = &
+                                rhs_vf(i)%sf(j, k, l) + 1._wp/dx(j)* &
+                                (flux_src_n(i)%sf(j - 1, k, l) &
+                                 - flux_src_n(i)%sf(j, k, l))
                         end do
                     end do
                 end do
-            end if
-
-            if (present(j_src_n)) then
-                !$acc parallel loop collapse(3) gang vector default(present)
-                do l = 0, p
-                    do k = 0, n
-                        do j = 0, m
-                            do i = 1, Dif_size
-                                rhs_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = &
-                                    rhs_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) - 1._wp/dx(j)* &
-                                    (j_src_n(advxb + Dif_idx(i) - 1)%sf(j, k, l) - &
-                                    j_src_n(advxb + Dif_idx(i) - 1)%sf(j - 1, k, l))
-
-                                rhs_vf(Dif_idx(i))%sf(j, k, l) = &
-                                    rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dx(j)* &
-                                    (j_src_n(Dif_idx(i))%sf(j, k, l) - &
-                                    j_src_n(Dif_idx(i))%sf(j - 1, k, l))
-                            end do
-
-                            rhs_vf(E_idx)%sf(j, k, l) = &
-                                rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dx(j)* &
-                                (j_src_n(E_idx)%sf(j, k, l) - &
-                                j_src_n(E_idx)%sf(j - 1, k, l))
-                        end do
-                    end do
-                end do
-            end if
+            end do
 
         elseif (idir == 2) then ! y-direction
 
@@ -2629,6 +2595,11 @@ contains
                     nullify (flux_src_n(i)%vf(l)%sf)
                     @:DEALLOCATE(flux_gsrc_n(i)%vf(l)%sf)
                 end do
+                if (diffusion) then
+                    do l = cont_idx%beg, cont_idx%end
+                        @:DEALLOCATE(j_src_vf(i)%vf(l)%sf)
+                    end do
+                end if
             else
                 do l = 1, sys_size
                     @:DEALLOCATE(flux_n(i)%vf(l)%sf)
@@ -2639,6 +2610,15 @@ contains
                     do l = mom_idx%beg, E_idx
                         @:DEALLOCATE(flux_src_n(i)%vf(l)%sf)
                     end do
+                end if
+
+                if (diffusion) then
+                    do l = cont_idx%beg, cont_idx%end
+                        @:DEALLOCATE(flux_src_n(i)%vf(l)%sf)
+                    end do
+                    if (.NOT. viscous) then
+                        @:DEALLOCATE(flux_src_n(i)%vf(E_idx)%sf)
+                    end if
                 end if
 
                 if (riemann_solver == 1) then
@@ -2655,21 +2635,14 @@ contains
             end if
 
             @:DEALLOCATE(flux_n(i)%vf, flux_src_n(i)%vf, flux_gsrc_n(i)%vf)
-
             if (diffusion) then
-                do l = 1, Dif_size
-                    @:DEALLOCATE(j_src_n(i)%vf(Dif_idx(l))%sf)
-                    @:DEALLOCATE(j_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
-                end do
-                @:DEALLOCATE(j_src_n(i)%vf(E_idx)%sf)
- 
-                @:DEALLOCATE(j_src_n(i)%vf)
+                @:DEALLOCATE(j_src_vf(i)%vf)
             end if
         end do
 
         @:DEALLOCATE(flux_n, flux_src_n, flux_gsrc_n)
         if (diffusion) then
-            @:DEALLOCATE(j_src_n)
+            @:DEALLOCATE(j_src_vf)
         end if
 
         if (viscous .and. cyl_coord) then

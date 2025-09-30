@@ -231,7 +231,7 @@ contains
         gamma = fluid_pp(1)%gamma
         lit_gamma = (1d0 + gamma)/gamma
 
-        b = 15._wp
+        b = 20._wp
         c = 0.5_wp
         d = 0.5_wp
 
