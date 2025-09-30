@@ -135,6 +135,8 @@ contains
         ! First, compute the temperature field from the conservative variables.
         if (chemistry) call s_compute_q_T_sf(q_T_sf, q_cons_vf, idwbuff)
 
+        if (diffusion) call s_compute_sum_alpha_g(q_cons_vf, idwbuff)
+
         ! Converting the conservative variables to the primitive ones given
         ! preexisting initial condition data files were read in on start-up
         if (old_ic) then

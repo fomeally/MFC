@@ -669,10 +669,10 @@ contains
         end if
 
         if (diffusion) then
-            @:ALLOCATE(Ds(1:num_fluids, 1:num_fluids))
-            do i = 1, num_fluids
-                do j = 1, num_fluids
-                    Ds(i, j) = fluid_pp(i)%D(j)
+            @:ALLOCATE(Ds(1:Dif_size, 1:Dif_size))
+            do i = 1, Dif_size
+                do j = 1, Dif_size
+                    Ds(i, j) = fluid_pp(Dif_idx(i))%D(j)
                 end do
             end do
             !$acc update device(Ds)
@@ -1056,6 +1056,8 @@ contains
                         qK_prim_vf(i)%sf(j, k, l) = qK_cons_vf(i)%sf(j, k, l)
                     end do
 
+                    if (diffusion) qK_prim_vf(advg_idx)%sf(j, k, l) = qK_cons_vf(advg_idx)%sf(j, k, l)
+
                     if (surface_tension) then
                         qK_prim_vf(c_idx)%sf(j, k, l) = qK_cons_vf(c_idx)%sf(j, k, l)
                     end if
@@ -1187,6 +1189,8 @@ contains
                     do i = adv_idx%beg, adv_idx%end
                         q_cons_vf(i)%sf(j, k, l) = q_prim_vf(i)%sf(j, k, l)
                     end do
+
+                    if (diffusion) q_cons_vf(advg_idx)%sf(j, k, l) = q_prim_vf(advg_idx)%sf(j, k, l)
 
                     ! Zeroing out the dynamic pressure since it is computed
                     ! iteratively by cycling through the velocity equations

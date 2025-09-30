@@ -155,6 +155,9 @@ module m_global_parameters
 
     !$acc declare create(Dif_size, Dif_idx)
 
+    integer :: liq_idx
+    !$acc declare create(liq_idx)
+
 #ifdef MFC_MPI
 
     type(mpi_io_var), public :: MPI_IO_DATA
