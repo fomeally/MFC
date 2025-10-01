@@ -363,6 +363,7 @@ contains
                     dbvars = dbvars + 1
                 end if
 
+                if (diffusion) dbvars = dbvars + 1 ! Mixture gas volume fraction
             end if
 
             ! Specific heat ratio function

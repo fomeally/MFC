@@ -125,6 +125,7 @@ module m_global_parameters
     type(int_bounds_info) :: internalEnergies_idx  !< Indexes of first & last internal energy eqns.
     type(bub_bounds_info) :: bub_idx               !< Indexes of first & last bubble variable eqns.
     integer :: gamma_idx                           !< Index of specific heat ratio func. eqn.
+    integer :: advg_idx                            !< Index of mixture gas volume fraction
     integer :: alf_idx                             !< Index of specific heat ratio func. eqn.
     integer :: pi_inf_idx                          !< Index of liquid stiffness func. eqn.
     type(int_bounds_info) :: stress_idx            !< Indices of elastic stresses
@@ -303,6 +304,15 @@ module m_global_parameters
     logical :: bubbles_lagrange, rkck_adap_dt
     !> @}
 
+    !> @name The number of fluids, along with their identifying indexes, respectively,
+    !! for which we will compute as a mixture gas
+    !> @{
+    integer :: Dif_size
+    integer, allocatable, dimension(:) :: Dif_idx
+    !> @}
+
+    integer :: liq_idx
+
 contains
 
     !> Assigns default values to user inputs prior to reading
@@ -367,6 +377,7 @@ contains
             fluid_pp(i)%qv = 0._wp
             fluid_pp(i)%qvp = 0._wp
             fluid_pp(i)%G = dflt_real
+            fluid_pp(i)%gas_mixture = .false.
         end do
 
         ! Formatted database file(s) structure parameters
@@ -586,6 +597,11 @@ contains
             if (surface_tension) then
                 c_idx = sys_size + 1
                 sys_size = c_idx
+            end if
+
+            if (diffusion) then
+                advg_idx = sys_size + 1
+                sys_size = advg_idx
             end if
 
             ! Volume Fraction Model (6-equation model)
@@ -841,6 +857,32 @@ contains
         else ! Fully 3D cylindrical grid
             grid_geometry = 3
         end if
+
+        ! Bookkeeping the indices of any gas mixture fluids 
+            if (diffusion) then
+
+                ! Bookkeeping the indexes of any gas mixture fluids 
+            
+                ! Determining the number of fluids in the gas mixture
+                do i = 1, num_fluids
+                    if (fluid_pp(i)%gas_mixture) Dif_size = Dif_size + 1
+                end do
+
+                !$acc update device(Dif_size)
+
+                @:ALLOCATE(Dif_idx(1:Dif_size))
+
+                k = 0
+                do i = 1, num_fluids
+                    if (fluid_pp(i)%gas_mixture) then
+                        k = k + 1; Dif_idx(k) = i
+                    else
+                        liq_idx = i
+                    end if
+
+                end do
+
+            end if
 
     end subroutine s_initialize_global_parameters_module
 

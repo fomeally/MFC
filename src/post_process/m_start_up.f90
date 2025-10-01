@@ -184,6 +184,8 @@ contains
         ! Initialize the Temperature cache.
         if (chemistry) call s_compute_q_T_sf(q_T_sf, q_cons_vf, idwbuff)
 
+        if (diffusion) call s_compute_sum_alpha_g(q_cons_vf, idwbuff)
+
         ! Converting the conservative variables to the primitive ones
         call s_convert_conservative_to_primitive_variables(q_cons_vf, q_T_sf, q_prim_vf, idwbuff)
 
@@ -410,6 +412,14 @@ contains
 
                 varname(:) = ' '
 
+            end if
+
+            if (diffusion) then
+                q_sf = q_cons_vf(advg_idx)%sf(x_beg:x_end, y_beg:y_end, z_beg:z_end)
+                write (varname, '(A)') 'alpha_gas_mixture'
+                call s_write_variable_to_formatted_database_file(varname, t_step)
+
+                varname(:) = ' '
             end if
 
         end if
