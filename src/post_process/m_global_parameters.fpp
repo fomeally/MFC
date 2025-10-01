@@ -455,7 +455,7 @@ contains
         !!      any other tasks needed to properly setup the module
     subroutine s_initialize_global_parameters_module
 
-        integer :: i, j, fac
+        integer :: i, j, k, fac
 
         ! Setting m_root equal to m in the case of a 1D serial simulation
         if (num_procs == 1 .and. n == 0) m_root = m
@@ -870,7 +870,7 @@ contains
 
                 !$acc update device(Dif_size)
 
-                @:ALLOCATE(Dif_idx(1:Dif_size))
+                allocate (Dif_idx(1:Dif_size))
 
                 k = 0
                 do i = 1, num_fluids

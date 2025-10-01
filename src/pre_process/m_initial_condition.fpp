@@ -37,6 +37,8 @@ module m_initial_condition
 
     use m_chemistry
 
+    use m_diffusion
+
     implicit none
 
     ! NOTE: The abstract interface allows for the declaration of a pointer to

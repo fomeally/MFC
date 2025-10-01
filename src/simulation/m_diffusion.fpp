@@ -17,7 +17,7 @@ module m_diffusion
 
     use m_mpi_proxy            !< Message passing interface (MPI) module proxy
 
-    use m_weno                 !< WENO module
+    ! use m_weno                 !< WENO module
 
     use m_helper              !< Helper functions
 
@@ -170,7 +170,7 @@ contains
         ! From the volume fractions of each mixture gas component, compute the
         ! total gas volume fraction field.
 
-        type(scalar_field), dimension(sys_size), intent(in) :: q_cons_vf
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         type(int_bounds_info), dimension(1:3), intent(in) :: bounds
 
         integer :: x, y, z, i
@@ -247,7 +247,7 @@ contains
 
                     do i = 1, Dif_size
                         j_src_n(Dif_idx(i))%sf(k, l, q) = 0._wp
-                        j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = 0._wp
+                        !j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = 0._wp
                     end do
                     j_src_n(E_idx)%sf(k, l, q) = 0._wp
 
@@ -492,9 +492,9 @@ contains
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         integer :: x, y, z, i
         real(wp) :: rho, small_number, W
-        real(wp), allocatable, dimension(:) :: alpharho, Y
+        real(wp), allocatable, dimension(:) :: alpharho, Y_s
 
-        allocate(alpharho(Dif_size), Y(Dif_size))
+        allocate(alpharho(Dif_size), Y_s(Dif_size))
 
         small_number = 1.0e-8_wp
         W = 0._wp
@@ -517,17 +517,17 @@ contains
                         end do
                         
                         do i = 1, Dif_size
-                            Y(i) = alpharho(i) / rho
+                            Y_s(i) = alpharho(i) / rho
                         end do
 
                         do i = 1, Dif_size
-                            W = W + Y(i)/Ws(i)
+                            W = W + Y_s(i)/Ws(i)
                         end do
 
                         W = 1._wp / W
 
                         do i = 1, Dif_size
-                            q_cons_vf(advxb + Dif_idx(1) - 1)%sf(x, y, z) = q_cons_vf(advg_idx)%sf(x, y, z) * Y(i) * W / Ws(i)
+                            q_cons_vf(advxb + Dif_idx(1) - 1)%sf(x, y, z) = q_cons_vf(advg_idx)%sf(x, y, z) * Y_s(i) * W / Ws(i)
                         end do
                     end if
                 end do

@@ -772,38 +772,52 @@ contains
                     end do
                 end if
                 
-                if (diffusion .and. (Dif_size < num_fluids)) then
-                    @:ALLOCATE(flux_src_n(i)%vf(liq_idx)%sf( &
-                            & idwbuff(1)%beg:idwbuff(1)%end, &
-                            & idwbuff(2)%beg:idwbuff(2)%end, &
-                            & idwbuff(3)%beg:idwbuff(3)%end))
-                else if (diffusion .and. (Dif_size == num_fluids)) then
-                        @:ALLOCATE(flux_src_n(i)%vf(advg_idx)%sf( &
+                ! if (diffusion .and. (Dif_size < num_fluids)) then
+                !     @:ALLOCATE(flux_src_n(i)%vf(liq_idx)%sf( &
+                !             & idwbuff(1)%beg:idwbuff(1)%end, &
+                !             & idwbuff(2)%beg:idwbuff(2)%end, &
+                !             & idwbuff(3)%beg:idwbuff(3)%end))
+                ! else if (diffusion .and. (Dif_size == num_fluids)) then
+                !         @:ALLOCATE(flux_src_n(i)%vf(advg_idx)%sf( &
+                !                  & idwbuff(1)%beg:idwbuff(1)%end, &
+                !                  & idwbuff(2)%beg:idwbuff(2)%end, &
+                !                  & idwbuff(3)%beg:idwbuff(3)%end))
+                ! else if (.not. diffusion) then
+                !     @:ALLOCATE(flux_src_n(i)%vf(adv_idx%beg)%sf( &
+                !          & idwbuff(1)%beg:idwbuff(1)%end, &
+                !          & idwbuff(2)%beg:idwbuff(2)%end, &
+                !          & idwbuff(3)%beg:idwbuff(3)%end))       
+                ! end if
+
+                if (diffusion) then
+                    do l = advxb, advxe
+                        @:ALLOCATE(flux_src_n(i)%vf(l)%sf( &
                                  & idwbuff(1)%beg:idwbuff(1)%end, &
                                  & idwbuff(2)%beg:idwbuff(2)%end, &
                                  & idwbuff(3)%beg:idwbuff(3)%end))
-                else if (.not. diffusion) then
-                    @:ALLOCATE(flux_src_n(i)%vf(adv_idx%beg)%sf( &
-                         & idwbuff(1)%beg:idwbuff(1)%end, &
-                         & idwbuff(2)%beg:idwbuff(2)%end, &
-                         & idwbuff(3)%beg:idwbuff(3)%end))       
+                    end do
+
+                    @:ALLOCATE(flux_src_n(i)%vf(advg_idx)%sf( &
+                             & idwbuff(1)%beg:idwbuff(1)%end, &
+                             & idwbuff(2)%beg:idwbuff(2)%end, &
+                             & idwbuff(3)%beg:idwbuff(3)%end))
                 end if
 
-                if (riemann_solver == 1) then
-                    if (.not. diffusion) then
-                        do l = adv_idx%beg + 1, adv_idx%end
-                            @:ALLOCATE(flux_src_n(i)%vf(l)%sf( &
-                                    & idwbuff(1)%beg:idwbuff(1)%end, &
-                                    & idwbuff(2)%beg:idwbuff(2)%end, &
-                                    & idwbuff(3)%beg:idwbuff(3)%end))
-                        end do
-                    else if (diffusion .and. num_fluids > Dif_size) then
-                        @:ALLOCATE(flux_src_n(i)%vf(advg_idx)%sf( &
-                                 & idwbuff(1)%beg:idwbuff(1)%end, &
-                                 & idwbuff(2)%beg:idwbuff(2)%end, &
-                                 & idwbuff(3)%beg:idwbuff(3)%end))
-                    end if
-                end if
+                ! if (riemann_solver == 1) then
+                !     if (.not. diffusion) then
+                !         do l = adv_idx%beg + 1, adv_idx%end
+                !             @:ALLOCATE(flux_src_n(i)%vf(l)%sf( &
+                !                     & idwbuff(1)%beg:idwbuff(1)%end, &
+                !                     & idwbuff(2)%beg:idwbuff(2)%end, &
+                !                     & idwbuff(3)%beg:idwbuff(3)%end))
+                !         end do
+                !     else if (diffusion .and. num_fluids > Dif_size) then
+                !         @:ALLOCATE(flux_src_n(i)%vf(advg_idx)%sf( &
+                !                  & idwbuff(1)%beg:idwbuff(1)%end, &
+                !                  & idwbuff(2)%beg:idwbuff(2)%end, &
+                !                  & idwbuff(3)%beg:idwbuff(3)%end))
+                !     end if
+                ! end if
 
                 if (chemistry) then
                     do l = chemxb, chemxe
@@ -824,17 +838,13 @@ contains
             end if
 
             @:ACC_SETUP_VFs(flux_n(i), flux_src_n(i), flux_gsrc_n(i), j_src_n(i))
-            !possibly change this to be like above
+            !Franz possibly change this to be like above
             if (i == 1) then
                 if (riemann_solver /= 1) then
                     do l = adv_idx%beg + 1, adv_idx%end
                         flux_src_n(i)%vf(l)%sf => flux_src_n(i)%vf(adv_idx%beg)%sf
                         !$acc enter data attach(flux_src_n(i)%vf(l)%sf)
                     end do
-                    if (diffusion) then
-                        flux_src_n(i)%vf(advg_idx)%sf => flux_src_n(i)%vf(adv_idx%beg)%sf
-                        !$acc enter data attach(flux_src_n(i)%vf(advg_idx)%sf)
-                    end if
                 end if
             else
                 do l = 1, sys_size
@@ -2739,15 +2749,25 @@ contains
                     end do
                 end if
 
-                if (riemann_solver == 1) then
-                    do l = adv_idx%beg + 1, adv_idx%end
+                if (diffusion) then
+                    do l = adv_idx%beg, adv_idx%end
                         @:DEALLOCATE(flux_src_n(i)%vf(l)%sf)
                     end do
-                else
-                    do l = adv_idx%beg + 1, adv_idx%end
-                        nullify (flux_src_n(i)%vf(l)%sf)
-                    end do
+
+                    @:DEALLOCATE(flux_src_n(i)%vf(advg_idx)%sf)
+
                 end if
+
+                ! if (riemann_solver == 1) then
+                !     do l = adv_idx%beg + 1, adv_idx%end
+                !         @:DEALLOCATE(flux_src_n(i)%vf(l)%sf)
+                !     end do
+
+                ! else
+                !     do l = adv_idx%beg + 1, adv_idx%end
+                !         nullify (flux_src_n(i)%vf(l)%sf)
+                !     end do
+                ! end if
 
                 @:DEALLOCATE(flux_src_n(i)%vf(adv_idx%beg)%sf)
             end if

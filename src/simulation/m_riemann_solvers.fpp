@@ -306,7 +306,7 @@ contains
         real(wp) :: E_L, E_R
         real(wp) :: H_L, H_R
         real(wp), dimension(num_fluids) :: alpha_L, alpha_R
-        real(wp), :: alphag_L, alphag_R
+        real(wp) :: alphag_L, alphag_R
         real(wp), dimension(num_species) :: Ys_L, Ys_R
         real(wp), dimension(num_species) :: Cp_iL, Cp_iR, Xs_L, Xs_R, Gamma_iL, Gamma_iR
         real(wp), dimension(num_species) :: Yi_avg, Phi_avg, h_iL, h_iR, h_avg_2
@@ -1076,7 +1076,7 @@ contains
         real(wp) :: ptilde_L, ptilde_R
 
         real(wp) :: alpha_L_sum, alpha_R_sum, nbub_L_denom, nbub_R_denom
-        real(wo=p) :: alphag_L_sum, alphag_R_sum
+        real(wp) :: alphag_L_sum, alphag_R_sum
 
         real(wp) :: PbwR3Lbar, Pbwr3Rbar
         real(wp) :: R3Lbar, R3Rbar
@@ -4670,28 +4670,51 @@ contains
                 end do
             end do
 
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do l = is3%beg, is3%end
-                do k = is2%beg, is2%end
-                    do j = is1%beg, is1%end
-                        flux_src_vf(advxb)%sf(j, k, l) = &
-                            flux_src_rsx_vf(j, k, l, advxb)
-                    end do
-                end do
-            end do
+            if (.not. diffusion) then
 
-            if (riemann_solver == 1) then
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do i = advxb + 1, advxe
-                    do l = is3%beg, is3%end
-                        do k = is2%beg, is2%end
-                            do j = is1%beg, is1%end
-                                flux_src_vf(i)%sf(j, k, l) = &
-                                    flux_src_rsx_vf(j, k, l, i)
-                            end do
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do l = is3%beg, is3%end
+                    do k = is2%beg, is2%end
+                        do j = is1%beg, is1%end
+                            flux_src_vf(advxb)%sf(j, k, l) = &
+                                flux_src_rsx_vf(j, k, l, advxb)
                         end do
                     end do
                 end do
+
+                if (riemann_solver == 1) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do i = advxb + 1, advxe
+                        do l = is3%beg, is3%end
+                            do k = is2%beg, is2%end
+                                do j = is1%beg, is1%end
+                                    flux_src_vf(i)%sf(j, k, l) = &
+                                        flux_src_rsx_vf(j, k, l, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+
+            else
+
+                if (diffusion) then
+                    
+                    do l = is3%beg, is3%end
+                        do k = is2%beg, is2%end
+                            do j = is1%beg, is1%end
+                                do i = advxb, advxe
+                                    flux_src_vf(i)%sf(j, k, l) = 0._wp
+                                end do
+
+                                flux_src_vf(advg_idx)%sf(j, k, l) = &
+                                    flux_src_rsx_vf(j, k, l, advg_idx)
+                            end do
+                        end do
+                    end do
+                
+                end if
+
             end if
         end if
 

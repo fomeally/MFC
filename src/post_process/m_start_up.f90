@@ -41,6 +41,8 @@ module m_start_up
 
     use m_chemistry
 
+    use m_diffusion
+
     implicit none
 
 contains

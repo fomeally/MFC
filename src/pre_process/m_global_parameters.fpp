@@ -690,7 +690,7 @@ contains
 
                 !$acc update device(Dif_size)
 
-                @:ALLOCATE(Dif_idx(1:Dif_size))
+                allocate (Dif_idx(1:Dif_size))
 
                 k = 0
                 do i = 1, num_fluids

@@ -293,7 +293,7 @@ contains
                                  .or. &
                                  ((i >= chemxb) .and. (i <= chemxe)) &
                                  .or. &
-                                 (i == advg_idx)
+                                 (i == advg_idx) &
                                  ) then
                             write (2, FMT) x_cb(j), q_cons_vf(i)%sf(j, 0, 0)
                         else if (i == mom_idx%beg) then !u
