@@ -306,6 +306,7 @@ contains
         real(wp) :: E_L, E_R
         real(wp) :: H_L, H_R
         real(wp), dimension(num_fluids) :: alpha_L, alpha_R
+        real(wp), :: alphag_L, alphag_R
         real(wp), dimension(num_species) :: Ys_L, Ys_R
         real(wp), dimension(num_species) :: Cp_iL, Cp_iR, Xs_L, Xs_R, Gamma_iL, Gamma_iR
         real(wp), dimension(num_species) :: Yi_avg, Phi_avg, h_iL, h_iR, h_avg_2
@@ -338,6 +339,7 @@ contains
         real(wp) :: vel_L_rms, vel_R_rms, vel_avg_rms
         real(wp) :: Ms_L, Ms_R, pres_SL, pres_SR
         real(wp) :: alpha_L_sum, alpha_R_sum
+        real(wp) :: alphag_L_sum, alphag_R_sum
 
         integer :: i, j, k, l, q !< Generic loop iterators
 
@@ -399,6 +401,11 @@ contains
                                 alpha_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + i)
                             end do
 
+                            if (diffusion) then
+                                alphag_L = qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)
+                                alphag_R = qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx)
+                            end if
+
                             pres_L = qL_prim_rs${XYZ}$_vf(j, k, l, E_idx)
                             pres_R = qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx)
 
@@ -414,6 +421,9 @@ contains
 
                             alpha_L_sum = 0._wp
                             alpha_R_sum = 0._wp
+
+                            alphag_L_sum = 0._wp
+                            alphag_R_sum = 0._wp
 
                             if (mpp_lim) then
                                 !$acc loop seq
@@ -433,6 +443,18 @@ contains
                                 end do
 
                                 alpha_R = alpha_R/max(alpha_R_sum, sgm_eps)
+
+                                !individual alphas have been corrected, now correct the mixture alpha
+                                if (diffusion) then
+                                    !$acc loop seq
+                                    do i = 1, Dif_size
+                                        alphag_L_sum = alphag_L_sum + alpha_L(Dif_idx(i))
+                                        alphag_R_sum = alphag_R_sum + alpha_R(Dif_idx(i))
+                                    end do
+                                    alphag_L = alphag_L_sum
+                                    alphag_R = alphag_R_sum
+                                end if
+
                             end if
 
                             !$acc loop seq
@@ -803,17 +825,40 @@ contains
                             end if
 
                             ! Advection
-                            !$acc loop seq
-                            do i = advxb, advxe
-                                flux_rs${XYZ}$_vf(j, k, l, i) = &
-                                    (qL_prim_rs${XYZ}$_vf(j, k, l, i) &
-                                     - qR_prim_rs${XYZ}$_vf(j + 1, k, l, i)) &
+                            if (.not. diffusion) then
+                                !$acc loop seq
+                                do i = advxb, advxe
+                                    flux_rs${XYZ}$_vf(j, k, l, i) = &
+                                        (qL_prim_rs${XYZ}$_vf(j, k, l, i) &
+                                        - qR_prim_rs${XYZ}$_vf(j + 1, k, l, i)) &
+                                        *s_M*s_P/(s_M - s_P)
+                                    flux_src_rs${XYZ}$_vf(j, k, l, i) = &
+                                        (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i) &
+                                        - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, i)) &
+                                        /(s_M - s_P)
+                                end do
+                            else
+                                ! If Dif_size = num_fluids -----> flux_rs = 0 and flux_src = 1
+                                flux_rs${XYZ}$_vf(j, k, l, advg_idx) = &
+                                    (qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) &
+                                    - qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx)) &
                                     *s_M*s_P/(s_M - s_P)
-                                flux_src_rs${XYZ}$_vf(j, k, l, i) = &
-                                    (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i) &
-                                     - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, i)) &
-                                    /(s_M - s_P)
-                            end do
+                                flux_src_rs${XYZ}$_vf(j, k, l, advg_idx) = &
+                                    (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) &
+                                    - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)) &
+                                    /(s_M - s_P)                                                  
+                                if (num_fluids > Dif_size) then                               
+                                        flux_rs${XYZ}$_vf(j, k, l, liq_idx) = &
+                                            (qL_prim_rs${XYZ}$_vf(j, k, l, liq_idx) &
+                                            - qR_prim_rs${XYZ}$_vf(j + 1, k, l, liq_idx)) &
+                                            *s_M*s_P/(s_M - s_P)
+                                        flux_src_rs${XYZ}$_vf(j, k, l, liq_idx) = &
+                                            (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, liq_idx)) &
+                                            - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, liq_idx) &
+                                            /(s_M - s_P)                      
+                                end if
+
+                            end if
 
                             ! Xi field
                             !if ( hyperelasticity ) then
@@ -883,6 +928,7 @@ contains
                                     do i = advxb, advxe
                                         flux_gsrc_rs${XYZ}$_vf(j, k, l, i) = flux_rs${XYZ}$_vf(j, k, l, i)
                                     end do
+                                    if (diffusion) flux_gsrc_rs${XYZ}$_vf(j, k, l, advg_idx) = flux_rs${XYZ}$_vf(j, k, l, advg_idx)
                                 end if
                             #:endif
 
@@ -995,6 +1041,7 @@ contains
         real(wp) :: E_L, E_R
         real(wp) :: H_L, H_R
         real(wp), dimension(num_fluids) :: alpha_L, alpha_R
+        real(wp) :: alphag_L, alphag_R
         real(wp), dimension(num_species) :: Ys_L, Ys_R, Xs_L, Xs_R, Gamma_iL, Gamma_iR, Cp_iL, Cp_iR
         real(wp), dimension(num_species) :: Yi_avg, Phi_avg, h_iL, h_iR, h_avg_2
         real(wp) :: Cp_avg, Cv_avg, T_avg, c_sum_Yi_Phi, eps
@@ -1029,6 +1076,7 @@ contains
         real(wp) :: ptilde_L, ptilde_R
 
         real(wp) :: alpha_L_sum, alpha_R_sum, nbub_L_denom, nbub_R_denom
+        real(wo=p) :: alphag_L_sum, alphag_R_sum
 
         real(wp) :: PbwR3Lbar, Pbwr3Rbar
         real(wp) :: R3Lbar, R3Rbar
@@ -1117,6 +1165,9 @@ contains
                                 alpha_L_sum = 0._wp
                                 alpha_R_sum = 0._wp
 
+                                alphag_L_sum = 0._wp
+                                alphag_R_sum = 0._wp
+
                                 if (mpp_lim) then
                                     !$acc loop seq
                                     do i = 1, num_fluids
@@ -1141,6 +1192,18 @@ contains
                                     do i = 1, num_fluids
                                         qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + i)/max(alpha_R_sum, sgm_eps)
                                     end do
+
+                                    if (diffusion) then
+                                        !$acc loop seq
+                                        do i = 1, Dif_size
+                                            alphag_L_sum = alphag_L_sum + qL_prim_rs${XYZ}$_vf(j, k, l, advxb + Dif_idx(i) - 1)
+                                            alphag_R_sum = alphag_R_sum + qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + Dif_idx(i) - 1)
+
+                                        end do
+                                        qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) = alphag_L_sum
+                                        qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) = alphag_R_sum
+                                    end if
+
                                 end if
 
                                 !$acc loop seq
@@ -1157,6 +1220,8 @@ contains
 
                                     alpha_L(i) = qL_prim_rs${XYZ}$_vf(j, k, l, advxb + i - 1)
                                     alpha_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + i - 1)
+                                    alphag_L = qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)
+                                    alphag_R = qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx)
                                 end do
 
                                 if (viscous) then
@@ -2227,6 +2292,11 @@ contains
                                     alpha_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + i)
                                 end do
 
+                                if (diffusion) then
+                                    alphag_L = qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)
+                                    alphag_R = qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx)
+                                end if
+
                                 vel_L_rms = 0._wp; vel_R_rms = 0._wp
                                 !$acc loop seq
                                 do i = 1, num_dims
@@ -2251,6 +2321,9 @@ contains
 
                                 alpha_L_sum = 0._wp
                                 alpha_R_sum = 0._wp
+
+                                alphag_L_sum = 0._wp
+                                alphag_R_sum = 0._wp
 
                                 ! Change this by splitting it into the cases
                                 ! present in the bubbles_euler
@@ -2278,6 +2351,16 @@ contains
                                     do i = 1, num_fluids
                                         qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + i)/max(alpha_R_sum, sgm_eps)
                                     end do
+
+                                    if (diffusion) then
+                                        !$acc loop seq
+                                        do i = 1, Dif_size
+                                            alphag_L_sum = alphag_L_sum + qL_prim_rs${XYZ}$_vf(j, k, l, advxb + Dif_idx(i) - 1)
+                                            alphag_R_sum = alphag_R_sum + qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + Dif_idx(i) - 1)
+                                        end do
+                                        qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) = alphag_L_sum
+                                        qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) = alphag_R_sum
+                                    end if
                                 end if
 
                                 !$acc loop seq
@@ -2606,14 +2689,31 @@ contains
                                 end if
 
                                 ! VOLUME FRACTION FLUX.
-                                !$acc loop seq
-                                do i = advxb, advxe
-                                    flux_rs${XYZ}$_vf(j, k, l, i) = &
-                                        xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, i) &
-                                        *(vel_L(idx1) + s_M*(xi_L - 1._wp)) &
-                                        + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i) &
-                                        *(vel_R(idx1) + s_P*(xi_R - 1._wp))
-                                end do
+
+                                if (.not. diffusion) then 
+                                    !$acc loop seq
+                                    do i = advxb, advxe
+                                        flux_rs${XYZ}$_vf(j, k, l, i) = &
+                                            xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, i) &
+                                            *(vel_L(idx1) + s_M*(xi_L - 1._wp)) &
+                                            + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i) &
+                                            *(vel_R(idx1) + s_P*(xi_R - 1._wp))
+                                    end do
+                                else
+                                    flux_rs${XYZ}$_vf(j, k, l, advg_idx) = &
+                                            xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) &
+                                            *(vel_L(idx1) + s_M*(xi_L - 1._wp)) &
+                                            + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) &
+                                            *(vel_R(idx1) + s_P*(xi_R - 1._wp))
+
+                                    if (num_fluids > Dif_size) then
+                                        flux_rs${XYZ}$_vf(j, k, l, liq_idx) = &
+                                            xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, liq_idx) &
+                                            *(vel_L(idx1) + s_M*(xi_L - 1._wp)) &
+                                            + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, liq_idx) &
+                                            *(vel_R(idx1) + s_P*(xi_R - 1._wp))
+                                    end if
+                                end if
 
                                 ! VOLUME FRACTION SOURCE FLUX.
                                 !$acc loop seq
@@ -2640,7 +2740,15 @@ contains
                                     end do
                                 end if
 
-                                flux_src_rs${XYZ}$_vf(j, k, l, advxb) = vel_src_rs${XYZ}$_vf(j, k, l, idx1)
+                                if (.not. diffusion) then
+                                    flux_src_rs${XYZ}$_vf(j, k, l, advxb) = vel_src_rs${XYZ}$_vf(j, k, l, idx1)
+                                else if (diffusion) then
+                                    if (num_fluids > Dif_size) then
+                                        flux_src_rs${XYZ}$_vf(j, k, l, liq_idx) = vel_src_rs${XYZ}$_vf(j, k, l, idx1)
+                                    else if (num_fluids == Dif_size) then
+                                        flux_src_rs${XYZ}$_vf(j, k, l, advg_idx) = vel_src_rs${XYZ}$_vf(j, k, l, idx1)
+                                    end if
+                                end if
 
                                 if (chemistry) then
                                     !$acc loop seq
@@ -2679,6 +2787,9 @@ contains
                                         do i = advxb, advxe
                                             flux_gsrc_rs${XYZ}$_vf(j, k, l, i) = 0._wp
                                         end do
+                                        if (diffusion) then
+                                            flux_gsrc_rs${XYZ}$_vf(j, k, l, advg_idx) = 0._wp
+                                        end if
                                     end if
                                 #:endif
                                 #:if (NORM_DIR == 3)
@@ -2795,7 +2906,7 @@ contains
                     Ds(i, j) = fluid_pp(i)%D(j)
                 end do
             end do
-            !$acc update device(Ds)
+            !$acc update device(Ds, Dif_idx, Dif_size)
         end if
 
         !$acc enter data copyin(is1, is2, is3, isx, isy, isz)

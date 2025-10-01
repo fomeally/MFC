@@ -225,6 +225,7 @@ module m_global_parameters
     integer :: E_idx                                   !< Index of energy equation
     integer :: n_idx                                   !< Index of number density
     type(int_bounds_info) :: adv_idx                   !< Indexes of first & last advection eqns.
+    integer :: advg_idx                                !< Index of total (sum) gas volume fraction
     type(int_bounds_info) :: internalEnergies_idx      !< Indexes of first & last internal energy eqns.
     type(bub_bounds_info) :: bub_idx                   !< Indexes of first & last bubble variable eqns.
     integer :: alf_idx                                 !< Index of void fraction
@@ -304,7 +305,7 @@ module m_global_parameters
 
     integer :: startx, starty, startz
 
-    !$acc declare create(sys_size, buff_size, startx, starty, startz, E_idx, gamma_idx, pi_inf_idx, alf_idx, n_idx, stress_idx, b_size, tensor_size, xi_idx, species_idx)
+    !$acc declare create(sys_size, buff_size, startx, starty, startz, E_idx, gamma_idx, pi_inf_idx, alf_idx, advg_idx, n_idx, stress_idx, b_size, tensor_size, xi_idx, species_idx)
 
     ! END: Simulation Algorithm Parameters
 
@@ -814,6 +815,11 @@ contains
 
                 sys_size = adv_idx%end
 
+                if (diffusion) then
+                    advg_idx = sys_size + 1
+                    sys_size = advg_idx
+                end if
+
                 if (bubbles_euler) then
                     alf_idx = adv_idx%end
                 else
@@ -1238,7 +1244,7 @@ contains
         chemxb = species_idx%beg
         chemxe = species_idx%end
 
-        !$acc update device(momxb, momxe, advxb, advxe, contxb, contxe, bubxb, bubxe, intxb, intxe, sys_size, buff_size, E_idx, alf_idx, n_idx, adv_n, adap_dt, pi_fac, strxb, strxe, chemxb, chemxe)
+        !$acc update device(momxb, momxe, advxb, advxe, contxb, contxe, bubxb, bubxe, intxb, intxe, sys_size, buff_size, E_idx, alf_idx, advg_idx, n_idx, adv_n, adap_dt, pi_fac, strxb, strxe, chemxb, chemxe)
         !$acc update device(b_size, xibeg, xiend, tensor_size)
 
         !$acc update device(species_idx)

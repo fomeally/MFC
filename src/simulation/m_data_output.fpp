@@ -109,7 +109,7 @@ contains
         !!      those stability criteria which will be written at every
         !!      time-step.
     subroutine s_open_run_time_information_file
-
+        !Franz add here when you add a diffusive cfl
         character(LEN=name_len), parameter :: file_name = 'run_time.inf' !<
             !! Name of the run-time information file
 
@@ -1748,6 +1748,8 @@ contains
             vcfl_max = 0._wp
             Rc_min = 1e3_wp
         end if
+
+        !Franz should add a diffusive cfl here
 
     end subroutine s_initialize_data_output_module
 

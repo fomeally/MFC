@@ -25,9 +25,10 @@ module m_diffusion
 
     implicit none
 
-    private; public :: s_compute_sum_alpha_g, &
-s_initialize_diffusion_module, &
+    private; public :: s_initialize_diffusion_module, &
+s_compute_sum_alpha_g, &
 s_compute_diffusion_rhs, &
+s_correct_volume_fractions, &
 s_finalize_diffusion_module
 
     real(wp), allocatable, dimension(:, :) :: fd_coeff_x_d
@@ -60,34 +61,6 @@ s_finalize_diffusion_module
     !$acc declare create(rho_dif, alpha_dif, dvel_dx, dvel_dy, dvel_dz, denom, rhogcg2, rho1c12, kdivu, W_dif, T_dif)
 
 contains
-
-    subroutine s_compute_sum_alpha_g(q_cons_vf, bounds)
-
-        ! From the volume fractions of each mixture gas component, compute the
-        ! total gas volume fraction field.
-
-        type(scalar_field), dimension(sys_size), intent(in) :: q_cons_vf
-        type(int_bounds_info), dimension(1:3), intent(in) :: bounds
-
-        integer :: x, y, z, i
-        real(wp) :: sum_alpha_g
- 
-
-        sum_alpha_g = 0.0_wp
-        do z = bounds(3)%beg, bounds(3)%end
-            do y = bounds(2)%beg, bounds(2)%end
-                do x = bounds(1)%beg, bounds(1)%end
-                    !$acc loop seq
-                    sum_alpha_g = 0.0_wp
-                    do i = 1, Dif_size
-                        sum_alpha_g = sum_alpha_g + q_cons_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z)
-                    end do
-                    q_cons_vf(advg_idx)%sf(x, y, z) = sum_alpha_g
-                end do
-            end do
-        end do
-
-    end subroutine s_compute_sum_alpha_g
 
     subroutine s_initialize_diffusion_module
 
@@ -191,6 +164,34 @@ contains
         end if
 
     end subroutine s_initialize_diffusion_module
+
+    subroutine s_compute_sum_alpha_g(q_cons_vf, bounds)
+
+        ! From the volume fractions of each mixture gas component, compute the
+        ! total gas volume fraction field.
+
+        type(scalar_field), dimension(sys_size), intent(in) :: q_cons_vf
+        type(int_bounds_info), dimension(1:3), intent(in) :: bounds
+
+        integer :: x, y, z, i
+        real(wp) :: sum_alpha_g
+ 
+
+        sum_alpha_g = 0.0_wp
+        do z = bounds(3)%beg, bounds(3)%end
+            do y = bounds(2)%beg, bounds(2)%end
+                do x = bounds(1)%beg, bounds(1)%end
+                    !$acc loop seq
+                    sum_alpha_g = 0.0_wp
+                    do i = 1, Dif_size
+                        sum_alpha_g = sum_alpha_g + q_cons_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z)
+                    end do
+                    q_cons_vf(advg_idx)%sf(x, y, z) = sum_alpha_g
+                end do
+            end do
+        end do
+
+    end subroutine s_compute_sum_alpha_g
 
     subroutine s_compute_diffusion_rhs(idir, j_src_n, rhs_vf, q_prim_vf, irx, iry, irz)
 
@@ -411,16 +412,16 @@ contains
                     do i = 1, Dif_size
                         j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + j_flux(i)
                         j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) + h_f(i)*j_flux(i)
-                        j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) + alpha_flux(i)
-                        if ((k == 0 .or. offsets(1)*k < m) .and. (l == 0 .or. offsets(2)*l < n) .and. (q == 0 .or. offsets(3)*q < p)) then
-                            rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) = &
-                                rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) + 0.5_wp*alpha_nonconserv(i)
-                        end if
+                    !     j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) + alpha_flux(i)
+                    !     if ((k == 0 .or. offsets(1)*k < m) .and. (l == 0 .or. offsets(2)*l < n) .and. (q == 0 .or. offsets(3)*q < p)) then
+                    !         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) = &
+                    !             rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) + 0.5_wp*alpha_nonconserv(i)
+                    !     end if
 
-                        if (k > -1 .and. l > -1 .and. q > -1) then
-                            rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = &
-                                rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) + 0.5_wp*alpha_nonconserv(i)
-                        end if
+                    !     if (k > -1 .and. l > -1 .and. q > -1) then
+                    !         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = &
+                    !             rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) + 0.5_wp*alpha_nonconserv(i)
+                    !     end if
                     end do
                     if (k > -1 .and. l > -1 .and. q > -1) then
                         rhs_vf(momxb)%sf(k, l, q) = rhs_vf(momxb)%sf(k, l, q) - sigma*rho_L*q_prim_vf(momxb)%sf(k, l, q)
@@ -485,6 +486,55 @@ contains
         
 
     end subroutine s_compute_diffusion_rhs
+
+    subroutine s_correct_volume_fractions(q_cons_vf)
+
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+        integer :: x, y, z, i
+        real(wp) :: rho, small_number, W
+        real(wp), allocatable, dimension(:) :: alpharho, Y
+
+        allocate(alpharho(Dif_size), Y(Dif_size))
+
+        small_number = 1.0e-8_wp
+        W = 0._wp
+        rho = 0._wp
+
+        do z = 0, p
+            do y = 0, n
+                do x = 0, m
+                    if (q_cons_vf(advg_idx)%sf(x, y, z) < small_number) then
+                        do i = 1, Dif_size
+                            q_cons_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z) = 0._wp
+                        end do
+                    else
+                        do i = 1, Dif_size
+                            alpharho(i) = q_cons_vf(Dif_idx(i))%sf(x, y, z)
+                        end do
+ 
+                        do i = 1, Dif_size
+                            rho = rho + alpharho(i)
+                        end do
+                        
+                        do i = 1, Dif_size
+                            Y(i) = alpharho(i) / rho
+                        end do
+
+                        do i = 1, Dif_size
+                            W = W + Y(i)/Ws(i)
+                        end do
+
+                        W = 1._wp / W
+
+                        do i = 1, Dif_size
+                            q_cons_vf(advxb + Dif_idx(1) - 1)%sf(x, y, z) = q_cons_vf(advg_idx)%sf(x, y, z) * Y(i) * W / Ws(i)
+                        end do
+                    end if
+                end do
+            end do
+        end do
+
+    end subroutine s_correct_volume_fractions
 
     subroutine s_finalize_diffusion_module
 

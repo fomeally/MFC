@@ -675,7 +675,7 @@ contains
                     Ds(i, j) = fluid_pp(Dif_idx(i))%D(j)
                 end do
             end do
-            !$acc update device(Ds)
+            !$acc update device(Ds, Dif_idx, Dif_size)
         end if
 #endif
 
@@ -1511,11 +1511,20 @@ contains
             end if
         else
             if (alt_soundspeed) then
-                blkmod1 = ((gammas(1) + 1._wp)*pres + &
-                           pi_infs(1))/gammas(1)
-                blkmod2 = ((gammas(2) + 1._wp)*pres + &
-                           pi_infs(2))/gammas(2)
-                c = (1._wp/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
+                if (diffusion) then
+                    blkmod1 = ((gammas(liq_idx) + 1._wp)*pres + &
+                            pi_infs(liq_idx))/gammas(liq_idx)
+                    !Franz fix this for sure if using alt_soundspeed
+                    blkmod2 = ((gammas(2) + 1._wp)*pres + &
+                            pi_infs(2))/gammas(2)
+                    c = (1._wp/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
+                else                 
+                    blkmod1 = ((gammas(1) + 1._wp)*pres + &
+                            pi_infs(1))/gammas(1)
+                    blkmod2 = ((gammas(2) + 1._wp)*pres + &
+                            pi_infs(2))/gammas(2)
+                    c = (1._wp/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
+                end if
             elseif (model_eqns == 3) then
                 c = 0._wp
                 !$acc loop seq

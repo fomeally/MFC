@@ -159,6 +159,16 @@ contains
                 is2%beg:is2%end, &
                 is3%beg:is3%end, adv_idx%beg:adv_idx%end))
 
+            if (diffusion) then
+                @:ALLOCATE(F_rsx_vf(0:buff_size, &
+                    is2%beg:is2%end, &
+                    is3%beg:is3%end, advg_idx))
+
+                @:ALLOCATE(F_src_rsx_vf(0:buff_size, &
+                is2%beg:is2%end, &
+                is3%beg:is3%end, advg_idx))
+            end if
+
         end if
 
         @:ALLOCATE(flux_rsx_vf_l(-1:buff_size, &
@@ -168,6 +178,16 @@ contains
         @:ALLOCATE(flux_src_rsx_vf_l(-1:buff_size, &
             is2%beg:is2%end, &
             is3%beg:is3%end, adv_idx%beg:adv_idx%end))
+
+        if (diffusion) then
+            @:ALLOCATE(flux_rsx_vf_l(-1:buff_size, &
+                is2%beg:is2%end, &
+                is3%beg:is3%end, advg_idx))
+
+            @:ALLOCATE(flux_src_rsx_vf_l(-1:buff_size, &
+                is2%beg:is2%end, &
+                is3%beg:is3%end, advg_idx))
+        end if
 
         if (n > 0) then
 
@@ -202,6 +222,16 @@ contains
                     is2%beg:is2%end, &
                     is3%beg:is3%end, adv_idx%beg:adv_idx%end))
 
+                if (diffusion) then
+                    @:ALLOCATE(F_rsy_vf(0:buff_size, &
+                        is2%beg:is2%end, &
+                        is3%beg:is3%end, advg_idx))
+
+                    @:ALLOCATE(F_src_rsy_vf(0:buff_size, &
+                    is2%beg:is2%end, &
+                    is3%beg:is3%end, advg_idx))
+                end if
+
             end if
 
             @:ALLOCATE(flux_rsy_vf_l(-1:buff_size, &
@@ -211,6 +241,16 @@ contains
             @:ALLOCATE(flux_src_rsy_vf_l(-1:buff_size, &
                 is2%beg:is2%end, &
                 is3%beg:is3%end, adv_idx%beg:adv_idx%end))
+
+            if (diffusion) then
+                @:ALLOCATE(flux_rsy_vf_l(-1:buff_size, &
+                    is2%beg:is2%end, &
+                    is3%beg:is3%end, advg_idx))
+
+                @:ALLOCATE(flux_src_rsy_vf_l(-1:buff_size, &
+                    is2%beg:is2%end, &
+                    is3%beg:is3%end, advg_idx))
+            end if
 
         end if
 
@@ -247,6 +287,16 @@ contains
                     is2%beg:is2%end, &
                     is3%beg:is3%end, adv_idx%beg:adv_idx%end))
 
+                if (diffusion) then
+                    @:ALLOCATE(F_rsz_vf(0:buff_size, &
+                        is2%beg:is2%end, &
+                        is3%beg:is3%end, advg_idx))
+
+                    @:ALLOCATE(F_src_rsz_vf(0:buff_size, &
+                    is2%beg:is2%end, &
+                    is3%beg:is3%end, advg_idx))
+                end if
+
             end if
 
             @:ALLOCATE(flux_rsz_vf_l(-1:buff_size, &
@@ -256,6 +306,16 @@ contains
             @:ALLOCATE(flux_src_rsz_vf_l(-1:buff_size, &
                 is2%beg:is2%end, &
                 is3%beg:is3%end, adv_idx%beg:adv_idx%end))
+
+            if (diffusion) then
+                @:ALLOCATE(flux_rsz_vf_l(-1:buff_size, &
+                    is2%beg:is2%end, &
+                    is3%beg:is3%end, advg_idx))
+
+                @:ALLOCATE(flux_src_rsz_vf_l(-1:buff_size, &
+                    is2%beg:is2%end, &
+                    is3%beg:is3%end, advg_idx))
+            end if
 
         end if
 
@@ -401,7 +461,7 @@ contains
         @:ALLOCATE(Del_in(1:num_dims), Del_out(1:num_dims))
         @:ALLOCATE(vel_in(1:num_dims, 1:num_dims), vel_out(1:num_dims, 1:num_dims))
         @:ALLOCATE(alpha_rho_in(1:num_fluids, 1:num_dims), alpha_in(1:num_fluids, 1:num_dims))
-
+        !Franz may have to add here
         ! Assign and update GRCBC inputs
         #:for CBC_DIR, XYZ in [(1, 'x'), (2, 'y'), (3, 'z')]
             if (${CBC_DIR}$ <= num_dims) then

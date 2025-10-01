@@ -91,6 +91,7 @@ module m_start_up
  s_read_serial_data_files, &
  s_read_parallel_data_files, &
  s_populate_grid_variables_buffers, &
+ s_mixture_gas_volfrac, &
  s_initialize_internal_energy_equations, &
  s_initialize_modules, s_initialize_gpu_vars, &
  s_initialize_mpi_domain, s_finalize_modules, &
@@ -1147,6 +1148,35 @@ contains
     end subroutine s_populate_grid_variables_buffers
 
     !> The purpose of this procedure is to initialize the
+        !!      values of the sum of the volume fractions of
+        !!      the gas mixture
+        !! @param v_vf conservative variables
+    subroutine s_mixture_gas_volfrac(v_vf)
+
+        type(scalar_field), dimension(sys_size), intent(inout) :: v_vf
+
+        real(wp) :: sum_advg
+
+        integer :: i, j, k, l
+
+        do j = 0, m
+            do k = 0, n
+                do l = 0, p
+
+                    sum_advg = 0._wp
+                    do i = 1, Dif_size
+                        sum_advg = sum_advg + v_vf(Dif_idx(i) + adv_idx%beg - 1)%sf(j, k, l)
+                    end do
+
+                    v_vf(advg_idx)%sf(j, k, l) = sum_advg
+
+                end do
+            end do
+        end do
+
+    end subroutine s_mixture_gas_volfrac
+
+    !> The purpose of this procedure is to initialize the
         !!      values of the internal-energy equations of each phase
         !!      from the mass of each phase, the mixture momentum and
         !!      mixture-total-energy equations.
@@ -1485,6 +1515,7 @@ contains
         call s_read_data_files(q_cons_ts(1)%vf)
 
         if (model_eqns == 3) call s_initialize_internal_energy_equations(q_cons_ts(1)%vf)
+        if (diffusion) call s_mixture_gas_volfrac(q_cons_ts(1)%vf)
         if (ib) call s_ibm_setup()
         if (bodyForces) call s_initialize_body_forces_module()
         if (acoustic_source) call s_precalculate_acoustic_spatial_sources()

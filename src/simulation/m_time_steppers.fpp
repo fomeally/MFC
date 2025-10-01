@@ -24,6 +24,8 @@ module m_time_steppers
 
     use m_bubbles_EL           !< Lagrange bubble dynamics routines
 
+    use m_diffusion
+
     use m_ibm
 
     use m_hyperelastic
@@ -170,6 +172,13 @@ contains
                     idwbuff(3)%beg:idwbuff(3)%end))
                 @:ACC_SETUP_SFs(q_prim_vf(i))
             end do
+        end if
+
+        if (diffusion) then
+            @:ALLOCATE(q_prim_vf(advg_idx)%sf(idwbuff(1)%beg:idwbuff(1)%end, &
+                idwbuff(2)%beg:idwbuff(2)%end, &
+                idwbuff(3)%beg:idwbuff(3)%end))
+            @:ACC_SETUP_SFs(q_prim_vf(advg_idx))
         end if
 
         if (model_eqns == 3) then
@@ -354,6 +363,10 @@ contains
             end do
         end do
 
+        if (diffusion) then
+            call s_correct_volume_fractions(q_cons_ts(1)%vf)
+        end if
+
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
@@ -459,6 +472,10 @@ contains
             end do
         end do
 
+        if (diffusion) then
+            call s_correct_volume_fractions(q_cons_ts(2)%vf)
+        end if
+
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
@@ -534,6 +551,10 @@ contains
                 end do
             end do
         end do
+
+        if (diffusion) then
+            call s_correct_volume_fractions(q_cons_ts(1)%vf)
+        end if
 
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
@@ -647,6 +668,10 @@ contains
             end do
         end do
 
+        if (diffusion) then
+            call s_correct_volume_fractions(q_cons_ts(2)%vf)
+        end if
+
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
@@ -723,6 +748,10 @@ contains
             end do
         end do
 
+        if (diffusion) then
+            call s_correct_volume_fractions(q_cons_ts(2)%vf)
+        end if
+
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
             do i = 1, nb
@@ -798,6 +827,10 @@ contains
                 end do
             end do
         end do
+
+        if (diffusion) then
+            call s_correct_volume_fractions(q_cons_ts(1)%vf)
+        end if
 
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
@@ -1221,6 +1254,10 @@ contains
             do i = stress_idx%beg, stress_idx%end
                 @:DEALLOCATE(q_prim_vf(i)%sf)
             end do
+        end if
+
+        if (diffusion) then
+            @:DEALLOCATE(q_prim_vf(advg_idx)%sf)
         end if
 
         if (hyperelasticity) then
