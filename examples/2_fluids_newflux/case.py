@@ -80,10 +80,10 @@ print(
             "p": 0,
             "dt": 1.0e-5,
             "t_step_start": 0,
-            "t_step_stop": 1000,
-            "t_step_save": 2,
-            # "t_step_stop": 500000,
-            # "t_step_save": 5000,
+            # "t_step_stop": 1000,
+            # "t_step_save": 2,
+            "t_step_stop": 500000,
+            "t_step_save": 5000,
             # "t_step_stop": 10000000,
             # "t_step_save": 50000,
             # Simulation Algorithm Parameters
@@ -125,10 +125,10 @@ print(
             "patch_icpp(1)%pres": p0,
             "patch_icpp(1)%alpha_rho(1)": rho_n2,
             "patch_icpp(1)%alpha_rho(2)": 0.0,
-            #"patch_icpp(1)%alpha_rho(3)": 0.0,
+            # "patch_icpp(1)%alpha_rho(3)": 0.0,
             "patch_icpp(1)%alpha(1)": 1.0,
             "patch_icpp(1)%alpha(2)": 0.0,
-            #"patch_icpp(1)%alpha(3)": 0.0,
+            # "patch_icpp(1)%alpha(3)": 0.0,
             
             # Patch 2 CO2
             "patch_icpp(2)%geometry": 23,
@@ -139,10 +139,10 @@ print(
             "patch_icpp(2)%pres": p0,
             "patch_icpp(2)%alpha_rho(1)": 0.0,
             "patch_icpp(2)%alpha_rho(2)": rho_co2,
-            #"patch_icpp(2)%alpha_rho(3)": 0.0,
+            # "patch_icpp(2)%alpha_rho(3)": 0.0,
             "patch_icpp(2)%alpha(1)": 0.0,
             "patch_icpp(2)%alpha(2)": 1.0,
-            #"patch_icpp(2)%alpha(3)": 0.0,
+            # "patch_icpp(2)%alpha(3)": 0.0,
 
             # Fluids Physical Parameters
             # N2
@@ -154,7 +154,7 @@ print(
             "fluid_pp(1)%T0": T0_n2,
             "fluid_pp(1)%D(1)": D11,
             "fluid_pp(1)%D(2)": D12,
-            "fluid_pp(1)%gas_mixture" : "T",
+            "fluid_pp(1)%gas_mixture": "T",
 
             # CO2
             "fluid_pp(2)%gamma": Gamma_co2,
@@ -165,7 +165,7 @@ print(
             "fluid_pp(2)%T0": T0_co2,
             "fluid_pp(2)%D(1)": D21,
             "fluid_pp(2)%D(2)": D22,
-            "fluid_pp(2)%gas_mixture" : "T",
+            "fluid_pp(2)%gas_mixture": "T",
     
 
         }

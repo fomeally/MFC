@@ -1827,31 +1827,31 @@ contains
                 end do
             end if
 
-            if (present(j_src_n)) then
-                !$acc parallel loop collapse(3) gang vector default(present)
-                do l = 0, p
-                    do k = 0, n
-                        do j = 0, m
-                            do i = 1, Dif_size
-                                rhs_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = &
-                                    rhs_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) - 1._wp/dx(j)* &
-                                    (j_src_n(advxb + Dif_idx(i) - 1)%sf(j, k, l) - &
-                                    j_src_n(advxb + Dif_idx(i) - 1)%sf(j - 1, k, l))
+            ! if (present(j_src_n)) then
+            !     !$acc parallel loop collapse(3) gang vector default(present)
+            !     do l = 0, p
+            !         do k = 0, n
+            !             do j = 0, m
+            !                 do i = 1, Dif_size
+            !                     rhs_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = &
+            !                         rhs_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) - 1._wp/dx(j)* &
+            !                         (j_src_n(advxb + Dif_idx(i) - 1)%sf(j, k, l) - &
+            !                         j_src_n(advxb + Dif_idx(i) - 1)%sf(j - 1, k, l))
 
-                                rhs_vf(Dif_idx(i))%sf(j, k, l) = &
-                                    rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dx(j)* &
-                                    (j_src_n(Dif_idx(i))%sf(j, k, l) - &
-                                    j_src_n(Dif_idx(i))%sf(j - 1, k, l))
-                            end do
+            !                     rhs_vf(Dif_idx(i))%sf(j, k, l) = &
+            !                         rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dx(j)* &
+            !                         (j_src_n(Dif_idx(i))%sf(j, k, l) - &
+            !                         j_src_n(Dif_idx(i))%sf(j - 1, k, l))
+            !                 end do
 
-                            rhs_vf(E_idx)%sf(j, k, l) = &
-                                rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dx(j)* &
-                                (j_src_n(E_idx)%sf(j, k, l) - &
-                                j_src_n(E_idx)%sf(j - 1, k, l))
-                        end do
-                    end do
-                end do
-            end if
+            !                 rhs_vf(E_idx)%sf(j, k, l) = &
+            !                     rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dx(j)* &
+            !                     (j_src_n(E_idx)%sf(j, k, l) - &
+            !                     j_src_n(E_idx)%sf(j - 1, k, l))
+            !             end do
+            !         end do
+            !     end do
+            ! end if
 
         elseif (idir == 2) then ! y-direction
 
