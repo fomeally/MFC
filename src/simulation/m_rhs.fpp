@@ -2769,7 +2769,7 @@ contains
                 !     end do
                 ! end if
 
-                @:DEALLOCATE(flux_src_n(i)%vf(adv_idx%beg)%sf)
+                ! @:DEALLOCATE(flux_src_n(i)%vf(adv_idx%beg)%sf)
             end if
 
             @:DEALLOCATE(flux_n(i)%vf, flux_src_n(i)%vf, flux_gsrc_n(i)%vf)
@@ -2777,7 +2777,7 @@ contains
             if (diffusion) then
                 do l = 1, Dif_size
                     @:DEALLOCATE(j_src_n(i)%vf(Dif_idx(l))%sf)
-                    @:DEALLOCATE(j_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
+                    ! @:DEALLOCATE(j_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
                 end do
                 @:DEALLOCATE(j_src_n(i)%vf(E_idx)%sf)
  

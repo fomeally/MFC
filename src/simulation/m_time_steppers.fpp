@@ -364,7 +364,7 @@ contains
         end do
 
         if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(1)%vf)
+            call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
         end if
 
         !Evolve pb and mv for non-polytropic qbmm
@@ -473,7 +473,7 @@ contains
         end do
 
         if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(2)%vf)
+            call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
         end if
 
         !Evolve pb and mv for non-polytropic qbmm
@@ -553,7 +553,7 @@ contains
         end do
 
         if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(1)%vf)
+            call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
         end if
 
         if (qbmm .and. (.not. polytropic)) then
@@ -669,7 +669,7 @@ contains
         end do
 
         if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(2)%vf)
+            call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
         end if
 
         !Evolve pb and mv for non-polytropic qbmm
@@ -749,7 +749,7 @@ contains
         end do
 
         if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(2)%vf)
+            call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
         end if
 
         if (qbmm .and. (.not. polytropic)) then
@@ -829,7 +829,7 @@ contains
         end do
 
         if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(1)%vf)
+            call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
         end if
 
         if (qbmm .and. (.not. polytropic)) then

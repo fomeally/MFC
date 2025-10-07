@@ -295,6 +295,10 @@ contains
                                  .or. &
                                  (i == advg_idx) &
                                  ) then
+
+                            if (i == advg_idx) then
+                                print *, "advg_idx", q_cons_vf(i)%sf(j, 0, 0)
+                            end if
                             write (2, FMT) x_cb(j), q_cons_vf(i)%sf(j, 0, 0)
                         else if (i == mom_idx%beg) then !u
                             write (2, FMT) x_cb(j), q_cons_vf(mom_idx%beg)%sf(j, 0, 0)/rho

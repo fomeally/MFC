@@ -393,21 +393,21 @@ contains
                         !end do
                     !end if
 
-                    alpha_flux(1) = j_flux(1)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
-                    alpha_flux(2) = j_flux(2)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
+                    ! alpha_flux(1) = j_flux(1)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
+                    ! alpha_flux(2) = j_flux(2)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
 
-                    alpha_nonconserv(1) = j_flux(1)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
-                    alpha_nonconserv(2) = j_flux(2)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
+                    ! alpha_nonconserv(1) = j_flux(1)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
+                    ! alpha_nonconserv(2) = j_flux(2)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
 
-                    d = min(abs(x_cc(k)), abs(x_cc(m) - x_cc(k)))
-                    s = max(0.0_wp, 1._wp - d / x_cc(m))
-                    gamma = 0.0_wp
-                    do i = 1, Dif_size
-                        gamma = gamma + alpha_L(i)*(gammas(Dif_idx(i)) + 1._wp) / gammas(Dif_idx(i))
-                    end do
-                    c = sqrt(gamma*R_univ*T_L/W_L)
-                    sigma_max = 3._wp*c/x_cc(m)
-                    sigma = sigma_max*s**2._wp*(3._wp - 2._wp*s)
+                    ! d = min(abs(x_cc(k)), abs(x_cc(m) - x_cc(k)))
+                    ! s = max(0.0_wp, 1._wp - d / x_cc(m))
+                    ! gamma = 0.0_wp
+                    ! do i = 1, Dif_size
+                    !     gamma = gamma + alpha_L(i)*(gammas(Dif_idx(i)) + 1._wp) / gammas(Dif_idx(i))
+                    ! end do
+                    ! c = sqrt(gamma*R_univ*T_L/W_L)
+                    ! sigma_max = 3._wp*c/x_cc(m)
+                    ! sigma = sigma_max*s**2._wp*(3._wp - 2._wp*s)
 
                     do i = 1, Dif_size
                         j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + j_flux(i)
@@ -423,9 +423,9 @@ contains
                     !             rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) + 0.5_wp*alpha_nonconserv(i)
                     !     end if
                     end do
-                    if (k > -1 .and. l > -1 .and. q > -1) then
-                        rhs_vf(momxb)%sf(k, l, q) = rhs_vf(momxb)%sf(k, l, q) - sigma*rho_L*q_prim_vf(momxb)%sf(k, l, q)
-                    end if
+                    ! if (k > -1 .and. l > -1 .and. q > -1) then
+                    !     rhs_vf(momxb)%sf(k, l, q) = rhs_vf(momxb)%sf(k, l, q) - sigma*rho_L*q_prim_vf(momxb)%sf(k, l, q)
+                    ! end if
                 end do
             end do
         end do
@@ -487,27 +487,31 @@ contains
 
     end subroutine s_compute_diffusion_rhs
 
-    subroutine s_correct_volume_fractions(q_cons_vf)
+    subroutine s_correct_volume_fractions(q_cons_vf, q_prim_vf)
 
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
+
         integer :: x, y, z, i
         real(wp) :: rho, small_number, W
         real(wp), allocatable, dimension(:) :: alpharho, Y_s
 
         allocate(alpharho(Dif_size), Y_s(Dif_size))
 
-        small_number = 1.0e-8_wp
-        W = 0._wp
-        rho = 0._wp
+        small_number = 1.0e-12_wp
+
 
         do z = 0, p
             do y = 0, n
-                do x = 0, m
+                do x = 0, m 
                     if (q_cons_vf(advg_idx)%sf(x, y, z) < small_number) then
                         do i = 1, Dif_size
                             q_cons_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z) = 0._wp
                         end do
                     else
+                        rho = 0._wp
+                        W = 0._wp
+
                         do i = 1, Dif_size
                             alpharho(i) = q_cons_vf(Dif_idx(i))%sf(x, y, z)
                         end do
@@ -527,8 +531,14 @@ contains
                         W = 1._wp / W
 
                         do i = 1, Dif_size
-                            q_cons_vf(advxb + Dif_idx(1) - 1)%sf(x, y, z) = q_cons_vf(advg_idx)%sf(x, y, z) * Y_s(i) * W / Ws(i)
+                            q_cons_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z) = q_cons_vf(advg_idx)%sf(x, y, z) * Y_s(i) * W / Ws(i)
                         end do
+
+                        do i = 1, Dif_size
+                            q_prim_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z) = q_cons_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z)
+                        end do
+
+                        q_prim_vf(advg_idx)%sf(x, y, z) = q_cons_vf(advg_idx)%sf(x, y, z)
                     end if
                 end do
             end do

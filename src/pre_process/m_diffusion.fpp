@@ -39,7 +39,6 @@ contains
             real(wp) :: sum_alpha_g
     
 
-            sum_alpha_g = 0.0_wp
             do z = bounds(3)%beg, bounds(3)%end
                 do y = bounds(2)%beg, bounds(2)%end
                     do x = bounds(1)%beg, bounds(1)%end
