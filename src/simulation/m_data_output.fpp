@@ -544,9 +544,6 @@ contains
 
                     open (2, FILE=trim(file_path))
                     do j = 0, m
-                        ! if (i == advg_idx) then
-                        !     print *, 'advg_idx', q_cons_vf(i)%sf(j, 0, 0)
-                        ! end if
                         ! todo: revisit change here
                         if (((i >= adv_idx%beg) .and. (i <= adv_idx%end)) .or. (i == advg_idx)) then
                             write (2, FMT) x_cb(j), q_cons_vf(i)%sf(j, 0, 0)

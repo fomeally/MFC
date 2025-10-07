@@ -130,8 +130,12 @@ for f_id in range(1, 10+1):
     PRE_PROCESS[f'fluid_rho({f_id})'] = ParamType.REAL
 
     for real_attr in ["gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
-                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp" ]:
-        PRE_PROCESS[f"fluid_pp({f_id})%{real_attr}"] = ParamType.REAL
+                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "gas_mixture" ]:
+        if real_attr == "gas_mixture":
+            PRE_PROCESS[f"fluid_pp({f_id})%{real_attr}"] = ParamType.LOG
+        else:
+            PRE_PROCESS[f"fluid_pp({f_id})%{real_attr}"] = ParamType.REAL
+    
 
 for p_id in range(1, 10+1):
     for attribute, ty in [("geometry", ParamType.INT), ("smoothen", ParamType.LOG),
@@ -421,9 +425,12 @@ for fl_id in range(1,10+1):
         POST_PROCESS[f'{append}({fl_id})'] = ty
 
     for real_attr in ["gamma", "pi_inf", "ss", "pv", "gamma_v", "M_v", "mu_v", "k_v", "cp_v",
-                      "G", "mul0", "cv", "qv", "qvp" ]:
-        POST_PROCESS[f"fluid_pp({fl_id})%{real_attr}"] = ParamType.REAL
-
+                      "G", "mul0", "cv", "qv", "qvp", "gas_mixture" ]:
+        if real_attr == "gas_mixture":
+            POST_PROCESS[f"fluid_pp({fl_id})%{real_attr}"] = ParamType.LOG
+        else:
+            POST_PROCESS[f"fluid_pp({fl_id})%{real_attr}"] = ParamType.REAL
+    
 IGNORE = ["cantera_file", "chemistry"]
 
 ALL = COMMON.copy()

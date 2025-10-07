@@ -137,7 +137,7 @@ contains
         ! First, compute the temperature field from the conservative variables.
         if (chemistry) call s_compute_q_T_sf(q_T_sf, q_cons_vf, idwbuff)
 
-        if (diffusion) call s_compute_sum_alpha_g(q_cons_vf, idwbuff)
+        ! if (diffusion) call s_compute_sum_alpha_g(q_cons_vf, q_prim_vf, idwbuff)
 
         ! Converting the conservative variables to the primitive ones given
         ! preexisting initial condition data files were read in on start-up
@@ -358,6 +358,7 @@ contains
         call s_convert_primitive_to_conservative_variables(q_prim_vf, q_cons_vf)
 
         if (chemistry) call s_compute_q_T_sf(q_T_sf, q_cons_vf, idwint)
+        if (diffusion) call s_compute_sum_alpha_g(q_cons_vf, q_prim_vf, idwint)
 
         if (qbmm .and. .not. polytropic) then
             !Initialize pb and mv

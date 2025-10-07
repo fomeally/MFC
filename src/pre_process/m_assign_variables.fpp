@@ -478,14 +478,6 @@ contains
                 + (1._wp - eta)*orig_prim_vf(i)
         end do
 
-        if (diffusion) then
-            alphag_sum = 0._wp
-            do i = 1, Dif_size
-                alphag_sum = alphag_sum + q_prim_vf(Dif_idx(i) + adv_idx%beg - 1)%sf(j, k, l)
-            end do
-            q_prim_vf(advg_idx)%sf(j, k, l) = alphag_sum
-        end if
-
         ! Elastic Shear Stress
         if (elasticity) then
             do i = 1, (stress_idx%end - stress_idx%beg) + 1
