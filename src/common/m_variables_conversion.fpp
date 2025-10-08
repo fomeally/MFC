@@ -922,6 +922,14 @@ contains
 #endif
                     end if
 
+                    if (diffusion) then
+                        rho_K = 0._wp
+                        !$acc loop seq
+                        do i = 1, Dif_size
+                            rho_K = rho_K + max(0._wp, qK_cons_vf(Dif_idx(i))%sf(j, k, l))
+                        end do
+                    end if
+
                     if (chemistry) then
                         rho_K = 0._wp
                         !$acc loop seq
