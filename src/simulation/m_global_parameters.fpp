@@ -135,6 +135,7 @@ module m_global_parameters
     logical :: weno_avg       ! Average left/right cell-boundary states
     logical :: weno_Re_flux   !< WENO reconstruct velocity gradients for viscous stress tensor
     logical :: weno_Dif_flux  !< WENO reconstruct mass fraction gradients for mass diffusion flux
+    logical :: Dif_fv        !< use finite volume method for diffusion terms
     integer :: riemann_solver !< Riemann solver algorithm
     integer :: low_Mach       !< Low Mach number fix to HLLC Riemann solver
     integer :: wave_speeds    !< Wave speeds estimation method
@@ -528,6 +529,7 @@ contains
         weno_avg = .false.
         weno_Re_flux = .false.
         weno_Dif_flux = .false.
+        Dif_fv = .false.
         riemann_solver = dflt_int
         low_Mach = 0
         wave_speeds = dflt_int

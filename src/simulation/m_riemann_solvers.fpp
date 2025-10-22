@@ -2789,6 +2789,9 @@ contains
                                         end do
                                         if (diffusion) then
                                             flux_gsrc_rs${XYZ}$_vf(j, k, l, advg_idx) = 0._wp
+                                            if (num_fluids > Dif_size) then
+                                                flux_gsrc_rs${XYZ}$_vf(j, k, l, liq_idx) = 0._wp
+                                            end if
                                         end if
                                     end if
                                 #:endif

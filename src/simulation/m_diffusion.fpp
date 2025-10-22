@@ -242,677 +242,674 @@ contains
         offsets = 0
         offsets(idir) = 1
 
-        ! Finite Volume with RHS Approach
-        ! #########################################################################
-        ! #########################################################################
-        ! do q = 0, p
-        !     do l = 0, n
-        !         do k = 0, m
-        !             ! Calculate grid spacing using direction-based indexing
-        !             select case (idir)
-        !             case (1)
-        !                 grid_spacing = x_cc(k + 1) - x_cc(k)
-        !             case (2)
-        !                 grid_spacing = y_cc(l + 1) - y_cc(l)
-        !             case (3)
-        !                 grid_spacing = z_cc(q + 1) - z_cc(q)
-        !             end select
+            ! Finite Volume with RHS Approach
+            ! #########################################################################
+            ! #########################################################################
+            ! do q = 0, p
+            !     do l = 0, n
+            !         do k = 0, m
+            !             ! Calculate grid spacing using direction-based indexing
+            !             select case (idir)
+            !             case (1)
+            !                 grid_spacing = x_cc(k + 1) - x_cc(k)
+            !             case (2)
+            !                 grid_spacing = y_cc(l + 1) - y_cc(l)
+            !             case (3)
+            !                 grid_spacing = z_cc(q + 1) - z_cc(q)
+            !             end select
 
-        !             do i = 1, Dif_size
-        !                 alpha_L(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-        !                 alpha_M(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
-        !                 alpha_R(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-        !                 alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-        !                 alpharho_M(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-        !                 alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-        !             end do
+            !             do i = 1, Dif_size
+            !                 alpha_L(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+            !                 alpha_M(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
+            !                 alpha_R(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+            !                 alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+            !                 alpharho_M(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
+            !                 alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+            !             end do
 
-        !             do i = 1, Dif_size
-        !                 alpha_Rf(i) = 0.5_wp * (alpha_M(i) + alpha_R(i))
-        !                 alpha_Lf(i) = 0.5_wp * (alpha_L(i) + alpha_M(i))
-        !                 alpharho_Rf(i) = 0.5_wp * (alpharho_M(i) + alpharho_R(i))
-        !                 alpharho_Lf(i) = 0.5_wp * (alpharho_L(i) + alpharho_M(i))
-        !             end do
+            !             do i = 1, Dif_size
+            !                 alpha_Rf(i) = 0.5_wp * (alpha_M(i) + alpha_R(i))
+            !                 alpha_Lf(i) = 0.5_wp * (alpha_L(i) + alpha_M(i))
+            !                 alpharho_Rf(i) = 0.5_wp * (alpharho_M(i) + alpharho_R(i))
+            !                 alpharho_Lf(i) = 0.5_wp * (alpharho_L(i) + alpharho_M(i))
+            !             end do
 
-        !             rho_L = 0._wp
-        !             rho_R = 0._wp
-        !             rho_M = 0._wp
-        !             rho_Rf = 0._wp
-        !             rho_Lf = 0._wp
-        !             alpha_m_L = 0._wp
-        !             alpha_m_R = 0._wp
-        !             alpha_m_M = 0._wp
-        !             alpha_m_Rf = 0._wp
-        !             alpha_m_Lf = 0._wp
+            !             rho_L = 0._wp
+            !             rho_R = 0._wp
+            !             rho_M = 0._wp
+            !             rho_Rf = 0._wp
+            !             rho_Lf = 0._wp
+            !             alpha_m_L = 0._wp
+            !             alpha_m_R = 0._wp
+            !             alpha_m_M = 0._wp
+            !             alpha_m_Rf = 0._wp
+            !             alpha_m_Lf = 0._wp
 
-        !             do i = 1, Dif_size
-        !                 rho_L = rho_L + alpharho_L(i)
-        !                 rho_R = rho_R + alpharho_R(i)
-        !                 rho_M = rho_M + alpharho_M(i)
-        !                 rho_Rf = rho_Rf + alpharho_Rf(i)
-        !                 rho_Lf = rho_Lf + alpharho_Lf(i)
-        !                 alpha_m_L = alpha_m_L + alpha_L(i)
-        !                 alpha_m_R = alpha_m_R + alpha_R(i)
-        !                 alpha_m_M = alpha_m_M + alpha_M(i)
-        !                 alpha_m_Rf = alpha_m_Rf + alpha_Rf(i)
-        !                 alpha_m_Lf = alpha_m_Lf + alpha_Lf(i)
-        !             end do
+            !             do i = 1, Dif_size
+            !                 rho_L = rho_L + alpharho_L(i)
+            !                 rho_R = rho_R + alpharho_R(i)
+            !                 rho_M = rho_M + alpharho_M(i)
+            !                 rho_Rf = rho_Rf + alpharho_Rf(i)
+            !                 rho_Lf = rho_Lf + alpharho_Lf(i)
+            !                 alpha_m_L = alpha_m_L + alpha_L(i)
+            !                 alpha_m_R = alpha_m_R + alpha_R(i)
+            !                 alpha_m_M = alpha_m_M + alpha_M(i)
+            !                 alpha_m_Rf = alpha_m_Rf + alpha_Rf(i)
+            !                 alpha_m_Lf = alpha_m_Lf + alpha_Lf(i)
+            !             end do
 
-        !             rho_Rf = 0.5_wp * (rho_M + rho_R)
-        !             rho_Lf = 0.5_wp * (rho_L + rho_M)
+            !             rho_Rf = 0.5_wp * (rho_M + rho_R)
+            !             rho_Lf = 0.5_wp * (rho_L + rho_M)
 
-        !             kM = rho_M*Ds(1,2)
-        !             kR = rho_R*Ds(1,2)
-        !             kL = rho_L*Ds(1,2)
+            !             kM = rho_M*Ds(1,2)
+            !             kR = rho_R*Ds(1,2)
+            !             kL = rho_L*Ds(1,2)
 
-        !             k_Rf = 2.0_wp * kM * kR / (kM + kR)
-        !             k_Lf = 2.0_wp * kM * kL / (kM + kL)
+            !             k_Rf = 2.0_wp * kM * kR / (kM + kR)
+            !             k_Lf = 2.0_wp * kM * kL / (kM + kL)
 
-        !             P_L = q_prim_vf(E_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-        !             P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-        !             P_M = q_prim_vf(E_idx)%sf(k, l, q)
-        !             P_Rf = 0.5_wp * (P_M + P_R)
-        !             P_Lf = 0.5_wp * (P_L + P_M)
+            !             P_L = q_prim_vf(E_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+            !             P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+            !             P_M = q_prim_vf(E_idx)%sf(k, l, q)
+            !             P_Rf = 0.5_wp * (P_M + P_R)
+            !             P_Lf = 0.5_wp * (P_L + P_M)
 
+                    
+
+            !             do i = 1, Dif_size
+            !                 Y_L(i) = alpharho_L(i) / rho_L
+            !                 Y_R(i) = alpharho_R(i) / rho_R
+            !                 Y_M(i) = alpharho_M(i) / rho_M
+            !                 Y_Rf(i) = alpharho_Rf(i) / rho_Rf
+            !                 Y_Lf(i) = alpharho_Lf(i) / rho_Lf
+            !             end do
+
+            !             do i = 1, Dif_size
+            !                 dY_ds_Rf(i) = (Y_R(i) - Y_M(i)) / grid_spacing
+            !                 dY_ds_Lf(i) = (Y_M(i) - Y_L(i)) / grid_spacing
+            !             end do
+
+            !             W_L = 0._wp
+            !             W_R = 0._wp
+            !             W_M = 0._wp
+            !             W_Rf = 0._wp
+            !             W_Lf = 0._wp
+            !             do i = 1, Dif_size
+            !                 W_L = W_L + Y_L(i)/Ws(i)
+            !                 W_R = W_R + Y_R(i)/Ws(i)      
+            !                 W_M = W_M + Y_M(i)/Ws(i)
+            !                 W_Rf = W_Rf + Y_Rf(i)/Ws(i)
+            !                 W_Lf = W_Lf + Y_Lf(i)/Ws(i)
+
+            !                 ! W_L = W_L + alpha_L(i)*Ws(i)
+            !                 ! W_R = W_R + alpha_R(i)*Ws(i)
+            !                 ! W_M = W_M + alpha_M(i)*Ws(i)
+            !                 ! W_Rf = W_Rf + alpha_Rf(i)*Ws(i)
+            !                 ! W_Lf = W_Lf + alpha_Lf(i)*Ws(i)
+            !             end do
+            !             W_L = 1._wp / W_L
+            !             W_R = 1._wp / W_R
+            !             W_M = 1._wp / W_M
+            !             W_Rf = 1._wp / W_Rf
+            !             W_Lf = 1._wp / W_Lf
+
+            !             T_L = P_L * W_L / (rho_L * R_univ)
+            !             T_R = P_R * W_R / (rho_R * R_univ)
+            !             T_M = P_M * W_M / (rho_M * R_univ)
+            !             T_Rf = P_Rf * W_Rf / (rho_Rf * R_univ)
+            !             T_Lf = P_Lf * W_Lf / (rho_Lf * R_univ)
+
+            !             ! dT_ds_Rf = (T_R - T_M) / grid_spacing
+            !             ! dT_ds_Lf = (T_M - T_L) / grid_spacing
+            !             ! kappa = 2000.0_wp*Ds(1,2) ! Simple model for thermal conductivity
+
+            !             ! rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) + kappa*(dT_ds_Rf - dT_ds_Lf) / grid_spacing
+
+            !             do i = 1, Dif_size
+            !                     h_Rf(i) = h0s(i) + cps(i)*(T_Rf - T0s(i))
+            !                     h_Lf(i) = h0s(i) + cps(i)*(T_Lf - T0s(i))
+            !             end do
+
+            !             j_flux_Rf(1) = -rho_Rf*Ds(1,2)*dY_ds_Rf(1)
+            !             j_flux_Rf(2) = -j_flux_Rf(1)
+            !             j_flux_Lf(1) = -rho_Lf*Ds(1,2)*dY_ds_Lf(1)
+            !             j_flux_Lf(2) = -j_flux_Lf(1)
+
+            !             ! j_flux_Rf(1) = -k_Rf*dY_ds_Rf(1)
+            !             ! j_flux_Rf(2) = -j_flux_Rf(1)
+            !             ! j_flux_Lf(1) = -k_Lf*dY_ds_Lf(1)
+            !             ! j_flux_Lf(2) = -j_flux_Lf(1)
+                        
+            !             do i = 1, Dif_size
+            !                 rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) - (j_flux_Rf(i) - j_flux_Lf(i)) / grid_spacing
+            !                 rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) - (h_Rf(i)*j_flux_Rf(i) - h_Lf(i)*j_flux_Lf(i)) / grid_spacing
+            !             end do
+            !         end do 
+            !     end do
+            ! end do
+        
+            ! #########################################################################
+            ! #########################################################################
+        
+        if (Dif_fv) then
+            ! Finite Volume with j_src_n Approach
+            ! #########################################################################
+            ! #########################################################################
+            do q = isd3%beg, isd3%end
+                do l = isd2%beg, isd2%end
+                    do k = isd1%beg, isd1%end
+
+                        do i = 1, Dif_size
+                            j_src_n(Dif_idx(i))%sf(k, l, q) = 0._wp
+                            ! j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = 0._wp
+                        end do
+                        j_src_n(E_idx)%sf(k, l, q) = 0._wp
+
+                        ! Calculate grid spacing using direction-based indexing
+                        select case (idir)
+                        case (1)
+                            grid_spacing = x_cc(k + 1) - x_cc(k)
+                        case (2)
+                            grid_spacing = y_cc(l + 1) - y_cc(l)
+                        case (3)
+                            grid_spacing = z_cc(q + 1) - z_cc(q)
+                        end select
+
+                        do i = 1, Dif_size
+                            alpha_L(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
+                            alpha_R(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                            alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
+                            alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                        
+                        end do
+
+                        do i = 1, Dif_size
+                            alpha_f(i) = 0.5_wp * (alpha_L(i) + alpha_R(i))
+                            alpharho_f(i) = 0.5_wp * (alpharho_L(i) + alpharho_R(i))
+
+                            !alpha_f(i) = 2*alpha_L(i)*alpha_R(i) / (alpha_L(i) + alpha_R(i))
+                            !alpharho_f(i) = 2*alpharho_L(i)*alpharho_R(i) / (alpharho_L(i) + alpharho_R(i))
+                        end do
+
+                        rho_L = 0._wp
+                        rho_R = 0._wp
+                        rho_f = 0._wp
+                        alpha_m_L = 0._wp
+                        alpha_m_R = 0._wp
+                        alpha_m_f = 0._wp
+
+                        do i = 1, Dif_size
+                            rho_L = rho_L + alpharho_L(i)
+                            rho_R = rho_R + alpharho_R(i)
+                            rho_f = rho_f + alpharho_f(i)
+                            alpha_m_L = alpha_m_L + alpha_L(i)
+                            alpha_m_R = alpha_m_R + alpha_R(i)
+                            alpha_m_f = alpha_m_f + alpha_f(i)
+                        end do
+                        ! rho_f = 0.5_wp * (rho_L + rho_R)
+
+                        P_L = q_prim_vf(E_idx)%sf(k, l, q)
+                        P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                        P_f = 0.5_wp * (P_L + P_R)
+
+                        if (alpha_m_L > small_number) then
+                            do i = 1, Dif_size
+                                Y_L(i) = alpharho_L(i) / rho_L
+                            end do
+                        else
+                            do i = 1, Dif_size
+                                Y_L(i) = 0._wp
+                            end do
+                        end if
+
+                        if (alpha_m_R > small_number) then
+                            do i = 1, Dif_size
+                                Y_R(i) = alpharho_R(i) / rho_R
+                            end do
+                        else
+                            do i = 1, Dif_size
+                                Y_R(i) = 0._wp
+                            end do
+                        end if
+
+                        if (alpha_m_f > small_number) then
+                            do i = 1, Dif_size
+                                Y_f(i) = alpharho_f(i) / rho_f
+                            end do
+                        else
+                            do i = 1, Dif_size
+                                Y_f(i) = 0._wp
+                            end do
+                        end if
+
+                        do i = 1, Dif_size
+                            dY_ds_f(i) = (Y_R(i) - Y_L(i)) / grid_spacing
+                        end do
+
+                        W_L = 0._wp
+                        W_R = 0._wp
+                        W_f = 0._wp
+                        do i = 1, Dif_size
+                            W_L = W_L + Y_L(i)/Ws(i)
+                            W_R = W_R + Y_R(i)/Ws(i)      
+                            W_f = W_f + Y_f(i)/Ws(i)
                 
-
-        !             do i = 1, Dif_size
-        !                 Y_L(i) = alpharho_L(i) / rho_L
-        !                 Y_R(i) = alpharho_R(i) / rho_R
-        !                 Y_M(i) = alpharho_M(i) / rho_M
-        !                 Y_Rf(i) = alpharho_Rf(i) / rho_Rf
-        !                 Y_Lf(i) = alpharho_Lf(i) / rho_Lf
-        !             end do
-
-        !             do i = 1, Dif_size
-        !                 dY_ds_Rf(i) = (Y_R(i) - Y_M(i)) / grid_spacing
-        !                 dY_ds_Lf(i) = (Y_M(i) - Y_L(i)) / grid_spacing
-        !             end do
-
-        !             W_L = 0._wp
-        !             W_R = 0._wp
-        !             W_M = 0._wp
-        !             W_Rf = 0._wp
-        !             W_Lf = 0._wp
-        !             do i = 1, Dif_size
-        !                 W_L = W_L + Y_L(i)/Ws(i)
-        !                 W_R = W_R + Y_R(i)/Ws(i)      
-        !                 W_M = W_M + Y_M(i)/Ws(i)
-        !                 W_Rf = W_Rf + Y_Rf(i)/Ws(i)
-        !                 W_Lf = W_Lf + Y_Lf(i)/Ws(i)
-
-        !                 ! W_L = W_L + alpha_L(i)*Ws(i)
-        !                 ! W_R = W_R + alpha_R(i)*Ws(i)
-        !                 ! W_M = W_M + alpha_M(i)*Ws(i)
-        !                 ! W_Rf = W_Rf + alpha_Rf(i)*Ws(i)
-        !                 ! W_Lf = W_Lf + alpha_Lf(i)*Ws(i)
-        !             end do
-        !             W_L = 1._wp / W_L
-        !             W_R = 1._wp / W_R
-        !             W_M = 1._wp / W_M
-        !             W_Rf = 1._wp / W_Rf
-        !             W_Lf = 1._wp / W_Lf
-
-        !             T_L = P_L * W_L / (rho_L * R_univ)
-        !             T_R = P_R * W_R / (rho_R * R_univ)
-        !             T_M = P_M * W_M / (rho_M * R_univ)
-        !             T_Rf = P_Rf * W_Rf / (rho_Rf * R_univ)
-        !             T_Lf = P_Lf * W_Lf / (rho_Lf * R_univ)
-
-        !             dT_ds_Rf = (T_R - T_M) / grid_spacing
-        !             dT_ds_Lf = (T_M - T_L) / grid_spacing
-        !             kappa = 2000.0_wp*Ds(1,2) ! Simple model for thermal conductivity
-
-        !             rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) + kappa*(dT_ds_Rf - dT_ds_Lf) / grid_spacing
-
-        !             do i = 1, Dif_size
-        !                     h_Rf(i) = h0s(i) + cps(i)*(T_Rf - T0s(i))
-        !                     h_Lf(i) = h0s(i) + cps(i)*(T_Lf - T0s(i))
-        !             end do
-
-        !             j_flux_Rf(1) = -rho_Rf*Ds(1,2)*dY_ds_Rf(1)
-        !             j_flux_Rf(2) = -j_flux_Rf(1)
-        !             j_flux_Lf(1) = -rho_Lf*Ds(1,2)*dY_ds_Lf(1)
-        !             j_flux_Lf(2) = -j_flux_Lf(1)
-
-        !             ! j_flux_Rf(1) = -k_Rf*dY_ds_Rf(1)
-        !             ! j_flux_Rf(2) = -j_flux_Rf(1)
-        !             ! j_flux_Lf(1) = -k_Lf*dY_ds_Lf(1)
-        !             ! j_flux_Lf(2) = -j_flux_Lf(1)
-                    
-        !             do i = 1, Dif_size
-        !                 rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) - (j_flux_Rf(i) - j_flux_Lf(i)) / grid_spacing
-        !                 ! rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) - (h_Rf(i)*j_flux_Rf(i) - h_Lf(i)*j_flux_Lf(i)) / grid_spacing
-        !             end do
-        !         end do 
-        !     end do
-        ! end do
-        ! #########################################################################
-        ! #########################################################################
-
-
-        ! Finite Volume with j_src_n Approach
-        ! #########################################################################
-        ! #########################################################################
-        do q = isd3%beg, isd3%end
-            do l = isd2%beg, isd2%end
-                do k = isd1%beg, isd1%end
-
-                    do i = 1, Dif_size
-                        j_src_n(Dif_idx(i))%sf(k, l, q) = 0._wp
-                        ! j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = 0._wp
-                    end do
-                    j_src_n(E_idx)%sf(k, l, q) = 0._wp
-
-                    ! Calculate grid spacing using direction-based indexing
-                    select case (idir)
-                    case (1)
-                        grid_spacing = x_cc(k + 1) - x_cc(k)
-                    case (2)
-                        grid_spacing = y_cc(l + 1) - y_cc(l)
-                    case (3)
-                        grid_spacing = z_cc(q + 1) - z_cc(q)
-                    end select
-
-                    do i = 1, Dif_size
-                        alpha_L(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
-                        alpha_R(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                        alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-                        alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                    
-                    end do
-
-                    do i = 1, Dif_size
-                        alpha_f(i) = 0.5_wp * (alpha_L(i) + alpha_R(i))
-                        alpharho_f(i) = 0.5_wp * (alpharho_L(i) + alpharho_R(i))
-
-                        !alpha_f(i) = 2*alpha_L(i)*alpha_R(i) / (alpha_L(i) + alpha_R(i))
-                        !alpharho_f(i) = 2*alpharho_L(i)*alpharho_R(i) / (alpharho_L(i) + alpharho_R(i))
-                    end do
-
-                    rho_L = 0._wp
-                    rho_R = 0._wp
-                    rho_f = 0._wp
-                    alpha_m_L = 0._wp
-                    alpha_m_R = 0._wp
-                    alpha_m_f = 0._wp
-
-                    do i = 1, Dif_size
-                        rho_L = rho_L + alpharho_L(i)
-                        rho_R = rho_R + alpharho_R(i)
-                        !rho_f = rho_f + alpharho_f(i)
-                        alpha_m_L = alpha_m_L + alpha_L(i)
-                        alpha_m_R = alpha_m_R + alpha_R(i)
-                        alpha_m_f = alpha_m_f + alpha_f(i)
-                    end do
-                    rho_f = 0.5_wp * (rho_L + rho_R)
-
-                    P_L = q_prim_vf(E_idx)%sf(k, l, q)
-                    P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-
-                    if (alpha_m_L > small_number) then
-                        do i = 1, Dif_size
-                            Y_L(i) = alpharho_L(i) / rho_L
                         end do
-                    else
-                        print *, "should not be here"
+
+                        W_L = 1._wp / W_L
+                        W_R = 1._wp / W_R
+                        W_f = 1._wp / W_f
+
+                        if (alpha_m_L > small_number) then
+                            T_L = P_L * W_L / (rho_L * R_univ)
+                        else
+                            T_L = 0._wp
+                        end if
+
+                        if (alpha_m_R > small_number) then
+                            T_R = P_R * W_R / (rho_R * R_univ)
+                        else
+                            T_R = 0._wp
+                        end if
+
+                        if (alpha_m_f > small_number) then
+                            T_f = P_f * W_f / (rho_f * R_univ)
+                        else
+                            T_f = 0._wp
+                        end if
+
+                        if (alpha_m_f > small_number) then
+                            do i = 1, Dif_size
+                                h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
+                            end do
+                        else
+                            do i = 1, Dif_size
+                                h_f(i) = 0._wp
+                            end do
+                        end if 
+
+                        K_L(1) = rho_L*Ds(1,2)
+                        K_L(2) = rho_L*Ds(2,1)
+                        K_R(1) = rho_R*Ds(1,2)
+                        K_R(2) = rho_R*Ds(2,1)
+                        K_eff(1) = 2.0_wp / (1.0_wp/K_L(1) + 1.0_wp/K_R(1))
+                        K_eff(2) = 2.0_wp / (1.0_wp/K_L(2) + 1.0_wp/K_R(2))
+                        !j_flux(1) = -K_eff(1)*dY_ds_f(1)
+                        !j_flux(2) = -j_flux(1)
+                        j_flux(1) = -rho_f*Ds(1,2)*dY_ds_f(1)
+                        j_flux(2) = -rho_f*Ds(2,1)*dY_ds_f(2)
+
+                        ! dT_ds_Rf = (T_R - T_L) / grid_spacing
+                        ! kappa = 1000.0_wp*Ds(1,2) ! Simple model for thermal conductivity
+
+                        ! j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) - kappa*dT_ds_Rf 
+
+                        ! Enforce mass conservation of diffusion fluxes
+                        sum_jflux = 0.0_wp
+                        if (alpha_m_f > small_number) then
+                            do i = 1, Dif_size
+                                sum_jflux = sum_jflux + j_flux(i)
+                            end do
+
+                            do i = 1, Dif_size
+                                j_flux(i) = j_flux(i) - Y_f(i)*sum_jflux
+                            end do
+                        end if
+
+                        ! alpha_flux(1) = j_flux(1)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
+                        ! alpha_flux(2) = j_flux(2)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
+
+                        ! alpha_nonconserv(1) = j_flux(1)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
+                        ! alpha_nonconserv(2) = j_flux(2)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
+
+                        ! d = min(abs(x_cc(k)), abs(x_cc(m) - x_cc(k)))
+                        ! s = max(0.0_wp, 1._wp - d / x_cc(m))
+                        ! gamma = 0.0_wp
+                        ! do i = 1, Dif_size
+                        !     gamma = gamma + alpha_L(i)*(gammas(Dif_idx(i)) + 1._wp) / gammas(Dif_idx(i))
+                        ! end do
+                        ! c = sqrt(gamma*R_univ*T_L/W_L)
+                        ! sigma_max = 3._wp*c/x_cc(m)
+                        ! sigma = sigma_max*s**2._wp*(3._wp - 2._wp*s)
+
                         do i = 1, Dif_size
-                            Y_L(i) = 0._wp
+                            j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + j_flux(i)
+                            j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) + h_f(i)*j_flux(i)
+                            ! j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) + alpha_flux(i)
+                            ! if ((k == 0 .or. offsets(1)*k < m) .and. (l == 0 .or. offsets(2)*l < n) .and. (q == 0 .or. offsets(3)*q < p)) then
+                            !     rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) = &
+                            !         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) + 0.5_wp*alpha_nonconserv(i)
+                            ! end if
+
+                            ! if (k > -1 .and. l > -1 .and. q > -1) then
+                            !     rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = &
+                            !         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) + 0.5_wp*alpha_nonconserv(i)
+                            ! end if
                         end do
-                    end if
-
-                    if (alpha_m_R > small_number) then
-                        do i = 1, Dif_size
-                            Y_R(i) = alpharho_R(i) / rho_R
-                        end do
-                    else
-                        print *, "should not be here"
-                        do i = 1, Dif_size
-                            Y_R(i) = 0._wp
-                        end do
-                    end if
-
-                    if (alpha_m_f > small_number) then
-                        do i = 1, Dif_size
-                            Y_f(i) = alpharho_f(i) / rho_f
-                        end do
-                    else
-                        print *, "should not be here"
-                        do i = 1, Dif_size
-                            Y_f(i) = 0._wp
-                        end do
-                    end if
-
-                    do i = 1, Dif_size
-                        dY_ds_f(i) = (Y_R(i) - Y_L(i)) / grid_spacing
-                    end do
-
-                    W_L = 0._wp
-                    W_R = 0._wp
-                    W_f = 0._wp
-                    do i = 1, Dif_size
-                        W_L = W_L + Y_L(i)/Ws(i)
-                        W_R = W_R + Y_R(i)/Ws(i)      
-                        W_f = W_f + Y_f(i)/Ws(i)
-              
-                    end do
-
-                    W_L = 1._wp / W_L
-                    W_R = 1._wp / W_R
-                    W_f = 1._wp / W_f
-
-                    if (alpha_m_L > small_number) then
-                        T_L = P_L * W_L / (rho_L * R_univ)
-                    else
-                        print *, "should not be here"
-                        T_L = 0._wp
-                    end if
-
-                    if (alpha_m_R > small_number) then
-                        T_R = P_R * W_R / (rho_R * R_univ)
-                    else
-                        print *, "should not be here"
-                        T_R = 0._wp
-                    end if
-
-                    T_f = 0.5_wp * (T_L + T_R)
-                    !T_f = 298._wp
-                    !T_f = 2*T_L*T_R / (T_L + T_R)
-
-                    if (alpha_m_f > small_number) then
-                        do i = 1, Dif_size
-                            h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
-                        end do
-                    else
-                        print *, "should not be here"
-                        do i = 1, Dif_size
-                            h_f(i) = 0._wp
-                        end do
-                    end if 
-
-                    h_f(1) = 0.5*(cps(1) + cps(2))*(T_f - T0s(1))
-                    h_f(2) = h_f(1)
-                    K_L(1) = rho_L*Ds(1,2)
-                    K_L(2) = rho_L*Ds(2,1)
-                    K_R(1) = rho_R*Ds(1,2)
-                    K_R(2) = rho_R*Ds(2,1)
-                    K_eff(1) = 2.0_wp / (1.0_wp/K_L(1) + 1.0_wp/K_R(1))
-                    K_eff(2) = 2.0_wp / (1.0_wp/K_L(2) + 1.0_wp/K_R(2))
-                    !j_flux(1) = -K_eff(1)*dY_ds_f(1)
-                    !j_flux(2) = -j_flux(1)
-                    j_flux(1) = -rho_f*Ds(1,2)*dY_ds_f(1)
-                    j_flux(2) = -j_flux(1)
-
-                    dT_ds_Rf = (T_R - T_L) / grid_spacing
-                    kappa = 1000.0_wp*Ds(1,2) ! Simple model for thermal conductivity
-
-                    j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) - kappa*dT_ds_Rf 
-
-                    ! Enforce mass conservation of diffusion fluxes
-                    !sum_jflux = 0.0_wp
-                    !if (alpha_m_f > small_number) then
-                        !do i = 1, Dif_size
-                            !sum_jflux = sum_jflux + j_flux(i)
-                        !end do
-
-                        !do i = 1, Dif_size
-                            !j_flux(i) = j_flux(i) - Y_f(i)*sum_jflux
-                        !end do
-                    !end if
-
-                    ! alpha_flux(1) = j_flux(1)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
-                    ! alpha_flux(2) = j_flux(2)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
-
-                    ! alpha_nonconserv(1) = j_flux(1)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
-                    ! alpha_nonconserv(2) = j_flux(2)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
-
-                    ! d = min(abs(x_cc(k)), abs(x_cc(m) - x_cc(k)))
-                    ! s = max(0.0_wp, 1._wp - d / x_cc(m))
-                    ! gamma = 0.0_wp
-                    ! do i = 1, Dif_size
-                    !     gamma = gamma + alpha_L(i)*(gammas(Dif_idx(i)) + 1._wp) / gammas(Dif_idx(i))
-                    ! end do
-                    ! c = sqrt(gamma*R_univ*T_L/W_L)
-                    ! sigma_max = 3._wp*c/x_cc(m)
-                    ! sigma = sigma_max*s**2._wp*(3._wp - 2._wp*s)
-
-                    do i = 1, Dif_size
-                        j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + j_flux(i)
-                        j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) + h_f(i)*j_flux(i)
-                        ! j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) + alpha_flux(i)
-                        ! if ((k == 0 .or. offsets(1)*k < m) .and. (l == 0 .or. offsets(2)*l < n) .and. (q == 0 .or. offsets(3)*q < p)) then
-                        !     rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) = &
-                        !         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) + 0.5_wp*alpha_nonconserv(i)
-                        ! end if
-
                         ! if (k > -1 .and. l > -1 .and. q > -1) then
-                        !     rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = &
-                        !         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) + 0.5_wp*alpha_nonconserv(i)
+                        !     rhs_vf(momxb)%sf(k, l, q) = rhs_vf(momxb)%sf(k, l, q) - sigma*rho_L*q_prim_vf(momxb)%sf(k, l, q)
                         ! end if
                     end do
-                    ! if (k > -1 .and. l > -1 .and. q > -1) then
-                    !     rhs_vf(momxb)%sf(k, l, q) = rhs_vf(momxb)%sf(k, l, q) - sigma*rho_L*q_prim_vf(momxb)%sf(k, l, q)
-                    ! end if
                 end do
             end do
-        end do
         ! #########################################################################
         ! #########################################################################
+        else
+            ! Pure Finite Difference Approach 
+            ! #########################################################################
+            ! #########################################################################
+            if (idir == 1) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -2*fd_number, m + 2*fd_number
+                            do i = 1, Dif_size
+                                alpha_K_dif(k, l, q, i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
+                                alpharho_K_dif(k, l, q, i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
+                            end do
+                            rho_dif(k, l, q) = 0._wp
+                            alpha_dif(k, l, q) = 0._wp
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
 
-        ! Pure Finite Difference Approach 
-        ! #########################################################################
-        ! #########################################################################
-        ! if (idir == 1) then
-        !     !$acc parallel loop collapse(4) gang vector default(present)
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = -2*fd_number, m + 2*fd_number
-        !                 do i = 1, Dif_size
-        !                     alpha_K_dif(k, l, q, i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
-        !                     alpharho_K_dif(k, l, q, i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-        !                 end do
-        !                 rho_dif(k, l, q) = 0._wp
-        !                 alpha_dif(k, l, q) = 0._wp
-        !             end do
-        !         end do
-        !     end do
-        !     !$acc end parallel loop
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -2*fd_number, m + 2*fd_number
+                            do i = 1, Dif_size
+                                rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
+                                alpha_dif(k, l, q) = alpha_dif(k, l, q) + alpha_K_dif(k, l, q, i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
 
-        !     !$acc parallel loop collapse(4) gang vector default(present)
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = -2*fd_number, m + 2*fd_number
-        !                 do i = 1, Dif_size
-        !                     rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
-        !                     alpha_dif(k, l, q) = alpha_dif(k, l, q) + alpha_K_dif(k, l, q, i)
-        !                 end do
-        !             end do
-        !         end do
-        !     end do
-        !     !$acc end parallel loop
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -2*fd_number, m + 2*fd_number
+                            W_dif(k, l, q) = 0._wp
+                            do i = 1, Dif_size
+                                W_dif(k, l, q) = W_dif(k, l, q) + alpha_K_dif(k, l, q, i)*Ws(i)
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
 
-        !     !$acc parallel loop collapse(3) gang vector default(present)
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = -2*fd_number, m + 2*fd_number
-        !                 W_dif(k, l, q) = 0._wp
-        !                 do i = 1, Dif_size
-        !                     W_dif(k, l, q) = W_dif(k, l, q) + alpha_K_dif(k, l, q, i)*Ws(i)
-        !                 end do
-        !             end do
-        !         end do
-        !     end do
-        !     !$acc end parallel loop
-
-        !     !print *, "261"
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = -2*fd_number, m + 2*fd_number
-        !                 ! gas cell
-        !                 if (alpha_dif(k, l, q) > small_number) then
-        !                     T_dif(k, l, q) = q_prim_vf(E_idx)%sf(k, l, q) * W_dif(k, l, q) /( rho_dif(k, l, q)*R_univ )
-        !                 else
-        !                     T_dif(k, l, q) = 0._wp
-        !                 end if
-        !             end do
-        !         end do
-        !     end do
-        
-        !     !print *, "297"
-        !     !$acc parallel loop collapse(4) gang vector default(present)
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = -2*fd_number, m + 2*fd_number
-        !                 if (alpha_dif(k, l, q) > small_number) then
-        !                     do i = 1, Dif_size
+                !print *, "261"
+                do q = 0, p
+                    do l = 0, n
+                        do k = -2*fd_number, m + 2*fd_number
+                            ! gas cell
+                            if (alpha_dif(k, l, q) > small_number) then
+                                T_dif(k, l, q) = q_prim_vf(E_idx)%sf(k, l, q) * W_dif(k, l, q) /( rho_dif(k, l, q)*R_univ )
+                            else
+                                T_dif(k, l, q) = 0._wp
+                            end if
+                        end do
+                    end do
+                end do
+            
+                !print *, "297"
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -2*fd_number, m + 2*fd_number
+                            if (alpha_dif(k, l, q) > small_number) then
+                                do i = 1, Dif_size
+                                    
+                                    Y_dif(k, l, q, i) = alpharho_K_dif(k, l, q, i) / rho_dif(k, l, q)
+                                    !h_dif(k, l, q, i) = (q_prim_vf(E_idx)%sf(k, l, q) * (gammas(Dif_idx(i)) + 1._wp)) * alpha_K_dif(k, l, q, i) / alpharho_K_dif(k, l, q, i)
+                                    h_dif(k, l, q, i) = h0s(i) + cps(i)*(T_dif(k, l, q) - T0s(i))
                                 
-        !                         Y_dif(k, l, q, i) = alpharho_K_dif(k, l, q, i) / rho_dif(k, l, q)
-        !                         !h_dif(k, l, q, i) = (q_prim_vf(E_idx)%sf(k, l, q) * (gammas(Dif_idx(i)) + 1._wp)) * alpha_K_dif(k, l, q, i) / alpharho_K_dif(k, l, q, i)
-        !                         h_dif(k, l, q, i) = cps(i)*T_dif(k, l, q)
-                            
-        !                     end do
-        !                 end if
-        !             end do
-        !         end do
-        !     end do
-        !     !$acc end parallel loop
-        !     !print *, "311"
-        !     !$acc parallel loop collapse(4) gang vector default(present)
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = -fd_number, m + fd_number
-        !                 do i = 1, Dif_size
-        !                     dj_dx(k, l, q, i) = 0._wp
-        !                     djh_dx(k, l, q, i) = 0._wp
-        !                     dY_dx(k, l, q, i) = 0._wp
-        !                 end do
-        !             end do
-        !         end do
-        !     end do
-        !     !$acc end parallel loop
-        !     !print *, "325"
-        !     !set ghost cell for buffer region equal to k point (to enforce del dot j = 0)
-        !     !$acc parallel loop collapse(5) gang vector default(present)
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = -fd_number, m + fd_number
-        !                 if (alpha_dif(k, l, q) > small_number) then
-        !                     do i = 1, Dif_size
-        !                         do r = -fd_number, fd_number
-        !                             if (alpha_dif(k + r, l, q) > small_number) then
-        !                                 dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
-        !                                     + Y_dif(k + r, l, q, i)*fd_coeff_x_d(r, k)
-        !                             else
-        !                                 dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
-        !                                     + Y_dif(k, l, q, i)*fd_coeff_x_d(r, k)
-        !                             end if
-        !                         end do
-        !                     end do
-        !                 end if
-        !             end do
-        !         end do
-        !     end do
-        !     !$acc end parallel loop
-        !     !print *, "346"
-        !     if (Dif_size == 2) then
-        !         !$acc parallel loop collapse(5) gang vector default(present)
-        !         do q = 0, p
-        !             do l = 0, n
-        !                 do k = 0, m
-        !                     if (alpha_dif(k, l, q) > small_number) then
-        !                         do i = 1, Dif_size
-        !                             do r = -fd_number, fd_number
-        !                                 if (alpha_dif(k + r, l, q) > small_number) then
-        !                                     dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-        !                                         + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
-        !                                     djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-        !                                         + h_dif(k + r, l, q, i)*dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
+                                end do
+                            end if
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                !print *, "311"
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -fd_number, m + fd_number
+                            do i = 1, Dif_size
+                                dj_dx(k, l, q, i) = 0._wp
+                                djh_dx(k, l, q, i) = 0._wp
+                                dY_dx(k, l, q, i) = 0._wp
+                            end do
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                !print *, "325"
+                !set ghost cell for buffer region equal to k point (to enforce del dot j = 0)
+                !$acc parallel loop collapse(5) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = -fd_number, m + fd_number
+                            if (alpha_dif(k, l, q) > small_number) then
+                                do i = 1, Dif_size
+                                    do r = -fd_number, fd_number
+                                        if (alpha_dif(k + r, l, q) > small_number) then
+                                            dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
+                                                + Y_dif(k + r, l, q, i)*fd_coeff_x_d(r, k)
+                                        else
+                                            dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
+                                                + Y_dif(k, l, q, i)*fd_coeff_x_d(r, k)
+                                        end if
+                                    end do
+                                end do
+                            end if
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                !print *, "346"
+                if (Dif_size == 2) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                if (alpha_dif(k, l, q) > small_number) then
+                                    do i = 1, Dif_size
+                                        do r = -fd_number, fd_number
+                                            if (alpha_dif(k + r, l, q) > small_number) then
+                                                dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                    + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
+                                                djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                    + h_dif(k + r, l, q, i)*dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
 
-        !                                 else
-        !                                     dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-        !                                         + dY_dx(k, l, q, i)*rho_dif(k, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
-        !                                     djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-        !                                         + h_dif(k, l, q, i)*dY_dx(k, l, q, i)*rho_dif(k, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
-        !                                 end if
-        !                             end do
-        !                         end do
-        !                     end if
-        !                 end do
-        !             end do
-        !         end do
-        !         !$acc end parallel loop
-        !     else if (Dif_size == 3) then
-        !         !$acc parallel loop collapse(5) gang vector default(present)
-        !         do q = 0, p
-        !             do l = 0, n
-        !                 do k = 0, m
-        !                     if (alpha_dif(k, l, q) > small_number) then
-        !                         do r = -fd_number, fd_number
-        !                             do i = 1, Dif_size
-        !                                 if (alpha_dif(k + r, l, q) > small_number) then
-        !                                     select case (i)
-        !                                         case (1)
-        !                                             dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-        !                                                 + rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
-        !                                                 - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
-        !                                                 / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                            else
+                                                dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                    + dY_dx(k, l, q, i)*rho_dif(k, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
+                                                djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                    + h_dif(k, l, q, i)*dY_dx(k, l, q, i)*rho_dif(k, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
+                                            end if
+                                        end do
+                                    end do
+                                end if
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                else if (Dif_size == 3) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                if (alpha_dif(k, l, q) > small_number) then
+                                    do r = -fd_number, fd_number
+                                        do i = 1, Dif_size
+                                            if (alpha_dif(k + r, l, q) > small_number) then
+                                                select case (i)
+                                                    case (1)
+                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                            + rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
+                                                            - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
+                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                             djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-        !                                                 + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
-        !                                                 - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
-        !                                                 / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                            + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
+                                                            - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
+                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                         case (2)
-        !                                             dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-        !                                                 + rho_dif(k + r, l, q)*(Ds(1,2)*Ds(2,3)*(1._wp - Y_dif(k + r, l, q, 2))*dY_dx(k + r, l, q, 2) &
-        !                                                 - Y_dif(k + r, l, q, 2)*Ds(1,3)*(Ds(1,2)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 3))) &
-        !                                                 / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                    case (2)
+                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                            + rho_dif(k + r, l, q)*(Ds(1,2)*Ds(2,3)*(1._wp - Y_dif(k + r, l, q, 2))*dY_dx(k + r, l, q, 2) &
+                                                            - Y_dif(k + r, l, q, 2)*Ds(1,3)*(Ds(1,2)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 3))) &
+                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                             djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-        !                                                 + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
-        !                                                 - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
-        !                                                 / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                            + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
+                                                            - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
+                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                         case (3)
-        !                                             dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-        !                                                 + rho_dif(k + r, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 3))*dY_dx(k + r, l, q, 3) &
-        !                                                 - Y_dif(k + r, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 2))) &
-        !                                                 / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                    case (3)
+                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                            + rho_dif(k + r, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 3))*dY_dx(k + r, l, q, 3) &
+                                                            - Y_dif(k + r, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 2))) &
+                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                             djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-        !                                                 + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 3))*dY_dx(k + r, l, q, 3) &
-        !                                                 - Y_dif(k + r, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 2))) &
-        !                                                 / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-        !                                     end select
-                                    
-        !                                 else
-        !                                     select case (i)
-        !                                         case (1)
-        !                                             dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-        !                                                 + rho_dif(k, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 1))*dY_dx(k, l, q, 1) &
-        !                                                 - Y_dif(k, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k, l, q, 2) + Ds(1,3)*dY_dx(k, l, q, 3))) &
-        !                                                 / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                            + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 3))*dY_dx(k + r, l, q, 3) &
+                                                            - Y_dif(k + r, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 2))) &
+                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                end select
+                                        
+                                            else
+                                                select case (i)
+                                                    case (1)
+                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                            + rho_dif(k, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 1))*dY_dx(k, l, q, 1) &
+                                                            - Y_dif(k, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k, l, q, 2) + Ds(1,3)*dY_dx(k, l, q, 3))) &
+                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                             djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-        !                                                 + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
-        !                                                 - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
-        !                                                 / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                            + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
+                                                            - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
+                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                         case (2)
-        !                                             dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-        !                                                 + rho_dif(k, l, q)*(Ds(1,2)*Ds(2,3)*(1._wp - Y_dif(k, l, q, 2))*dY_dx(k, l, q, 2) &
-        !                                                 - Y_dif(k, l, q, 2)*Ds(1,3)*(Ds(1,2)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 3))) &
-        !                                                 / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                    case (2)
+                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                            + rho_dif(k, l, q)*(Ds(1,2)*Ds(2,3)*(1._wp - Y_dif(k, l, q, 2))*dY_dx(k, l, q, 2) &
+                                                            - Y_dif(k, l, q, 2)*Ds(1,3)*(Ds(1,2)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 3))) &
+                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                             djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-        !                                                 + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
-        !                                                 - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
-        !                                                 / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                            + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
+                                                            - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
+                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                         case (3)
-        !                                             dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-        !                                                 + rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
-        !                                                 - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
-        !                                                 / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                    case (3)
+                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
+                                                            + rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
+                                                            - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
+                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
 
-        !                                             djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-        !                                                 + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
-        !                                                 - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
-        !                                                 / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-        !                                     end select
+                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
+                                                            + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
+                                                            - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
+                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
+                                                end select
 
-        !                                 end if
-        !                             end do
-                                    
-        !                         end do
-        !                     end if 
-        !                 end do
-        !             end do
-        !         end do
-        !         !$acc end parallel loop
-        !     end if
-        !     !print *, "460"
-        !     !Valid for any number of species
-        !     ! species continuity
-        !     !$acc parallel loop collapse(4) gang vector default(present)
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = 0, m
-        !                 if (alpha_dif(k, l, q) > small_number) then
-        !                     do i = 1, Dif_size
-        !                         rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) &
-        !                             + dj_dx(k, l, q, i)
-        !                     end do
-        !                 end if
-        !             end do
-        !         end do
-        !     end do
-        !     !$acc end parallel loop
-        !     !print *, "475"
-        !     !Valid for any number of species
-        !     !energy
-        !     !$acc parallel loop collapse(4) gang vector default(present)
-        !     do q = 0, p
-        !         do l = 0, n
-        !             do k = 0, m
-        !                 if (alpha_dif(k, l, q) > small_number) then
-        !                     do i = 1, Dif_size
-        !                         rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
-        !                             + djh_dx(k, l, q, i)
-        !                     end do
-        !                 end if
-        !             end do
-        !         end do
-        !     end do
-        !     !$acc end parallel loop
-        !     ! !print *, "490"
-        !     ! !volume fraction
-        !     ! if (Dif_size == 2) then
-        !     !     !$acc parallel loop collapse(3) gang vector default(present)
-        !     !     do q = 0, p
-        !     !         do l = 0, n
-        !     !             do k = 0, m
-        !     !                 if (alpha_dif(k, l, q) > small_number) then
-        !     !                     do i = 1, Dif_size
-        !     !                         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-        !     !                             + dj_dx(k, l, q, i)*W_dif(k, l, q)*W_dif(k, l, q) / ( rho_dif(k, l, q)*Ws(1)*Ws(2)*alpha_dif(k, l, q))
-        !     !                     end do
-        !     !                 end if
-        !     !             end do
-        !     !         end do
-        !     !     end do
-        !     !     !$acc end parallel loop
-        !     ! elseif (Dif_size == 3) then
-        !     !     !$acc parallel loop collapse(4) gang vector default(present)
-        !     !     do q = 0, p
-        !     !         do l = 0, n
-        !     !             do k = 0, m
-        !     !                 if (alpha_dif(k, l, q) > small_number) then
-        !     !                     do i = 1, Dif_size
-        !     !                         select case (i)
-        !     !                             case (1)
-        !     !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-        !     !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
-        !     !                                 * ( dj_dx(k, l, q, 1)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 1))*Ws(2)*Ws(3) - alpha_K_dif(k, l, q, 1)*Ws(1)*( Ws(2)*dj_dx(k, l, q, 3) + Ws(3)*dj_dx(k, l, q, 2) ) )
+                                            end if
+                                        end do
+                                        
+                                    end do
+                                end if 
+                            end do
+                        end do
+                    end do
+                    !$acc end parallel loop
+                end if
+                !print *, "460"
+                !Valid for any number of species
+                ! species continuity
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            if (alpha_dif(k, l, q) > small_number) then
+                                do i = 1, Dif_size
+                                    rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) &
+                                        + dj_dx(k, l, q, i)
+                                end do
+                            end if
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                !print *, "475"
+                !Valid for any number of species
+                !energy
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do q = 0, p
+                    do l = 0, n
+                        do k = 0, m
+                            if (alpha_dif(k, l, q) > small_number) then
+                                do i = 1, Dif_size
+                                    rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
+                                        + djh_dx(k, l, q, i)
+                                end do
+                            end if
+                        end do
+                    end do
+                end do
+                !$acc end parallel loop
+                ! !print *, "490"
+                ! !volume fraction
+                ! if (Dif_size == 2) then
+                !     !$acc parallel loop collapse(3) gang vector default(present)
+                !     do q = 0, p
+                !         do l = 0, n
+                !             do k = 0, m
+                !                 if (alpha_dif(k, l, q) > small_number) then
+                !                     do i = 1, Dif_size
+                !                         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
+                !                             + dj_dx(k, l, q, i)*W_dif(k, l, q)*W_dif(k, l, q) / ( rho_dif(k, l, q)*Ws(1)*Ws(2)*alpha_dif(k, l, q))
+                !                     end do
+                !                 end if
+                !             end do
+                !         end do
+                !     end do
+                !     !$acc end parallel loop
+                ! elseif (Dif_size == 3) then
+                !     !$acc parallel loop collapse(4) gang vector default(present)
+                !     do q = 0, p
+                !         do l = 0, n
+                !             do k = 0, m
+                !                 if (alpha_dif(k, l, q) > small_number) then
+                !                     do i = 1, Dif_size
+                !                         select case (i)
+                !                             case (1)
+                !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
+                !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
+                !                                 * ( dj_dx(k, l, q, 1)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 1))*Ws(2)*Ws(3) - alpha_K_dif(k, l, q, 1)*Ws(1)*( Ws(2)*dj_dx(k, l, q, 3) + Ws(3)*dj_dx(k, l, q, 2) ) )
 
-        !     !                             case (2)
-        !     !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-        !     !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
-        !     !                                     * ( dj_dx(k, l, q, 2)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 2))*Ws(1)*Ws(3) - alpha_K_dif(k, l, q, 2)*Ws(2)*( Ws(1)*dj_dx(k, l, q, 3) + Ws(3)*dj_dx(k, l, q, 1) ) )
+                !                             case (2)
+                !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
+                !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
+                !                                     * ( dj_dx(k, l, q, 2)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 2))*Ws(1)*Ws(3) - alpha_K_dif(k, l, q, 2)*Ws(2)*( Ws(1)*dj_dx(k, l, q, 3) + Ws(3)*dj_dx(k, l, q, 1) ) )
 
-        !     !                             case (3)
-        !     !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-        !     !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
-        !     !                                     * ( dj_dx(k, l, q, 3)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 3))*Ws(1)*Ws(2) - alpha_K_dif(k, l, q, 3)*Ws(3)*( Ws(1)*dj_dx(k, l, q, 2) + Ws(2)*dj_dx(k, l, q, 1) ) )
-        !     !                         end select
-        !     !                     end do
-        !     !                 end if
-        !     !             end do
-        !     !         end do
-        !     !     end do
-        !     !     !$acc end parallel loop
-        !     ! end if
-        ! end if
+                !                             case (3)
+                !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
+                !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
+                !                                     * ( dj_dx(k, l, q, 3)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 3))*Ws(1)*Ws(2) - alpha_K_dif(k, l, q, 3)*Ws(3)*( Ws(1)*dj_dx(k, l, q, 2) + Ws(2)*dj_dx(k, l, q, 1) ) )
+                !                         end select
+                !                     end do
+                !                 end if
+                !             end do
+                !         end do
+                !     end do
+                !     !$acc end parallel loop
+                ! end if
+            end if
+        end if
         ! #########################################################################
         ! #########################################################################
         

@@ -22,7 +22,7 @@ rho_co2 = p0*W_co2 / (Rbar * T0)
 Gamma_co2 = 1.0 / (gamma_co2 - 1.0)
 cv_co2 = Rbar * Gamma_co2 / W_co2
 cp_co2 = gamma_co2*cv_co2
-T0_co2 = 298.0
+T0_co2 = 0.0
 h0_co2 = 0.0
 
 
@@ -35,7 +35,7 @@ rho_n2 = p0*W_n2 / (Rbar * T0)
 Gamma_n2 = 1.0 / (gamma_n2 - 1.0)
 cv_n2 = Rbar * Gamma_n2 / W_n2
 cp_n2 = gamma_n2*cv_n2
-T0_n2 = 298.0
+T0_n2 = 0.0
 h0_n2 = 0.0
 
 # H2 props
@@ -45,7 +45,7 @@ rho_h2 = p0*W_h2 / (Rbar * T0)
 Gamma_h2 = 1.0 / (gamma_h2 - 1.0)
 cv_h2 = Rbar * Gamma_h2 / W_h2
 cp_h2 = gamma_h2*cv_h2
-T0_h2 = 298.0
+T0_h2 = 0.0
 h0_h2 = 0.0
 
 # Binary diffusion coefficients
@@ -80,8 +80,8 @@ print(
             "p": 0,
             "dt": 1.0e-5,
             "t_step_start": 0,
-            # "t_step_stop": 2,
-            # "t_step_save": 2,
+            # "t_step_stop": 10,
+            # "t_step_save": 10,
             "t_step_stop": 500000,
             "t_step_save": 5000,
             # "t_step_stop": 10000000,
@@ -95,15 +95,16 @@ print(
             "mpp_lim": "F",
             "mixture_err": "F",
             "time_stepper": 3,
-            "weno_order": 3,
+            "weno_order": 5,
             "weno_eps": 1.0e-16,
             "weno_Re_flux": "F",
             "weno_Dif_flux": "F",
+            "Dif_fv" : "T",
             "weno_avg": "F",
             "mapped_weno": "T",
             "null_weights": "F",
             "mp_weno": "F",
-            "riemann_solver": 1,
+            "riemann_solver": 2,
             "wave_speeds": 1,
             "avg_state": 2,
             "bc_x%beg": -2,

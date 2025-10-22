@@ -153,7 +153,7 @@ contains
             fluid_pp, probe_wrt, prim_vars_wrt, &
             fd_order, probe, num_probes, t_step_old, &
             alt_soundspeed, mixture_err, weno_Re_flux, weno_Dif_flux, &
-            null_weights, precision, parallel_io, cyl_coord, &
+            Dif_fv, null_weights, precision, parallel_io, cyl_coord, &
             rhoref, pref, bubbles_euler, bubble_model, &
             R0ref, chem_params, &
 #:if not MFC_CASE_OPTIMIZATION
