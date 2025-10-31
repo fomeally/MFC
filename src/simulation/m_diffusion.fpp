@@ -204,35 +204,41 @@ contains
         real(wp) :: W1, W2, W3, D12, D13, D23
         real(wp) :: R_univ, small_number
         real(wp) :: grid_spacing
-        real(wp) :: rho_L, rho_R, rho_f, rho_M, rho_Rf, rho_Lf
-        real(wp) :: alpha_m_L, alpha_m_R, alpha_m_f, alpha_m_M, alpha_m_Rf, alpha_m_Lf
-        real(wp) :: P_L, P_R, P_f, P_M, P_Rf, P_Lf
-        real(wp) :: T_L, T_R, T_f, W_L, W_R, W_f, T_M, W_M, T_Rf, W_Rf, T_Lf, W_Lf
+        real(wp) :: rho_L, rho_R, rho_f
+        real(wp) :: alpha_m_L, alpha_m_R, alpha_m_f
+        real(wp) :: P_L, P_R, P_f
+        real(wp) :: T_f, W_f
         real(wp) :: sum_jflux
-        real(wp) :: kM, kR, kL, k_Rf, k_Lf
-        real(wp), allocatable :: alpha_L(:), alpha_R(:), alpha_f(:), alpha_M(:), alpha_Lf(:), alpha_Rf(:)
-        real(wp), allocatable :: alpharho_L(:), alpharho_R(:), alpharho_f(:), alpharho_M(:), alpharho_Lf(:), alpharho_Rf(:)
-        real(wp), allocatable :: Y_L(:), Y_R(:), Y_f(:), Y_M(:), Y_Lf(:), Y_Rf(:)
-        real(wp), allocatable :: dY_ds_f(:), dY_ds_Lf(:), dY_ds_Rf(:)
-        real(wp), allocatable :: h_f(:), h_Lf(:), h_Rf(:)
-        real(wp), allocatable :: K_L(:), K_R(:), K_eff(:)
-        real(wp), allocatable :: j_flux(:), j_flux_Lf(:), j_flux_Rf(:)
-        real(wp), allocatable :: alpha_flux(:), alpha_flux_Lf(:), alpha_flux_Rf(:)
-        real(wp), allocatable :: alpha_nonconserv(:), alpha_flux_nonconserve_Lf(:), alpha_flux_nonconserve_Rf(:)
-        real(wp) :: d, s, c, sigma_max, sigma, gamma, kappa, dT_ds_Rf, dT_ds_Lf
         integer, dimension(3) :: offsets
 
-        allocate(alpha_L(Dif_size), alpha_R(Dif_size), alpha_f(Dif_size), alpha_M(Dif_size), alpha_Lf(Dif_size), alpha_Rf(Dif_size))
-        allocate(alpharho_L(Dif_size), alpharho_R(Dif_size), alpharho_f(Dif_size), alpharho_M(Dif_size), alpharho_Lf(Dif_size), alpharho_Rf(Dif_size))
-        allocate(Y_L(Dif_size), Y_R(Dif_size), Y_f(Dif_size), Y_M(Dif_size), Y_Lf(Dif_size), Y_Rf(Dif_size))
-        allocate(dY_ds_f(Dif_size), dY_ds_Lf(Dif_size), dY_ds_Rf(Dif_size))
-        allocate(h_f(Dif_size), h_Lf(Dif_size), h_Rf(Dif_size))
-        allocate(K_L(Dif_size), K_R(Dif_size), K_eff(Dif_size))
-        allocate(j_flux(Dif_size), j_flux_Lf(Dif_size), j_flux_Rf(Dif_size))
-        allocate(alpha_flux(Dif_size), alpha_flux_Lf(Dif_size), alpha_flux_Rf(Dif_size))
-        allocate(alpha_nonconserv(Dif_size), alpha_flux_nonconserve_Lf(Dif_size), alpha_flux_nonconserve_Rf(Dif_size))
+        real(wp) :: alpha_L(Dif_size), alpha_R(Dif_size), alpha_f(Dif_size)
+        real(wp) :: alpharho_L(Dif_size), alpharho_R(Dif_size), alpharho_f(Dif_size)
+        real(wp) :: Y_f(Dif_size), Y_L(Dif_size), Y_R(Dif_size)
+        real(wp) :: dY_ds_f(Dif_size)
+        real(wp) :: h_f(Dif_size)
+        real(wp) :: j_flux(Dif_size)
 
-        R_univ = 8314.3_wp
+
+
+        ! real(wp), allocatable :: alpha_L(:), alpha_R(:), alpha_f(:)
+        ! real(wp), allocatable :: alpharho_L(:), alpharho_R(:), alpharho_f(:)
+        ! real(wp), allocatable :: Y_f(:), Y_L(:), Y_R(:)
+        ! real(wp), allocatable :: dY_ds_f(:)
+        ! real(wp), allocatable :: h_f(:)
+        ! real(wp), allocatable :: j_flux(:)
+
+
+
+
+
+        ! allocate(alpha_L(Dif_size), alpha_R(Dif_size), alpha_f(Dif_size))
+        ! allocate(alpharho_L(Dif_size), alpharho_R(Dif_size), alpharho_f(Dif_size))
+        ! allocate(Y_f(Dif_size), Y_L(Dif_size), Y_R(Dif_size))
+        ! allocate(dY_ds_f(Dif_size))
+        ! allocate(h_f(Dif_size))
+        ! allocate(j_flux(Dif_size))
+
+        R_univ = 8314.462618_wp
 
         small_number = 1.0e-8_wp
 
@@ -241,155 +247,6 @@ contains
         ! Set offsets based on direction using array indexing
         offsets = 0
         offsets(idir) = 1
-
-            ! Finite Volume with RHS Approach
-            ! #########################################################################
-            ! #########################################################################
-            ! do q = 0, p
-            !     do l = 0, n
-            !         do k = 0, m
-            !             ! Calculate grid spacing using direction-based indexing
-            !             select case (idir)
-            !             case (1)
-            !                 grid_spacing = x_cc(k + 1) - x_cc(k)
-            !             case (2)
-            !                 grid_spacing = y_cc(l + 1) - y_cc(l)
-            !             case (3)
-            !                 grid_spacing = z_cc(q + 1) - z_cc(q)
-            !             end select
-
-            !             do i = 1, Dif_size
-            !                 alpha_L(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-            !                 alpha_M(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
-            !                 alpha_R(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-            !                 alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-            !                 alpharho_M(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-            !                 alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-            !             end do
-
-            !             do i = 1, Dif_size
-            !                 alpha_Rf(i) = 0.5_wp * (alpha_M(i) + alpha_R(i))
-            !                 alpha_Lf(i) = 0.5_wp * (alpha_L(i) + alpha_M(i))
-            !                 alpharho_Rf(i) = 0.5_wp * (alpharho_M(i) + alpharho_R(i))
-            !                 alpharho_Lf(i) = 0.5_wp * (alpharho_L(i) + alpharho_M(i))
-            !             end do
-
-            !             rho_L = 0._wp
-            !             rho_R = 0._wp
-            !             rho_M = 0._wp
-            !             rho_Rf = 0._wp
-            !             rho_Lf = 0._wp
-            !             alpha_m_L = 0._wp
-            !             alpha_m_R = 0._wp
-            !             alpha_m_M = 0._wp
-            !             alpha_m_Rf = 0._wp
-            !             alpha_m_Lf = 0._wp
-
-            !             do i = 1, Dif_size
-            !                 rho_L = rho_L + alpharho_L(i)
-            !                 rho_R = rho_R + alpharho_R(i)
-            !                 rho_M = rho_M + alpharho_M(i)
-            !                 rho_Rf = rho_Rf + alpharho_Rf(i)
-            !                 rho_Lf = rho_Lf + alpharho_Lf(i)
-            !                 alpha_m_L = alpha_m_L + alpha_L(i)
-            !                 alpha_m_R = alpha_m_R + alpha_R(i)
-            !                 alpha_m_M = alpha_m_M + alpha_M(i)
-            !                 alpha_m_Rf = alpha_m_Rf + alpha_Rf(i)
-            !                 alpha_m_Lf = alpha_m_Lf + alpha_Lf(i)
-            !             end do
-
-            !             rho_Rf = 0.5_wp * (rho_M + rho_R)
-            !             rho_Lf = 0.5_wp * (rho_L + rho_M)
-
-            !             kM = rho_M*Ds(1,2)
-            !             kR = rho_R*Ds(1,2)
-            !             kL = rho_L*Ds(1,2)
-
-            !             k_Rf = 2.0_wp * kM * kR / (kM + kR)
-            !             k_Lf = 2.0_wp * kM * kL / (kM + kL)
-
-            !             P_L = q_prim_vf(E_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-            !             P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-            !             P_M = q_prim_vf(E_idx)%sf(k, l, q)
-            !             P_Rf = 0.5_wp * (P_M + P_R)
-            !             P_Lf = 0.5_wp * (P_L + P_M)
-
-                    
-
-            !             do i = 1, Dif_size
-            !                 Y_L(i) = alpharho_L(i) / rho_L
-            !                 Y_R(i) = alpharho_R(i) / rho_R
-            !                 Y_M(i) = alpharho_M(i) / rho_M
-            !                 Y_Rf(i) = alpharho_Rf(i) / rho_Rf
-            !                 Y_Lf(i) = alpharho_Lf(i) / rho_Lf
-            !             end do
-
-            !             do i = 1, Dif_size
-            !                 dY_ds_Rf(i) = (Y_R(i) - Y_M(i)) / grid_spacing
-            !                 dY_ds_Lf(i) = (Y_M(i) - Y_L(i)) / grid_spacing
-            !             end do
-
-            !             W_L = 0._wp
-            !             W_R = 0._wp
-            !             W_M = 0._wp
-            !             W_Rf = 0._wp
-            !             W_Lf = 0._wp
-            !             do i = 1, Dif_size
-            !                 W_L = W_L + Y_L(i)/Ws(i)
-            !                 W_R = W_R + Y_R(i)/Ws(i)      
-            !                 W_M = W_M + Y_M(i)/Ws(i)
-            !                 W_Rf = W_Rf + Y_Rf(i)/Ws(i)
-            !                 W_Lf = W_Lf + Y_Lf(i)/Ws(i)
-
-            !                 ! W_L = W_L + alpha_L(i)*Ws(i)
-            !                 ! W_R = W_R + alpha_R(i)*Ws(i)
-            !                 ! W_M = W_M + alpha_M(i)*Ws(i)
-            !                 ! W_Rf = W_Rf + alpha_Rf(i)*Ws(i)
-            !                 ! W_Lf = W_Lf + alpha_Lf(i)*Ws(i)
-            !             end do
-            !             W_L = 1._wp / W_L
-            !             W_R = 1._wp / W_R
-            !             W_M = 1._wp / W_M
-            !             W_Rf = 1._wp / W_Rf
-            !             W_Lf = 1._wp / W_Lf
-
-            !             T_L = P_L * W_L / (rho_L * R_univ)
-            !             T_R = P_R * W_R / (rho_R * R_univ)
-            !             T_M = P_M * W_M / (rho_M * R_univ)
-            !             T_Rf = P_Rf * W_Rf / (rho_Rf * R_univ)
-            !             T_Lf = P_Lf * W_Lf / (rho_Lf * R_univ)
-
-            !             ! dT_ds_Rf = (T_R - T_M) / grid_spacing
-            !             ! dT_ds_Lf = (T_M - T_L) / grid_spacing
-            !             ! kappa = 2000.0_wp*Ds(1,2) ! Simple model for thermal conductivity
-
-            !             ! rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) + kappa*(dT_ds_Rf - dT_ds_Lf) / grid_spacing
-
-            !             do i = 1, Dif_size
-            !                     h_Rf(i) = h0s(i) + cps(i)*(T_Rf - T0s(i))
-            !                     h_Lf(i) = h0s(i) + cps(i)*(T_Lf - T0s(i))
-            !             end do
-
-            !             j_flux_Rf(1) = -rho_Rf*Ds(1,2)*dY_ds_Rf(1)
-            !             j_flux_Rf(2) = -j_flux_Rf(1)
-            !             j_flux_Lf(1) = -rho_Lf*Ds(1,2)*dY_ds_Lf(1)
-            !             j_flux_Lf(2) = -j_flux_Lf(1)
-
-            !             ! j_flux_Rf(1) = -k_Rf*dY_ds_Rf(1)
-            !             ! j_flux_Rf(2) = -j_flux_Rf(1)
-            !             ! j_flux_Lf(1) = -k_Lf*dY_ds_Lf(1)
-            !             ! j_flux_Lf(2) = -j_flux_Lf(1)
-                        
-            !             do i = 1, Dif_size
-            !                 rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) - (j_flux_Rf(i) - j_flux_Lf(i)) / grid_spacing
-            !                 rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) - (h_Rf(i)*j_flux_Rf(i) - h_Lf(i)*j_flux_Lf(i)) / grid_spacing
-            !             end do
-            !         end do 
-            !     end do
-            ! end do
-        
-            ! #########################################################################
-            ! #########################################################################
         
         if (Dif_fv) then
             ! Finite Volume with j_src_n Approach
@@ -426,9 +283,6 @@ contains
                         do i = 1, Dif_size
                             alpha_f(i) = 0.5_wp * (alpha_L(i) + alpha_R(i))
                             alpharho_f(i) = 0.5_wp * (alpharho_L(i) + alpharho_R(i))
-
-                            !alpha_f(i) = 2*alpha_L(i)*alpha_R(i) / (alpha_L(i) + alpha_R(i))
-                            !alpharho_f(i) = 2*alpharho_L(i)*alpharho_R(i) / (alpharho_L(i) + alpharho_R(i))
                         end do
 
                         rho_L = 0._wp
@@ -446,7 +300,6 @@ contains
                             alpha_m_R = alpha_m_R + alpha_R(i)
                             alpha_m_f = alpha_m_f + alpha_f(i)
                         end do
-                        ! rho_f = 0.5_wp * (rho_L + rho_R)
 
                         P_L = q_prim_vf(E_idx)%sf(k, l, q)
                         P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
@@ -486,31 +339,12 @@ contains
                             dY_ds_f(i) = (Y_R(i) - Y_L(i)) / grid_spacing
                         end do
 
-                        W_L = 0._wp
-                        W_R = 0._wp
                         W_f = 0._wp
-                        do i = 1, Dif_size
-                            W_L = W_L + Y_L(i)/Ws(i)
-                            W_R = W_R + Y_R(i)/Ws(i)      
-                            W_f = W_f + Y_f(i)/Ws(i)
-                
+                        do i = 1, Dif_size  
+                            W_f = W_f + Y_f(i)/Ws(i)              
                         end do
 
-                        W_L = 1._wp / W_L
-                        W_R = 1._wp / W_R
                         W_f = 1._wp / W_f
-
-                        if (alpha_m_L > small_number) then
-                            T_L = P_L * W_L / (rho_L * R_univ)
-                        else
-                            T_L = 0._wp
-                        end if
-
-                        if (alpha_m_R > small_number) then
-                            T_R = P_R * W_R / (rho_R * R_univ)
-                        else
-                            T_R = 0._wp
-                        end if
 
                         if (alpha_m_f > small_number) then
                             T_f = P_f * W_f / (rho_f * R_univ)
@@ -528,21 +362,20 @@ contains
                             end do
                         end if 
 
-                        K_L(1) = rho_L*Ds(1,2)
-                        K_L(2) = rho_L*Ds(2,1)
-                        K_R(1) = rho_R*Ds(1,2)
-                        K_R(2) = rho_R*Ds(2,1)
-                        K_eff(1) = 2.0_wp / (1.0_wp/K_L(1) + 1.0_wp/K_R(1))
-                        K_eff(2) = 2.0_wp / (1.0_wp/K_L(2) + 1.0_wp/K_R(2))
-                        !j_flux(1) = -K_eff(1)*dY_ds_f(1)
-                        !j_flux(2) = -j_flux(1)
-                        j_flux(1) = -rho_f*Ds(1,2)*dY_ds_f(1)
-                        j_flux(2) = -rho_f*Ds(2,1)*dY_ds_f(2)
+                        ! Compute diffusion fluxes
+                        if (Dif_size == 2) then
+                            j_flux(1) = -rho_f*Ds(1,2)*dY_ds_f(1)
+                            j_flux(2) = -rho_f*Ds(2,1)*dY_ds_f(2)
+                        else if (Dif_size == 3) then
+                            j_flux(1) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                                            ( Ds(1,2)*Ds(1,3)*dY_ds_f(1)*(1._wp - Y_f(1)) - Y_f(1)*Ds(2,3)*(Ds(1,2)*dY_ds_f(2) + Ds(1,3)*dY_ds_f(3)) )
 
-                        ! dT_ds_Rf = (T_R - T_L) / grid_spacing
-                        ! kappa = 1000.0_wp*Ds(1,2) ! Simple model for thermal conductivity
+                            j_flux(2) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                                            ( Ds(2,1)*Ds(2,3)*dY_ds_f(2)*(1._wp - Y_f(2)) - Y_f(2)*Ds(3,1)*(Ds(2,1)*dY_ds_f(1) + Ds(2,3)*dY_ds_f(3)) )
 
-                        ! j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) - kappa*dT_ds_Rf 
+                            j_flux(3) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                                            ( Ds(3,1)*Ds(3,2)*dY_ds_f(3)*(1._wp - Y_f(3)) - Y_f(3)*Ds(1,2)*(Ds(3,1)*dY_ds_f(1) + Ds(3,2)*dY_ds_f(2)) )
+                        end if
 
                         ! Enforce mass conservation of diffusion fluxes
                         sum_jflux = 0.0_wp
@@ -556,39 +389,10 @@ contains
                             end do
                         end if
 
-                        ! alpha_flux(1) = j_flux(1)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
-                        ! alpha_flux(2) = j_flux(2)*W_f**2._wp / (rho_f*Ws(1)*Ws(2)*alpha_m_f)
-
-                        ! alpha_nonconserv(1) = j_flux(1)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
-                        ! alpha_nonconserv(2) = j_flux(2)*(W_R**2._wp/(rho_R*Ws(1)*Ws(2)*alpha_m_R) - W_L**2._wp/(rho_L*Ws(1)*Ws(2)*alpha_m_L)) / grid_spacing
-
-                        ! d = min(abs(x_cc(k)), abs(x_cc(m) - x_cc(k)))
-                        ! s = max(0.0_wp, 1._wp - d / x_cc(m))
-                        ! gamma = 0.0_wp
-                        ! do i = 1, Dif_size
-                        !     gamma = gamma + alpha_L(i)*(gammas(Dif_idx(i)) + 1._wp) / gammas(Dif_idx(i))
-                        ! end do
-                        ! c = sqrt(gamma*R_univ*T_L/W_L)
-                        ! sigma_max = 3._wp*c/x_cc(m)
-                        ! sigma = sigma_max*s**2._wp*(3._wp - 2._wp*s)
-
                         do i = 1, Dif_size
                             j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + j_flux(i)
                             j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) + h_f(i)*j_flux(i)
-                            ! j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) + alpha_flux(i)
-                            ! if ((k == 0 .or. offsets(1)*k < m) .and. (l == 0 .or. offsets(2)*l < n) .and. (q == 0 .or. offsets(3)*q < p)) then
-                            !     rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) = &
-                            !         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) + 0.5_wp*alpha_nonconserv(i)
-                            ! end if
-
-                            ! if (k > -1 .and. l > -1 .and. q > -1) then
-                            !     rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = &
-                            !         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) + 0.5_wp*alpha_nonconserv(i)
-                            ! end if
                         end do
-                        ! if (k > -1 .and. l > -1 .and. q > -1) then
-                        !     rhs_vf(momxb)%sf(k, l, q) = rhs_vf(momxb)%sf(k, l, q) - sigma*rho_L*q_prim_vf(momxb)%sf(k, l, q)
-                        ! end if
                     end do
                 end do
             end do

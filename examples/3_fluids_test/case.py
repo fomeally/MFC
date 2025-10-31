@@ -59,9 +59,9 @@ D31 = D13
 D32 = D23
 D33 = 0.0e0
 
-Lx = 1.0
+Lx = 2.0
 
-Nx = 199
+Nx = 399
 
 
 # Configuring case dictionary
@@ -78,20 +78,21 @@ print(
             "m": Nx,
             "n": 0,
             "p": 0,
-            "dt": 1.0e-5,
+            "dt": 1.0e-6,
             "t_step_start": 0,
             # "t_step_stop": 10000,
             # "t_step_save": 20,
-            "t_step_stop": 500000,
-            "t_step_save": 5000,
+            "t_step_stop": 5000000,
+            "t_step_save": 50000,
+            "t_step_print": 50000,
             # "t_step_stop": 10000000,
             # "t_step_save": 50000,
             # Simulation Algorithm Parameters
-            "num_patches": 2,
+            "num_patches": 3,
             "model_eqns": 2,
             "alt_soundspeed": "F",
             "diffusion": "T",
-            "num_fluids": 2,
+            "num_fluids": 3,
             "mpp_lim": "F",
             "mixture_err": "F",
             "time_stepper": 3,
@@ -104,7 +105,7 @@ print(
             "mapped_weno": "T",
             "null_weights": "F",
             "mp_weno": "F",
-            "riemann_solver": 1,
+            "riemann_solver": 2,
             "wave_speeds": 1,
             "avg_state": 2,
             "bc_x%beg": -2,
@@ -126,24 +127,39 @@ print(
             "patch_icpp(1)%pres": p0,
             "patch_icpp(1)%alpha_rho(1)": rho_n2,
             "patch_icpp(1)%alpha_rho(2)": 0.0,
-            #"patch_icpp(1)%alpha_rho(3)": 0.0,
+            "patch_icpp(1)%alpha_rho(3)": 0.0,
             "patch_icpp(1)%alpha(1)": 1.0,
             "patch_icpp(1)%alpha(2)": 0.0,
-            #"patch_icpp(1)%alpha(3)": 0.0,
+            "patch_icpp(1)%alpha(3)": 0.0,
             
             # Patch 2 CO2
             "patch_icpp(2)%geometry": 1,
-            "patch_icpp(2)%x_centroid": 0.75*Lx,
-            "patch_icpp(2)%length_x": 0.50*Lx,
+            "patch_icpp(2)%x_centroid": (Lx + 0.5) / Lx,
+            "patch_icpp(2)%length_x": 0.75*Lx,
             "patch_icpp(2)%alter_patch(1)": "T",
             "patch_icpp(2)%vel(1)": 0.0,
             "patch_icpp(2)%pres": p0,
             "patch_icpp(2)%alpha_rho(1)": 0.0,
             "patch_icpp(2)%alpha_rho(2)": rho_co2,
-            #"patch_icpp(2)%alpha_rho(3)": 0.0,
+            "patch_icpp(2)%alpha_rho(3)": 0.0,
             "patch_icpp(2)%alpha(1)": 0.0,
             "patch_icpp(2)%alpha(2)": 1.0,
-            #"patch_icpp(2)%alpha(3)": 0.0,
+            "patch_icpp(2)%alpha(3)": 0.0,
+
+            # Patch 3 Water
+            "patch_icpp(3)%geometry": 1,
+            "patch_icpp(3)%x_centroid": 0.75*Lx,
+            "patch_icpp(3)%length_x": 0.50*Lx,
+            "patch_icpp(3)%alter_patch(1)": "T",
+            "patch_icpp(3)%alter_patch(2)": "T",            
+            "patch_icpp(3)%vel(1)": 0.0,
+            "patch_icpp(3)%pres": p0,
+            "patch_icpp(3)%alpha_rho(1)": 0.0,
+            "patch_icpp(3)%alpha_rho(2)": 0.0,
+            "patch_icpp(3)%alpha_rho(3)": rho0w,
+            "patch_icpp(3)%alpha(1)": 0.0,
+            "patch_icpp(3)%alpha(2)": 0.0,
+            "patch_icpp(3)%alpha(3)": 1.0,
 
             # Fluids Physical Parameters
             # N2
@@ -168,7 +184,10 @@ print(
             "fluid_pp(2)%D(2)": D22,
             "fluid_pp(2)%gas_mixture" : "T",
     
-
+            # Water
+            "fluid_pp(3)%gamma": 1.0e0 / (gamw - 1.0e0),
+            "fluid_pp(3)%pi_inf": gamw*piw / (gamw - 1.0e0),
+            "fluid_pp(3)%gas_mixture" : "F",
         }
     )
 )

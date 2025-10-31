@@ -848,13 +848,13 @@ contains
                                     - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)) &
                                     /(s_M - s_P)                                                  
                                 if (num_fluids > Dif_size) then                               
-                                        flux_rs${XYZ}$_vf(j, k, l, liq_idx) = &
-                                            (qL_prim_rs${XYZ}$_vf(j, k, l, liq_idx) &
-                                            - qR_prim_rs${XYZ}$_vf(j + 1, k, l, liq_idx)) &
+                                        flux_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = &
+                                            (qL_prim_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) &
+                                            - qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + liq_idx - 1)) &
                                             *s_M*s_P/(s_M - s_P)
-                                        flux_src_rs${XYZ}$_vf(j, k, l, liq_idx) = &
-                                            (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, liq_idx)) &
-                                            - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, liq_idx) &
+                                        flux_src_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = &
+                                            (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + liq_idx - 1)) &
+                                            - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) &
                                             /(s_M - s_P)                      
                                 end if
 
@@ -2707,10 +2707,10 @@ contains
                                             *(vel_R(idx1) + s_P*(xi_R - 1._wp))
 
                                     if (num_fluids > Dif_size) then
-                                        flux_rs${XYZ}$_vf(j, k, l, liq_idx) = &
-                                            xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, liq_idx) &
+                                        flux_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = &
+                                            xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) &
                                             *(vel_L(idx1) + s_M*(xi_L - 1._wp)) &
-                                            + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, liq_idx) &
+                                            + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + liq_idx - 1) &
                                             *(vel_R(idx1) + s_P*(xi_R - 1._wp))
                                     end if
                                 end if
@@ -2744,7 +2744,7 @@ contains
                                     flux_src_rs${XYZ}$_vf(j, k, l, advxb) = vel_src_rs${XYZ}$_vf(j, k, l, idx1)
                                 else if (diffusion) then
                                     if (num_fluids > Dif_size) then
-                                        flux_src_rs${XYZ}$_vf(j, k, l, liq_idx) = vel_src_rs${XYZ}$_vf(j, k, l, idx1)
+                                        flux_src_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = vel_src_rs${XYZ}$_vf(j, k, l, idx1)
                                     else if (num_fluids == Dif_size) then
                                         flux_src_rs${XYZ}$_vf(j, k, l, advg_idx) = vel_src_rs${XYZ}$_vf(j, k, l, idx1)
                                     end if
@@ -2790,7 +2790,7 @@ contains
                                         if (diffusion) then
                                             flux_gsrc_rs${XYZ}$_vf(j, k, l, advg_idx) = 0._wp
                                             if (num_fluids > Dif_size) then
-                                                flux_gsrc_rs${XYZ}$_vf(j, k, l, liq_idx) = 0._wp
+                                                flux_gsrc_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = 0._wp
                                             end if
                                         end if
                                     end if
@@ -4700,24 +4700,63 @@ contains
                 end if
 
             else
-
-                if (diffusion) then
-                    
+                if (num_fluids > Dif_size) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
                     do l = is3%beg, is3%end
                         do k = is2%beg, is2%end
                             do j = is1%beg, is1%end
-                                do i = advxb, advxe
-                                    flux_src_vf(i)%sf(j, k, l) = 0._wp
-                                end do
+                                flux_src_vf(advxb + liq_idx - 1)%sf(j, k, l) = &
+                                    flux_src_rsx_vf(j, k, l, advxb + liq_idx - 1)
+                            end do
+                        end do
+                    end do
 
+                    if (riemann_solver == 1) then
+                        !$acc parallel loop collapse(3) gang vector default(present)
+                        do l = is3%beg, is3%end
+                            do k = is2%beg, is2%end
+                                do j = is1%beg, is1%end
+                                    flux_src_vf(advg_idx)%sf(j, k, l) = &
+                                        flux_src_rsx_vf(j, k, l, advg_idx)
+                                end do
+                            end do
+                        end do
+
+                        !$acc parallel loop collapse(4) gang vector default(present)
+                        do i = 1, Dif_size
+                            do l = is3%beg, is3%end
+                                do k = is2%beg, is2%end
+                                    do j = is1%beg, is1%end
+                                        flux_src_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = 0._wp
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end if
+                else if (num_fluids == Dif_size) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = is3%beg, is3%end
+                        do k = is2%beg, is2%end
+                            do j = is1%beg, is1%end
                                 flux_src_vf(advg_idx)%sf(j, k, l) = &
                                     flux_src_rsx_vf(j, k, l, advg_idx)
                             end do
                         end do
                     end do
-                
-                end if
 
+                    if (riemann_solver == 1) then
+                        !$acc parallel loop collapse(4) gang vector default(present)
+                        do i = 1, Dif_size
+                            do l = is3%beg, is3%end
+                                do k = is2%beg, is2%end
+                                    do j = is1%beg, is1%end
+                                        flux_src_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = 0._wp
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end if
+                end if
             end if
         end if
 
