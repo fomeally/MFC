@@ -273,8 +273,10 @@ contains
         real(wp) :: pi_inf     !< Cell-avg. liquid stiffness function
         real(wp) :: c          !< Cell-avg. sound speed
         real(wp) :: H          !< Cell-avg. enthalpy
+        real(wp) :: rho_dif, gam_num, gam_denom, gam_mix
+        real(wp) :: Y_dif(Dif_size)
         real(wp), dimension(2) :: Re         !< Cell-avg. Reynolds numbers
-        integer :: j, k, l
+        integer :: j, k, l, i
 
         ! Computing Stability Criteria at Current Time-step
         !$acc parallel loop collapse(3) gang vector default(present) private(vel, alpha, Re)
@@ -282,8 +284,44 @@ contains
             do k = 0, n
                 do j = 0, m
                     call s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, j, k, l)
+                    
 
-                    call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c)
+                    rho_dif = 0._wp
+                    gam_num = 0._wp
+                    gam_denom = 0._wp
+                    gam_mix = 0._wp
+                    
+                    if (diffusion .and. alt_soundspeed) then
+                        if (q_prim_vf(advg_idx)%sf(j, k, l) > small_num_dif) then
+                            !$acc loop seq
+                            do i = 1, Dif_size
+                                rho_dif = rho_dif + q_prim_vf(Dif_idx(i))%sf(j, k, l)
+                            end do
+
+                            !$acc loop seq
+                            do i = 1, Dif_size
+                                Y_dif(i) = q_prim_vf(Dif_idx(i))%sf(j, k, l) / rho_dif
+                            end do
+                        else
+                            !$acc loop seq
+                            do i = 1, Dif_size
+                                Y_dif(i) = 0._wp
+                            end do 
+                        end if
+
+                        do i = 1, Dif_size
+                            gam_num = gam_num + Y_dif(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
+                            gam_denom = gam_denom + Y_dif(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                        end do
+
+                        gam_mix = gam_num / gam_denom
+
+                        call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c, q_prim_vf(advg_idx)%sf(j, k, l), gam_mix)
+                    
+                    else
+                        call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c)
+                    end if
+                        
 
                     if (viscous) then
                         call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, icfl_sf, vcfl_sf, Rc_sf)

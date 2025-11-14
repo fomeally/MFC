@@ -306,7 +306,6 @@ contains
         real(wp) :: E_L, E_R
         real(wp) :: H_L, H_R
         real(wp), dimension(num_fluids) :: alpha_L, alpha_R
-        real(wp) :: alphag_L, alphag_R
         real(wp), dimension(num_species) :: Ys_L, Ys_R
         real(wp), dimension(num_species) :: Cp_iL, Cp_iR, Xs_L, Xs_R, Gamma_iL, Gamma_iR
         real(wp), dimension(num_species) :: Yi_avg, Phi_avg, h_iL, h_iR, h_avg_2
@@ -339,7 +338,12 @@ contains
         real(wp) :: vel_L_rms, vel_R_rms, vel_avg_rms
         real(wp) :: Ms_L, Ms_R, pres_SL, pres_SR
         real(wp) :: alpha_L_sum, alpha_R_sum
+        real(wp) :: alphag_L, alphag_R, alphag_avg
         real(wp) :: alphag_L_sum, alphag_R_sum
+
+        real(wp) :: rho_dif_L, rho_dif_R
+        real(wp) :: Y_dif_L(Dif_size), Y_dif_R(Dif_size)
+        real(wp) :: gam_num_L, gam_den_L, gam_mix_L, gam_num_R, gam_den_R, gam_mix_R, gam_mix_avg
 
         integer :: i, j, k, l, q !< Generic loop iterators
 
@@ -424,6 +428,7 @@ contains
 
                             alphag_L_sum = 0._wp
                             alphag_R_sum = 0._wp
+                            alphag_avg = 0._wp
 
                             if (mpp_lim) then
                                 !$acc loop seq
@@ -621,20 +626,99 @@ contains
                             ! Enthalpy with elastic energy
                             H_L = (E_L + pres_L)/rho_L
                             H_R = (E_R + pres_R)/rho_R
+                            
+                            rho_dif_L = 0._wp
+                            rho_dif_R = 0._wp
+                            gam_mix_L = 0._wp
+                            gam_mix_R = 0._wp
+                            gam_mix_avg = 0._wp
+                            
+                            if (diffusion .and. alt_soundspeed) then
+                                if (alphag_L > small_num_dif) then
+                                    !$acc loop seq
+                                    do i = 1, Dif_size
+                                        rho_dif_L = rho_dif_L + alpha_rho_L(Dif_idx(i))
+                                    end do
+
+                                    !$acc loop seq
+                                    do i = 1, Dif_size
+                                        Y_dif_L(i) = alpha_rho_L(Dif_idx(i)) / rho_dif_L
+                                    end do
+                                else
+                                    !$acc loop seq
+                                    do i = 1, Dif_size
+                                        Y_dif_L(i) = 0._wp
+                                    end do 
+                                end if
+
+                                gam_num_L = 0._wp
+                                gam_den_L = 0._wp
+
+                                do i = 1, Dif_size
+                                    gam_num_L = gam_num_L + Y_dif_L(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
+                                    gam_den_L = gam_den_L + Y_dif_L(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                                end do
+
+                                gam_mix_L = gam_num_L / gam_den_L
+
+
+                                if (alphag_R > small_num_dif) then
+                                    !$acc loop seq
+                                    do i = 1, Dif_size
+                                        rho_dif_R = rho_dif_R + alpha_rho_R(Dif_idx(i))
+                                    end do
+
+                                    !$acc loop seq
+                                    do i = 1, Dif_size
+                                        Y_dif_R(i) = alpha_rho_R(Dif_idx(i)) / rho_dif_R
+                                    end do
+                                else
+                                    !$acc loop seq
+                                    do i = 1, Dif_size
+                                        Y_dif_R(i) = 0._wp
+                                    end do 
+                                end if
+
+                                gam_num_R = 0._wp
+                                gam_den_R = 0._wp
+
+                                do i = 1, Dif_size
+                                    gam_num_R = gam_num_R + Y_dif_R(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
+                                    gam_den_R = gam_den_R + Y_dif_R(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                                end do
+
+                                gam_mix_R = gam_num_R / gam_den_R
+                            
+                            end if
 
                             @:compute_average_state()
 
-                            call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
+                            if (diffusion .and. alt_soundspeed) then
+                                call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
+                                                          vel_L_rms, 0._wp, c_L, alphag_L, gam_mix_L)
+
+                                call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
+                                                            vel_R_rms, 0._wp, c_R, alphag_R, gam_mix_R)
+
+                                !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
+                                ! variables are placeholders to call the subroutine.
+
+                                call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
+                                                            vel_avg_rms, c_sum_Yi_Phi, c_avg, alphag_avg, gam_mix_avg)
+
+                            else
+                                call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
                                                           vel_L_rms, 0._wp, c_L)
 
-                            call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
-                                                          vel_R_rms, 0._wp, c_R)
+                                call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
+                                                            vel_R_rms, 0._wp, c_R)
 
-                            !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
-                            ! variables are placeholders to call the subroutine.
+                                !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
+                                ! variables are placeholders to call the subroutine.
 
-                            call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
-                                                          vel_avg_rms, c_sum_Yi_Phi, c_avg)
+                                call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
+                                                            vel_avg_rms, c_sum_Yi_Phi, c_avg)
+                            end if
 
                             if (viscous) then
                                 !$acc loop seq
@@ -1041,7 +1125,6 @@ contains
         real(wp) :: E_L, E_R
         real(wp) :: H_L, H_R
         real(wp), dimension(num_fluids) :: alpha_L, alpha_R
-        real(wp) :: alphag_L, alphag_R
         real(wp), dimension(num_species) :: Ys_L, Ys_R, Xs_L, Xs_R, Gamma_iL, Gamma_iR, Cp_iL, Cp_iR
         real(wp), dimension(num_species) :: Yi_avg, Phi_avg, h_iL, h_iR, h_avg_2
         real(wp) :: Cp_avg, Cv_avg, T_avg, c_sum_Yi_Phi, eps
@@ -1076,7 +1159,6 @@ contains
         real(wp) :: ptilde_L, ptilde_R
 
         real(wp) :: alpha_L_sum, alpha_R_sum, nbub_L_denom, nbub_R_denom
-        real(wp) :: alphag_L_sum, alphag_R_sum
 
         real(wp) :: PbwR3Lbar, Pbwr3Rbar
         real(wp) :: R3Lbar, R3Rbar
@@ -1092,6 +1174,14 @@ contains
         real(wp) :: pres_SL, pres_SR, Ms_L, Ms_R
         real(wp) :: flux_ene_e
         real(wp) :: zcoef, pcorr !< low Mach number correction
+
+        real(wp) :: alphag_L, alphag_R, alphag_avg
+        real(wp) :: alphag_L_sum, alphag_R_sum
+        real(wp) :: gam_num_L, gam_den_L, gam_mix_L
+        real(wp) :: gam_num_R, gam_den_R, gam_mix_R
+        real(wp) :: gam_mix_avg
+        real(wp) :: rho_dif_L, rho_dif_R
+        real(wp) :: Y_dif_L(Dif_size), Y_dif_R(Dif_size)
 
         integer :: i, j, k, l, q !< Generic loop iterators
         integer :: idx1, idxi
@@ -1165,8 +1255,8 @@ contains
                                 alpha_L_sum = 0._wp
                                 alpha_R_sum = 0._wp
 
-                                alphag_L_sum = 0._wp
-                                alphag_R_sum = 0._wp
+                                alphag_L = 0._wp
+                                alphag_R = 0._wp
 
                                 if (mpp_lim) then
                                     !$acc loop seq
@@ -1196,12 +1286,12 @@ contains
                                     if (diffusion) then
                                         !$acc loop seq
                                         do i = 1, Dif_size
-                                            alphag_L_sum = alphag_L_sum + qL_prim_rs${XYZ}$_vf(j, k, l, advxb + Dif_idx(i) - 1)
-                                            alphag_R_sum = alphag_R_sum + qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + Dif_idx(i) - 1)
+                                            alphag_L = alphag_L + qL_prim_rs${XYZ}$_vf(j, k, l, advxb + Dif_idx(i) - 1)
+                                            alphag_R = alphag_R + qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + Dif_idx(i) - 1)
 
                                         end do
-                                        qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) = alphag_L_sum
-                                        qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) = alphag_R_sum
+                                        qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) = alphag_L
+                                        qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) = alphag_R
                                     end if
 
                                 end if
@@ -2280,6 +2370,7 @@ contains
                     !$acc vel_L_tmp, vel_R_tmp, Ys_L, Ys_R, Xs_L, Xs_R, Gamma_iL, Gamma_iR, Cp_iL, Cp_iR,          &
                     !$acc tau_e_L, tau_e_R, xi_field_L, xi_field_R,                                                &
                     !$acc Yi_avg, Phi_avg, h_iL, h_iR, h_avg_2) copyin(is1,is2,is3)
+
                     do l = is3%beg, is3%end
                         do k = is2%beg, is2%end
                             do j = is1%beg, is1%end
@@ -2324,6 +2415,7 @@ contains
 
                                 alphag_L_sum = 0._wp
                                 alphag_R_sum = 0._wp
+                                alphag_avg = 0._wp
 
                                 ! Change this by splitting it into the cases
                                 ! present in the bubbles_euler
@@ -2360,6 +2452,8 @@ contains
                                         end do
                                         qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) = alphag_L_sum
                                         qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) = alphag_R_sum
+                                        alphag_L = alphag_L_sum
+                                        alphag_R = alphag_R_sum
                                     end if
                                 end if
 
@@ -2527,19 +2621,100 @@ contains
                                 H_L = (E_L + pres_L)/rho_L
                                 H_R = (E_R + pres_R)/rho_R
 
+                                rho_dif_L = 0._wp
+                                rho_dif_R = 0._wp
+                                gam_mix_L = 0._wp
+                                gam_mix_R = 0._wp
+                                gam_mix_avg = 0._wp
+
+                                if (diffusion .and. alt_soundspeed) then
+                                    if (alphag_L > small_num_dif) then
+                                        !$acc loop seq
+                                        do i = 1, Dif_size
+                                            rho_dif_L = rho_dif_L + alpha_rho_L(Dif_idx(i))
+                                        end do
+
+                                        !$acc loop seq
+                                        do i = 1, Dif_size
+                                            Y_dif_L(i) = alpha_rho_L(Dif_idx(i)) / rho_dif_L
+                                        end do
+
+                                        gam_num_L = 0._wp
+                                        gam_den_L = 0._wp
+
+                                        do i = 1, Dif_size
+                                            gam_num_L = gam_num_L + Y_dif_L(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
+                                            gam_den_L = gam_den_L + Y_dif_L(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                                        end do
+
+                                        gam_mix_L = gam_num_L / gam_den_L
+                                    else
+                                        !$acc loop seq
+                                        do i = 1, Dif_size
+                                            Y_dif_L(i) = 0._wp
+                                        end do 
+                                    end if
+
+                                    
+
+
+                                    if (alphag_R > small_num_dif) then
+                                        !$acc loop seq
+                                        do i = 1, Dif_size
+                                            rho_dif_R = rho_dif_R + alpha_rho_R(Dif_idx(i))
+                                        end do
+
+                                        !$acc loop seq
+                                        do i = 1, Dif_size
+                                            Y_dif_R(i) = alpha_rho_R(Dif_idx(i)) / rho_dif_R
+                                        end do
+
+                                        gam_num_R = 0._wp
+                                        gam_den_R = 0._wp
+
+                                        do i = 1, Dif_size
+                                            gam_num_R = gam_num_R + Y_dif_R(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
+                                            gam_den_R = gam_den_R + Y_dif_R(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                                        end do
+
+                                        gam_mix_R = gam_num_R / gam_den_R
+                                    else
+                                        !$acc loop seq
+                                        do i = 1, Dif_size
+                                            Y_dif_R(i) = 0._wp
+                                        end do 
+                                    end if
+                                end if
+
                                 @:compute_average_state()
 
-                                call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
-                                                              vel_L_rms, 0._wp, c_L)
+                                if (diffusion .and. alt_soundspeed) then 
 
-                                call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
-                                                              vel_R_rms, 0._wp, c_R)
+                                    call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
+                                                                vel_L_rms, 0._wp, c_L, alphag_L, gam_mix_L)
 
-                                !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
-                                ! variables are placeholders to call the subroutine.
-                                call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
-                                                              vel_avg_rms, c_sum_Yi_Phi, c_avg)
+                                    call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
+                                                                vel_R_rms, 0._wp, c_R, alphag_R, gam_mix_R)
 
+                                    !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
+                                    ! variables are placeholders to call the subroutine.
+                                    call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
+                                                                vel_avg_rms, c_sum_Yi_Phi, c_avg, alphag_avg, gam_mix_avg)
+
+                                else
+                                    call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
+                                                                vel_L_rms, 0._wp, c_L)
+
+                                    call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
+                                                                vel_R_rms, 0._wp, c_R)
+
+                                    !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
+                                    ! variables are placeholders to call the subroutine.
+                                    call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
+                                                                vel_avg_rms, c_sum_Yi_Phi, c_avg)
+
+                                end if
+                                
                                 if (viscous) then
                                     !$acc loop seq
                                     do i = 1, 2

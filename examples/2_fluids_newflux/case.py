@@ -84,6 +84,7 @@ print(
             # "t_step_save": 20,
             "t_step_stop": 500000,
             "t_step_save": 5000,
+            "t_step_print": 5000,
             # "t_step_stop": 10000000,
             # "t_step_save": 50000,
             # Simulation Algorithm Parameters
@@ -104,7 +105,7 @@ print(
             "mapped_weno": "T",
             "null_weights": "F",
             "mp_weno": "F",
-            "riemann_solver": 1,
+            "riemann_solver": 2,
             "wave_speeds": 1,
             "avg_state": 2,
             "bc_x%beg": -2,

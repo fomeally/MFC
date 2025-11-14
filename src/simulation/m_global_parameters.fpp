@@ -135,7 +135,8 @@ module m_global_parameters
     logical :: weno_avg       ! Average left/right cell-boundary states
     logical :: weno_Re_flux   !< WENO reconstruct velocity gradients for viscous stress tensor
     logical :: weno_Dif_flux  !< WENO reconstruct mass fraction gradients for mass diffusion flux
-    logical :: Dif_fv        !< use finite volume method for diffusion terms
+    logical :: Dif_fv        !< use finite volume method for diffusion terms'
+    real(wp) :: small_num_dif !< small number for diffusion terms
     integer :: riemann_solver !< Riemann solver algorithm
     integer :: low_Mach       !< Low Mach number fix to HLLC Riemann solver
     integer :: wave_speeds    !< Wave speeds estimation method
@@ -530,6 +531,7 @@ contains
         weno_Re_flux = .false.
         weno_Dif_flux = .false.
         Dif_fv = .false.
+        small_num_dif = 1.0e-8_wp
         riemann_solver = dflt_int
         low_Mach = 0
         wave_speeds = dflt_int
@@ -1077,7 +1079,6 @@ contains
 
             end if
 
-
             ! Bookkeeping the indexes of any gas mixture fluids 
             if (diffusion) then
                 ! Determining the number of fluids in the gas mixture
@@ -1086,7 +1087,12 @@ contains
                 end do
 
                 !$acc update device(Dif_size)
-
+ 
+                if (proc_rank == 0) then                 
+                    if (alt_soundspeed .and. num_fluids /= Dif_size + 1) then
+                        error stop "For alt_soundspeed and diffusion, num_fluids must be equal to Dif_size + 1"
+                    end if
+                end if
 
                 @:ALLOCATE(Dif_idx(1:Dif_size))
 

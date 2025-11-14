@@ -966,7 +966,11 @@ contains
         type(vector_field) :: gm_alpha_qp
 
         real(wp) :: dt_local
-        integer :: j, k, l !< Generic loop iterators
+        integer :: j, k, l, i !< Generic loop iterators
+
+        real(wp) :: gam_num, gam_den, gam_mix
+        real(wp) :: Y_dif(Dif_size)
+        real(wp) :: rho_dif
 
         call s_convert_conservative_to_primitive_variables( &
             q_cons_ts(1)%vf, &
@@ -981,8 +985,32 @@ contains
                 do j = 0, m
                     call s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, j, k, l)
 
-                    ! Compute mixture sound speed
-                    call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c)
+                    rho_dif = 0._wp
+                    gam_num = 0._wp
+                    gam_den = 0._wp
+                    gam_mix = 0._wp
+                    if (diffusion .and. alt_soundspeed) then
+                        if (q_prim_vf(advg_idx)%sf(j, k, l) > small_num_dif) then
+                            do i = 1, Dif_size
+                                rho_dif = rho_dif + q_prim_vf(Dif_idx(i))%sf(j, k, l)
+                            end do
+                            do i = 1, Dif_size
+                                Y_dif(i) = q_prim_vf(Dif_idx(i))%sf(j, k, l) / rho_dif
+                            end do
+                            do i = 1, Dif_size
+                                gam_num = gam_num + Y_dif(i) * (1._wp + gammas(Dif_idx(i))) / fluid_pp(Dif_idx(i))%W
+                                gam_den = gam_den + Y_dif(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W 
+                            end do
+                            gam_mix = gam_num / gam_den
+                        end if
+                    end if
+                    print *, "Here time steppers"
+                    if (diffusion .and. alt_soundspeed) then
+                        ! Compute mixture sound speed
+                        call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c, q_prim_vf(advg_idx)%sf(j, k, l), gam_mix)
+                    else
+                        call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c)
+                    end if
 
                     call s_compute_dt_from_cfl(vel, c, max_dt, rho, Re, j, k, l)
                 end do

@@ -8,6 +8,8 @@
 
     H_avg = 5e-1_wp*(H_L + H_R)
     gamma_avg = 5e-1_wp*(gamma_L + gamma_R)
+    gam_mix_avg = 5e-1_wp*(gam_mix_L + gam_mix_R)
+    alphag_avg = 5e-1_wp*(alphag_L + alphag_R)
 
 #:enddef arithmetic_avg
 
@@ -31,6 +33,14 @@
 
     vel_avg_rms = (sqrt(rho_L)*vel_L(1) + sqrt(rho_R)*vel_R(1))**2._wp/ &
                   (sqrt(rho_L) + sqrt(rho_R))**2._wp
+
+    ! Franz maybe go through mass fractions again
+    if (diffusion) then
+        gam_mix_avg = (sqrt(rho_L)*gam_mix_L + sqrt(rho_R)*gam_mix_R)/ &
+                      (sqrt(rho_L) + sqrt(rho_R))
+        alphag_avg = (sqrt(rho_L)*alphag_L + sqrt(rho_R)*alphag_R)/ &
+                      (sqrt(rho_L) + sqrt(rho_R))
+    end if
 
     if (chemistry) then
         eps = 0.001_wp

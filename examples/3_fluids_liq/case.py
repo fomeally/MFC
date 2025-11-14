@@ -90,7 +90,7 @@ print(
             # Simulation Algorithm Parameters
             "num_patches": 2,
             "model_eqns": 2,
-            "alt_soundspeed": "F",
+            "alt_soundspeed": "T",
             "diffusion": "T",
             "num_fluids": 3,
             "mpp_lim": "F",
@@ -116,7 +116,7 @@ print(
             "prim_vars_wrt": "T",
             "parallel_io": "F",
             "fd_order": 2,
-            'schlieren_wrt'                :'F',
+            "schlieren_wrt": "F",
             "probe_wrt": "F",
             
             # Patch 1 N2

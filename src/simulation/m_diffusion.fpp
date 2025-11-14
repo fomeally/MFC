@@ -29,6 +29,7 @@ module m_diffusion
 s_compute_sum_alpha_g, &
 s_compute_diffusion_rhs, &
 s_correct_volume_fractions, &
+s_correct_riemann_volume_fractions, &
 s_finalize_diffusion_module
 
     real(wp), allocatable, dimension(:, :) :: fd_coeff_x_d
@@ -202,7 +203,7 @@ contains
 
         integer :: i, k, l, q, r !< Loop variables
         real(wp) :: W1, W2, W3, D12, D13, D23
-        real(wp) :: R_univ, small_number
+        real(wp) :: R_univ
         real(wp) :: grid_spacing
         real(wp) :: rho_L, rho_R, rho_f
         real(wp) :: alpha_m_L, alpha_m_R, alpha_m_f
@@ -239,8 +240,6 @@ contains
         ! allocate(j_flux(Dif_size))
 
         R_univ = 8314.462618_wp
-
-        small_number = 1.0e-8_wp
 
         isd1 = irx; isd2 = iry; isd3 = irz
 
@@ -305,7 +304,7 @@ contains
                         P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
                         P_f = 0.5_wp * (P_L + P_R)
 
-                        if (alpha_m_L > small_number) then
+                        if (alpha_m_L > small_num_dif) then
                             do i = 1, Dif_size
                                 Y_L(i) = alpharho_L(i) / rho_L
                             end do
@@ -315,7 +314,7 @@ contains
                             end do
                         end if
 
-                        if (alpha_m_R > small_number) then
+                        if (alpha_m_R > small_num_dif) then
                             do i = 1, Dif_size
                                 Y_R(i) = alpharho_R(i) / rho_R
                             end do
@@ -325,7 +324,7 @@ contains
                             end do
                         end if
 
-                        if (alpha_m_f > small_number) then
+                        if (alpha_m_f > small_num_dif) then
                             do i = 1, Dif_size
                                 Y_f(i) = alpharho_f(i) / rho_f
                             end do
@@ -346,13 +345,13 @@ contains
 
                         W_f = 1._wp / W_f
 
-                        if (alpha_m_f > small_number) then
+                        if (alpha_m_f > small_num_dif) then
                             T_f = P_f * W_f / (rho_f * R_univ)
                         else
                             T_f = 0._wp
                         end if
 
-                        if (alpha_m_f > small_number) then
+                        if (alpha_m_f > small_num_dif) then
                             do i = 1, Dif_size
                                 h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
                             end do
@@ -379,7 +378,7 @@ contains
 
                         ! Enforce mass conservation of diffusion fluxes
                         sum_jflux = 0.0_wp
-                        if (alpha_m_f > small_number) then
+                        if (alpha_m_f > small_num_dif) then
                             do i = 1, Dif_size
                                 sum_jflux = sum_jflux + j_flux(i)
                             end do
@@ -444,12 +443,12 @@ contains
                 end do
                 !$acc end parallel loop
 
-                !print *, "261"
+                !$acc parallel loop collapse(4) gang vector default(present)
                 do q = 0, p
                     do l = 0, n
                         do k = -2*fd_number, m + 2*fd_number
                             ! gas cell
-                            if (alpha_dif(k, l, q) > small_number) then
+                            if (alpha_dif(k, l, q) > small_num_dif) then
                                 T_dif(k, l, q) = q_prim_vf(E_idx)%sf(k, l, q) * W_dif(k, l, q) /( rho_dif(k, l, q)*R_univ )
                             else
                                 T_dif(k, l, q) = 0._wp
@@ -457,13 +456,13 @@ contains
                         end do
                     end do
                 end do
-            
-                !print *, "297"
+                !$acc end parallel loop
+
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do q = 0, p
                     do l = 0, n
                         do k = -2*fd_number, m + 2*fd_number
-                            if (alpha_dif(k, l, q) > small_number) then
+                            if (alpha_dif(k, l, q) > small_num_dif) then
                                 do i = 1, Dif_size
                                     
                                     Y_dif(k, l, q, i) = alpharho_K_dif(k, l, q, i) / rho_dif(k, l, q)
@@ -476,7 +475,7 @@ contains
                     end do
                 end do
                 !$acc end parallel loop
-                !print *, "311"
+
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do q = 0, p
                     do l = 0, n
@@ -490,16 +489,16 @@ contains
                     end do
                 end do
                 !$acc end parallel loop
-                !print *, "325"
+
                 !set ghost cell for buffer region equal to k point (to enforce del dot j = 0)
                 !$acc parallel loop collapse(5) gang vector default(present)
                 do q = 0, p
                     do l = 0, n
                         do k = -fd_number, m + fd_number
-                            if (alpha_dif(k, l, q) > small_number) then
+                            if (alpha_dif(k, l, q) > small_num_dif) then
                                 do i = 1, Dif_size
                                     do r = -fd_number, fd_number
-                                        if (alpha_dif(k + r, l, q) > small_number) then
+                                        if (alpha_dif(k + r, l, q) > small_num_dif) then
                                             dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
                                                 + Y_dif(k + r, l, q, i)*fd_coeff_x_d(r, k)
                                         else
@@ -513,16 +512,16 @@ contains
                     end do
                 end do
                 !$acc end parallel loop
-                !print *, "346"
+
                 if (Dif_size == 2) then
                     !$acc parallel loop collapse(5) gang vector default(present)
                     do q = 0, p
                         do l = 0, n
                             do k = 0, m
-                                if (alpha_dif(k, l, q) > small_number) then
+                                if (alpha_dif(k, l, q) > small_num_dif) then
                                     do i = 1, Dif_size
                                         do r = -fd_number, fd_number
-                                            if (alpha_dif(k + r, l, q) > small_number) then
+                                            if (alpha_dif(k + r, l, q) > small_num_dif) then
                                                 dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
                                                     + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
                                                 djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
@@ -546,10 +545,10 @@ contains
                     do q = 0, p
                         do l = 0, n
                             do k = 0, m
-                                if (alpha_dif(k, l, q) > small_number) then
+                                if (alpha_dif(k, l, q) > small_num_dif) then
                                     do r = -fd_number, fd_number
                                         do i = 1, Dif_size
-                                            if (alpha_dif(k + r, l, q) > small_number) then
+                                            if (alpha_dif(k + r, l, q) > small_num_dif) then
                                                 select case (i)
                                                     case (1)
                                                         dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
@@ -631,14 +630,14 @@ contains
                     end do
                     !$acc end parallel loop
                 end if
-                !print *, "460"
+
                 !Valid for any number of species
                 ! species continuity
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do q = 0, p
                     do l = 0, n
                         do k = 0, m
-                            if (alpha_dif(k, l, q) > small_number) then
+                            if (alpha_dif(k, l, q) > small_num_dif) then
                                 do i = 1, Dif_size
                                     rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) &
                                         + dj_dx(k, l, q, i)
@@ -648,14 +647,14 @@ contains
                     end do
                 end do
                 !$acc end parallel loop
-                !print *, "475"
+
                 !Valid for any number of species
                 !energy
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do q = 0, p
                     do l = 0, n
                         do k = 0, m
-                            if (alpha_dif(k, l, q) > small_number) then
+                            if (alpha_dif(k, l, q) > small_num_dif) then
                                 do i = 1, Dif_size
                                     rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
                                         + djh_dx(k, l, q, i)
@@ -665,113 +664,11 @@ contains
                     end do
                 end do
                 !$acc end parallel loop
-                ! !print *, "490"
-                ! !volume fraction
-                ! if (Dif_size == 2) then
-                !     !$acc parallel loop collapse(3) gang vector default(present)
-                !     do q = 0, p
-                !         do l = 0, n
-                !             do k = 0, m
-                !                 if (alpha_dif(k, l, q) > small_number) then
-                !                     do i = 1, Dif_size
-                !                         rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-                !                             + dj_dx(k, l, q, i)*W_dif(k, l, q)*W_dif(k, l, q) / ( rho_dif(k, l, q)*Ws(1)*Ws(2)*alpha_dif(k, l, q))
-                !                     end do
-                !                 end if
-                !             end do
-                !         end do
-                !     end do
-                !     !$acc end parallel loop
-                ! elseif (Dif_size == 3) then
-                !     !$acc parallel loop collapse(4) gang vector default(present)
-                !     do q = 0, p
-                !         do l = 0, n
-                !             do k = 0, m
-                !                 if (alpha_dif(k, l, q) > small_number) then
-                !                     do i = 1, Dif_size
-                !                         select case (i)
-                !                             case (1)
-                !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-                !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
-                !                                 * ( dj_dx(k, l, q, 1)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 1))*Ws(2)*Ws(3) - alpha_K_dif(k, l, q, 1)*Ws(1)*( Ws(2)*dj_dx(k, l, q, 3) + Ws(3)*dj_dx(k, l, q, 2) ) )
-
-                !                             case (2)
-                !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-                !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
-                !                                     * ( dj_dx(k, l, q, 2)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 2))*Ws(1)*Ws(3) - alpha_K_dif(k, l, q, 2)*Ws(2)*( Ws(1)*dj_dx(k, l, q, 3) + Ws(3)*dj_dx(k, l, q, 1) ) )
-
-                !                             case (3)
-                !                                 rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) &
-                !                                     + W_dif(k, l, q) / ( Ws(1)*Ws(2)*Ws(3)*rho_dif(k, l, q)*alpha_dif(k, l, q) ) &
-                !                                     * ( dj_dx(k, l, q, 3)*(alpha_dif(k, l, q) - alpha_K_dif(k, l, q, 3))*Ws(1)*Ws(2) - alpha_K_dif(k, l, q, 3)*Ws(3)*( Ws(1)*dj_dx(k, l, q, 2) + Ws(2)*dj_dx(k, l, q, 1) ) )
-                !                         end select
-                !                     end do
-                !                 end if
-                !             end do
-                !         end do
-                !     end do
-                !     !$acc end parallel loop
-                ! end if
             end if
         end if
         ! #########################################################################
         ! #########################################################################
         
-        ! compute kdivu term
-        !if (num_fluids > Dif_size) then
-
-            !$acc parallel loop collapse(3) gang vector default(present)
-            !do q = 0, p
-                !do l = 0, n
-                    !do k = 0, m
-                        !dvel_dx(k, l, q) = 0._wp
-                        !do r = -fd_number, fd_number
-                            !dvel_dx(k, l, q) = dvel_dx(k, l, q) + q_prim_vf(momxb + idir - 1)%sf(k + r, l, q)*fd_coeff_x_d(r, k)
-                        !end do
-                    !end do
-                !end do
-            !end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(3) gang vector default(present)
-            !do q = 0, p
-                !do l = 0, n
-                    !do k = 0, m
-                        !denom(k, l, q) = 0._wp
-                        !if (alpha_dif(k, l, q) > small_number) then
-                            !do i = 1, Dif_size
-                                !denom(k, l, q) = denom(k, l, q) + alpha_K_dif(k, l, q, i) / ( q_prim_vf(E_idx)%sf(k, l, q)*(1._wp + gammas(Dif_idx(i))) / gammas(Dif_idx(i)) )
-                            !end do
-                        
-                            !rho1c12(k, l, q) = ( (gammas(liq_idx) + 1._wp)*q_prim_vf(E_idx)%sf(k, l, q) + pi_infs(liq_idx) )/gammas(liq_idx)
-                            !rhogcg2(k, l, q) = 1._wp / denom(k, l, q)
-                            !kdivu(k, l, q) = alpha_dif(k, l, q)*(1._wp - alpha_dif(k, l, q))*(rhogcg2(k, l, q) - rho1c12(k, l, q)) / ( (1._wp - alpha_dif(k, l, q))*rhogcg2(k, l, q) + alpha_dif(k, l, q)*rho1c12(k, l, q) )
-                        !end if
-                    !end do
-                !end do
-            !end do
-            !$acc end parallel loop
-
-            !$acc parallel loop collapse(3) gang vector default(present)
-            !do q = 0, p
-                !do l = 0, n
-                    !do k = 0, m
-                        !if (alpha_dif(k, l, q) > small_number) then
-                            !do i = 1, Dif_size
-                                !rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) = rhs_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q) - alpha_K_dif(k, l, q, i) / alpha_dif(k, l, q) &
-                                    !* kdivu(k, l, q)*dvel_dx(k, l, q)
-                            !end do
-                            !rhs_vf(advxb + liq_idx - 1)%sf(k, l, q) = rhs_vf(advxb + liq_idx - 1)%sf(k, l, q) + kdivu(k, l, q)*dvel_dx(k, l, q)
-                        !end if
-                    !end do
-                !end do
-            !end do
-            !$acc end parallel loop
-        !end if
-        
-        
-        
-
     end subroutine s_compute_diffusion_rhs
 
     subroutine s_correct_volume_fractions(q_cons_vf, q_prim_vf)
@@ -780,18 +677,13 @@ contains
         type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
 
         integer :: x, y, z, i
-        real(wp) :: rho, small_number, W
-        real(wp), allocatable, dimension(:) :: alpharho, Y_s
-
-        allocate(alpharho(Dif_size), Y_s(Dif_size))
-
-        small_number = 1.0e-12_wp
-
+        real(wp) :: rho, W
+        real(wp) :: alpharho(Dif_size), Y_s(Dif_size)
 
         do z = 0, p
             do y = 0, n
                 do x = 0, m 
-                    if (q_cons_vf(advg_idx)%sf(x, y, z) < small_number) then
+                    if (q_cons_vf(advg_idx)%sf(x, y, z) < small_num_dif) then
                         do i = 1, Dif_size
                             q_cons_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z) = 0._wp
                         end do
@@ -832,6 +724,56 @@ contains
         end do
 
     end subroutine s_correct_volume_fractions
+
+    subroutine s_correct_riemann_volume_fractions(q_rs_vf, bounds)
+
+        real(wp), dimension(startx:, starty:, startz:, 1:), intent(inout) :: q_rs_vf
+        type(int_bounds_info), dimension(1:3), intent(in) :: bounds
+
+
+        integer :: x, y, z, i
+        real(wp) :: rho, W
+        real(wp) :: alpharho(Dif_size), Y_s(Dif_size)
+
+        do z = bounds(3)%beg, bounds(3)%end
+            do y = bounds(2)%beg, bounds(2)%end
+                do x = bounds(1)%beg, bounds(1)%end
+                    if (q_rs_vf(x, y, z, advg_idx) < small_num_dif) then
+                        do i = 1, Dif_size
+                            q_rs_vf(x, y, z, advxb + Dif_idx(i) - 1) = 0._wp
+                        end do
+                    else
+                        rho = 0._wp
+                        W = 0._wp
+
+                        do i = 1, Dif_size
+                            alpharho(i) = q_rs_vf(x, y, z, Dif_idx(i))
+                        end do
+ 
+                        do i = 1, Dif_size
+                            rho = rho + alpharho(i)
+                        end do
+                        
+                        do i = 1, Dif_size
+                            Y_s(i) = alpharho(i) / rho
+                        end do
+
+                        do i = 1, Dif_size
+                            W = W + Y_s(i)/Ws(i)
+                        end do
+
+                        W = 1._wp / W
+
+                        do i = 1, Dif_size
+                            q_rs_vf(x, y, z, advxb + Dif_idx(i) - 1) = q_rs_vf(x, y, z, advg_idx) * Y_s(i) * W / Ws(i)
+                        end do
+
+                    end if
+                end do
+            end do
+        end do
+
+    end subroutine s_correct_riemann_volume_fractions
 
     subroutine s_finalize_diffusion_module
 

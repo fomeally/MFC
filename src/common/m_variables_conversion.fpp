@@ -1491,7 +1491,7 @@ contains
     end subroutine s_finalize_variables_conversion_module
 
 #ifndef MFC_PRE_PROCESS
-    pure subroutine s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_sum, c_c, c)
+    subroutine s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_sum, c_c, c, advg, gam_mix)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_speed_of_sound
 #else
@@ -1505,6 +1505,8 @@ contains
         real(wp), intent(in) :: vel_sum
         real(wp), intent(in) :: c_c
         real(wp), intent(out) :: c
+        real(wp), intent(in), optional :: advg
+        real(wp), intent(in), optional :: gam_mix
 
         real(wp) :: blkmod1, blkmod2
         real(wp) :: Tolerance
@@ -1522,10 +1524,13 @@ contains
                 if (diffusion) then
                     blkmod1 = ((gammas(liq_idx) + 1._wp)*pres + &
                             pi_infs(liq_idx))/gammas(liq_idx)
-                    !Franz fix this for sure if using alt_soundspeed
-                    blkmod2 = ((gammas(2) + 1._wp)*pres + &
-                            pi_infs(2))/gammas(2)
-                    c = (1._wp/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
+                            
+                    blkmod2 = gam_mix * pres
+                    c = (1._wp/(rho*(adv(liq_idx)/blkmod1 + advg/blkmod2)))
+                    ! print *, "liq adv: ", adv(liq_idx)
+                    ! print *, "gas adv: ", advg
+                    ! print *, "blkmod1: ", blkmod1
+                    ! print *, "blkmod2: ", blkmod2
                 else                 
                     blkmod1 = ((gammas(1) + 1._wp)*pres + &
                             pi_infs(1))/gammas(1)

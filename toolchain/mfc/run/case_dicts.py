@@ -220,6 +220,7 @@ SIMULATION.update({
     'weno_Re_flux': ParamType.LOG,
     'weno_Dif_flux': ParamType.LOG,
     'Dif_fv': ParamType.LOG,
+    'small_num_dif': ParamType.REAL,
     'riemann_solver': ParamType.INT,
     'wave_speeds': ParamType.INT,
     'avg_state': ParamType.INT,

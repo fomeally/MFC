@@ -1282,6 +1282,9 @@ contains
         integer :: i, j, k, l, s !looping indices
         integer :: ierr, counter, root !< number of data points extracted to fit shape to SH perturbations
 
+        real(wp) :: gam_num, gam_den, gam_mix, rho_dif
+        real(wp) :: Y_dif(Dif_size)
+
         Egk = 0_wp
         Elp = 0_wp
         Egint = 0_wp
@@ -1323,10 +1326,39 @@ contains
                     end do
 
                     H = ((gamma + 1_wp)*pres + pi_inf)/rho
+                    gam_num = 0._wp
+                    gam_den = 0._wp
+                    gam_mix = 0._wp
 
-                    call s_compute_speed_of_sound(pres, rho, &
+                    if (diffusion .and. alt_soundspeed) then
+                        if (q_prim_vf(advg_idx)%sf(i, j, k) > small_num_dif) then
+
+                            do s = 1, Dif_size
+                                rho_dif = rho_dif + q_prim_vf(Dif_idx(s))%sf(i, j, k)
+                            end do
+
+                            do s = 1, Dif_size
+                                Y_dif(s) = q_prim_vf(Dif_idx(s))%sf(i, j, k)/rho_dif
+                            end do
+
+                            do s = 1, num_fluids
+                                gam_num = gam_num + Y_dif(s)*(fluid_pp(Dif_idx(s))%gamma + 1._wp) / fluid_pp(Dif_idx(s))%W
+                                gam_den = gam_den + Y_dif(s)*fluid_pp(Dif_idx(s))%gamma / fluid_pp(Dif_idx(s))%W
+                            end do
+
+                            gam_mix = gam_num/gam_den
+
+                        end if 
+
+                        call s_compute_speed_of_sound(pres, rho, &
+                                                  gamma, pi_inf, &
+                                                  H, adv, 0._wp, 0._wp, c, q_prim_vf(advg_idx)%sf(i, j, k), gam_mix)
+                    
+                    else 
+                        call s_compute_speed_of_sound(pres, rho, &
                                                   gamma, pi_inf, &
                                                   H, adv, 0._wp, 0._wp, c)
+                    end if
 
                     Ma = maxvel/c
                     if (Ma > MaxMa .and. (adv(1) > (1.0_wp - 1.0e-10_wp))) then

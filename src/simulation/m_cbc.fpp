@@ -860,6 +860,7 @@ contains
                         H = (E + pres)/rho
 
                         ! Compute mixture sound speed
+                        !Franz add here if doing cbc w/ diffusion
                         call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_K_sum, 0._wp, c)
 
                         ! First-Order Spatial Derivatives of Primitive Variables

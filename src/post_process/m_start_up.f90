@@ -86,7 +86,7 @@ contains
             relax_model, cf_wrt, sigma, adv_n, ib, num_ibs, &
             cfl_adap_dt, cfl_const_dt, t_save, t_stop, n_start, &
             cfl_target, surface_tension, bubbles_lagrange, rkck_adap_dt, &
-            sim_data, hyperelasticity, diffusion
+            sim_data, hyperelasticity, diffusion, small_num_dif
 
         ! Inquiring the status of the post_process.inp file
         file_loc = 'post_process.inp'
@@ -475,6 +475,7 @@ contains
         end if
 
         ! Adding the sound speed to the formatted database file
+        ! Franz add here not needed right now
         if (c_wrt) then
             do k = -offset_z%beg, p + offset_z%end
                 do j = -offset_y%beg, n + offset_y%end
