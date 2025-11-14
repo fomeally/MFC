@@ -188,9 +188,6 @@ contains
         ! to write to that cell. If both queries check out, the primitive
         ! variables of the current patch are assigned to this cell.
         do i = 0, m
-            
-
-            
 
             if (x_boundary%beg <= x_cc(i) .and. &
                 x_boundary%end >= x_cc(i) .and. &
@@ -198,7 +195,7 @@ contains
 
                 eta = exp(-5d-1*(x_cc(i) - x_centroid)**2)/sqrt(2d0*pi)
                 call s_assign_patch_primitive_variables(patch_id, i, 0, 0, &
-                                            eta, q_prim_vf, patch_id_fp)
+                                                        eta, q_prim_vf, patch_id_fp)
 
                 @:analytical()
             end if
@@ -206,8 +203,6 @@ contains
         end do
 
     end subroutine s_1d_gaussian ! ----------------------------------------
-
-
 
     !>          The tanh patch is a 1D geometry. The geometry
     !!              of the patch is well-defined when its centroid and length
@@ -255,9 +250,6 @@ contains
         ! to write to that cell. If both queries check out, the primitive
         ! variables of the current patch are assigned to this cell.
         do i = 0, m
-            
-
-            
 
             if (x_boundary%beg <= x_cc(i) .and. &
                 x_boundary%end >= x_cc(i) .and. &
@@ -265,7 +257,7 @@ contains
 
                 eta = c*tanh(b*(x_cc(i) - x_centroid)) + d
                 call s_assign_patch_primitive_variables(patch_id, i, 0, 0, &
-                                            eta, q_prim_vf, patch_id_fp)
+                                                        eta, q_prim_vf, patch_id_fp)
 
                 @:analytical()
             end if
@@ -320,9 +312,6 @@ contains
         ! to write to that cell. If both queries check out, the primitive
         ! variables of the current patch are assigned to this cell.
         do i = 0, m
-            
-
-            
 
             if (x_boundary%beg <= x_cc(i) .and. &
                 x_boundary%end >= x_cc(i) .and. &
@@ -330,7 +319,7 @@ contains
 
                 eta = c*tanh(b*(x_cc(i) - x_centroid)) + d
                 call s_assign_patch_primitive_variables(patch_id, i, 0, 0, &
-                                            eta, q_prim_vf, patch_id_fp)
+                                                        eta, q_prim_vf, patch_id_fp)
 
                 @:analytical()
             end if
@@ -338,7 +327,6 @@ contains
         end do
 
     end subroutine s_1d_ntanh ! ----------------------------------------
-
 
     !>  The spiral patch is a 2D geometry that may be used, The geometry
         !!              of the patch is well-defined when its centroid and radius

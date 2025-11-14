@@ -1090,7 +1090,6 @@ contains
                                                              jK_prim_vf, &
                                                              ibounds)
 
-
         type(scalar_field), dimension(sys_size), intent(in) :: qK_prim_vf
         type(scalar_field), dimension(sys_size), intent(inout) :: jK_prim_vf
         type(int_bounds_info), dimension(1:3), intent(in) :: ibounds
@@ -1117,30 +1116,29 @@ contains
                     end do
 
                     call s_convert_species_to_mixture_variables_acc(rho_K, gamma_K, pi_inf_K, qv_K, &
-                                                                            alpha_K, alpha_rho_K, Re_K, j, k, l)
+                                                                    alpha_K, alpha_rho_K, Re_K, j, k, l)
 
                     !$acc loop seq
                     do i = contxb, contxe
-                        
+
                         jK_prim_vf(i)%sf(j, k, l) = alpha_rho_K(i) &
-                                                        /rho_K
-                    
+                                                    /rho_K
+
                     end do
 
                     ! This calculates the enthalpies for each fluid. Only works with ghost fluid method!!
                     do i = 1, num_fluids
 
-                        jK_prim_vf(advxb + i - 1)%sf(j, k, l) = (qK_prim_vf(E_idx)%sf(j, k, l) * (gammas(i) + 1._wp) + &
-                                                                    pi_infs(i)) * alpha_K(i) / alpha_rho_K(i) 
+                        jK_prim_vf(advxb + i - 1)%sf(j, k, l) = (qK_prim_vf(E_idx)%sf(j, k, l)*(gammas(i) + 1._wp) + &
+                                                                 pi_infs(i))*alpha_K(i)/alpha_rho_K(i)
                     end do
 
                 end do
             end do
         end do
         !$acc end parallel loop
-        
-    end subroutine s_convert_conservative_to_diffusion_variables
 
+    end subroutine s_convert_conservative_to_diffusion_variables
 
     !>  The following procedure handles the conversion between
         !!      the primitive variables and the conservative variables.
@@ -1521,16 +1519,16 @@ contains
             if (alt_soundspeed) then
                 if (diffusion) then
                     blkmod1 = ((gammas(liq_idx) + 1._wp)*pres + &
-                            pi_infs(liq_idx))/gammas(liq_idx)
+                               pi_infs(liq_idx))/gammas(liq_idx)
                     !Franz fix this for sure if using alt_soundspeed
                     blkmod2 = ((gammas(2) + 1._wp)*pres + &
-                            pi_infs(2))/gammas(2)
+                               pi_infs(2))/gammas(2)
                     c = (1._wp/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
-                else                 
+                else
                     blkmod1 = ((gammas(1) + 1._wp)*pres + &
-                            pi_infs(1))/gammas(1)
+                               pi_infs(1))/gammas(1)
                     blkmod2 = ((gammas(2) + 1._wp)*pres + &
-                            pi_infs(2))/gammas(2)
+                               pi_infs(2))/gammas(2)
                     c = (1._wp/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
                 end if
             elseif (model_eqns == 3) then
