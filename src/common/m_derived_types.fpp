@@ -310,7 +310,7 @@ module m_derived_types
         real(wp) :: cp      !< heat capacity constant pressure
         real(wp) :: T0      !< Reference temperature
         real(wp) :: h0      !< Reference enthalpy
-        logical  :: gas_mixture !< Whether the fluid is part of the gas mixture
+        logical :: gas_mixture !< Whether the fluid is part of the gas mixture
     end type physical_parameters
 
     !> Derived type annexing the flow probe location

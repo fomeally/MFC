@@ -112,7 +112,7 @@ module m_riemann_solvers
 
     real(wp), allocatable, dimension(:, :) :: Ds
     !$acc declare create(Ds)
-    
+
 contains
 
     !> Dispatch to the subroutines that are utilized to compute the
@@ -572,16 +572,13 @@ contains
                                 do i = 1, strxe - strxb + 1
                                     tau_e_L(i) = qL_prim_rs${XYZ}$_vf(j, k, l, strxb - 1 + i)
                                     tau_e_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, strxb - 1 + i)
-                                    ! Elastic contribution to energy if G large enough
-                                    !TODO take out if statement if stable without
-                                    if ((G_L > 1000) .and. (G_R > 1000)) then
+                                    ! Elastic contribution to energy
+                                    E_L = E_L + (tau_e_L(i)*tau_e_L(i))/(4._wp*G_L)
+                                    E_R = E_R + (tau_e_R(i)*tau_e_R(i))/(4._wp*G_R)
+                                    ! Additional terms in 2D and 3D
+                                    if ((i == 2) .or. (i == 4) .or. (i == 5)) then
                                         E_L = E_L + (tau_e_L(i)*tau_e_L(i))/(4._wp*G_L)
                                         E_R = E_R + (tau_e_R(i)*tau_e_R(i))/(4._wp*G_R)
-                                        ! Additional terms in 2D and 3D
-                                        if ((i == 2) .or. (i == 4) .or. (i == 5)) then
-                                            E_L = E_L + (tau_e_L(i)*tau_e_L(i))/(4._wp*G_L)
-                                            E_R = E_R + (tau_e_R(i)*tau_e_R(i))/(4._wp*G_R)
-                                        end if
                                     end if
                                 end do
                             end if
@@ -830,32 +827,32 @@ contains
                                 do i = advxb, advxe
                                     flux_rs${XYZ}$_vf(j, k, l, i) = &
                                         (qL_prim_rs${XYZ}$_vf(j, k, l, i) &
-                                        - qR_prim_rs${XYZ}$_vf(j + 1, k, l, i)) &
+                                         - qR_prim_rs${XYZ}$_vf(j + 1, k, l, i)) &
                                         *s_M*s_P/(s_M - s_P)
                                     flux_src_rs${XYZ}$_vf(j, k, l, i) = &
                                         (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i) &
-                                        - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, i)) &
+                                         - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, i)) &
                                         /(s_M - s_P)
                                 end do
                             else
                                 ! If Dif_size = num_fluids -----> flux_rs = 0 and flux_src = 1
                                 flux_rs${XYZ}$_vf(j, k, l, advg_idx) = &
                                     (qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) &
-                                    - qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx)) &
+                                     - qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx)) &
                                     *s_M*s_P/(s_M - s_P)
                                 flux_src_rs${XYZ}$_vf(j, k, l, advg_idx) = &
                                     (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) &
-                                    - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)) &
-                                    /(s_M - s_P)                                                  
-                                if (num_fluids > Dif_size) then                               
-                                        flux_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = &
-                                            (qL_prim_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) &
-                                            - qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + liq_idx - 1)) &
-                                            *s_M*s_P/(s_M - s_P)
-                                        flux_src_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = &
-                                            (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + liq_idx - 1)) &
-                                            - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) &
-                                            /(s_M - s_P)                      
+                                     - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)) &
+                                    /(s_M - s_P)
+                                if (num_fluids > Dif_size) then
+                                    flux_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = &
+                                        (qL_prim_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) &
+                                         - qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + liq_idx - 1)) &
+                                        *s_M*s_P/(s_M - s_P)
+                                    flux_src_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = &
+                                        (s_M*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + liq_idx - 1)) &
+                                        - s_P*qL_prim_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) &
+                                        /(s_M - s_P)
                                 end if
 
                             end if
@@ -2690,7 +2687,7 @@ contains
 
                                 ! VOLUME FRACTION FLUX.
 
-                                if (.not. diffusion) then 
+                                if (.not. diffusion) then
                                     !$acc loop seq
                                     do i = advxb, advxe
                                         flux_rs${XYZ}$_vf(j, k, l, i) = &
@@ -2701,10 +2698,10 @@ contains
                                     end do
                                 else
                                     flux_rs${XYZ}$_vf(j, k, l, advg_idx) = &
-                                            xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) &
-                                            *(vel_L(idx1) + s_M*(xi_L - 1._wp)) &
-                                            + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) &
-                                            *(vel_R(idx1) + s_P*(xi_R - 1._wp))
+                                        xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx) &
+                                        *(vel_L(idx1) + s_M*(xi_L - 1._wp)) &
+                                        + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx) &
+                                        *(vel_R(idx1) + s_P*(xi_R - 1._wp))
 
                                     if (num_fluids > Dif_size) then
                                         flux_rs${XYZ}$_vf(j, k, l, advxb + liq_idx - 1) = &

@@ -156,7 +156,7 @@ module m_global_parameters
     !$acc declare create(Dif_size, Dif_idx)
 
     integer :: liq_idx
-    !$acc declare create(liq_idx)
+!$acc declare create(liq_idx)
 
 #ifdef MFC_MPI
 
@@ -674,15 +674,13 @@ contains
                 sys_size = c_idx
             end if
 
-
-
-            ! Bookkeeping the indexes of any gas mixture fluids 
+            ! Bookkeeping the indexes of any gas mixture fluids
             if (diffusion) then
                 advg_idx = sys_size + 1
                 sys_size = advg_idx
 
-                ! Bookkeeping the indexes of any gas mixture fluids 
-            
+                ! Bookkeeping the indexes of any gas mixture fluids
+
                 ! Determining the number of fluids in the gas mixture
                 do i = 1, num_fluids
                     if (fluid_pp(i)%gas_mixture) Dif_size = Dif_size + 1

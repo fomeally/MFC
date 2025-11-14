@@ -29,29 +29,29 @@ contains
 
     subroutine s_compute_sum_alpha_g(q_cons_vf, q_prim_vf, bounds)
 
-            ! From the volume fractions of each mixture gas component, compute the
-            ! total gas volume fraction field.
+        ! From the volume fractions of each mixture gas component, compute the
+        ! total gas volume fraction field.
 
-            type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
-            type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
-            type(int_bounds_info), dimension(1:3), intent(in) :: bounds
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
+        type(int_bounds_info), dimension(1:3), intent(in) :: bounds
 
-            integer :: x, y, z, i
-            real(wp) :: sum_alpha_g
-    
-            do z = bounds(3)%beg, bounds(3)%end
-                do y = bounds(2)%beg, bounds(2)%end
-                    do x = bounds(1)%beg, bounds(1)%end
-                        !$acc loop seq
-                        sum_alpha_g = 0.0_wp
-                        do i = 1, Dif_size
-                            sum_alpha_g = sum_alpha_g + q_prim_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z)
-                        end do
-                        q_cons_vf(advg_idx)%sf(x, y, z) = sum_alpha_g
-                        q_prim_vf(advg_idx)%sf(x, y, z) = sum_alpha_g
+        integer :: x, y, z, i
+        real(wp) :: sum_alpha_g
+
+        do z = bounds(3)%beg, bounds(3)%end
+            do y = bounds(2)%beg, bounds(2)%end
+                do x = bounds(1)%beg, bounds(1)%end
+                    !$acc loop seq
+                    sum_alpha_g = 0.0_wp
+                    do i = 1, Dif_size
+                        sum_alpha_g = sum_alpha_g + q_prim_vf(advxb + Dif_idx(i) - 1)%sf(x, y, z)
                     end do
+                    q_cons_vf(advg_idx)%sf(x, y, z) = sum_alpha_g
+                    q_prim_vf(advg_idx)%sf(x, y, z) = sum_alpha_g
                 end do
             end do
+        end do
 
     end subroutine s_compute_sum_alpha_g
 
