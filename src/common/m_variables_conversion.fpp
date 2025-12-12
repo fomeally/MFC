@@ -145,6 +145,8 @@ contains
             ! for computing pressure is targeted by the procedure pointer
 
             if ((model_eqns /= 4) .and. (bubbles_euler .neqv. .true.)) then
+                ! print *, "gamma: ", gamma
+                ! print *, "energy: ", energy
                 pres = (energy - dyn_p - pi_inf - qv)/gamma
             else if ((model_eqns /= 4) .and. bubbles_euler) then
                 pres = ((energy - dyn_p)/(1._wp - alf) - pi_inf - qv)/gamma
@@ -395,6 +397,8 @@ contains
         real(wp), optional, dimension(num_fluids), intent(in) :: G
 
         real(wp), dimension(num_fluids) :: alpha_rho_K, alpha_K !<
+        real(wp) :: gamma_g, rho_dif_K, alphag_K, gam_num, gam_denom
+        real(wp) :: Y_dif_K(Dif_size)
 
         integer :: i, j !< Generic loop iterator
 
@@ -424,10 +428,56 @@ contains
 
         do i = 1, num_fluids
             rho = rho + alpha_rho_K(i)
-            gamma = gamma + alpha_K(i)*gammas(i)
+            ! gamma = gamma + alpha_K(i)*gammas(i)
             pi_inf = pi_inf + alpha_K(i)*pi_infs(i)
             qv = qv + alpha_rho_K(i)*qvs(i)
         end do
+
+        if (diffusion) then
+            gamma_g = 0._wp
+            rho_dif_K = 0._wp
+            alphag_K = 0._wp
+            gam_num = 0._wp
+            gam_denom = 0._wp
+
+            do i = 1, Dif_size
+                alphag_K = alphag_K + alpha_K(Dif_idx(i))
+            end do
+            ! print *, "alphag_K: ", alphag_K
+
+            if (alphag_K > small_num_dif) then
+                
+                do i = 1, Dif_size
+                    rho_dif_K = rho_dif_K + alpha_rho_K(Dif_idx(i))
+                end do
+
+                do i = 1, Dif_size
+                    Y_dif_K(i) = alpha_rho_K(Dif_idx(i))/rho_dif_K
+                end do
+
+                do i = 1, Dif_size
+                    gam_num = gam_num + Y_dif_K(i)*(1._wp + gammas(Dif_idx(i))) / fluid_pp(Dif_idx(i))%W
+                    gam_denom = gam_denom + Y_dif_K(i)*gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                end do
+                gamma_g = gam_num / gam_denom
+                gamma_g = 1._wp / (gamma_g - 1._wp)
+            end if
+
+            if (num_fluids > Dif_size) then
+                gamma = gamma_g*alphag_K + &
+                          alpha_K(liq_idx)*gammas(liq_idx)
+
+            else 
+                gamma = gamma_g*alphag_K
+            end if
+
+        else
+            do i = 1, num_fluids
+                gamma = gamma + alpha_K(i)*gammas(i)
+            end do
+        end if
+
+        ! print *, "gamma: ", gamma
 #ifdef MFC_SIMULATION
         ! Computing the shear and bulk Reynolds numbers from species analogs
         do i = 1, 2
@@ -485,6 +535,8 @@ contains
 
         integer :: i, j !< Generic loop iterators
         real(wp) :: alpha_K_sum
+        real(wp) :: gamma_g, rho_dif_K, alphag_K, gam_num, gam_denom
+        real(wp) :: Y_dif_K(Dif_size)
 
 #ifdef MFC_SIMULATION
         ! Constraining the partial densities and the volume fractions within
@@ -509,12 +561,55 @@ contains
 
         end if
 
+        
         do i = 1, num_fluids
             rho_K = rho_K + alpha_rho_K(i)
-            gamma_K = gamma_K + alpha_K(i)*gammas(i)
+            ! gamma_K = gamma_K + alpha_K(i)*gammas(i)
             pi_inf_K = pi_inf_K + alpha_K(i)*pi_infs(i)
             qv_K = qv_K + alpha_rho_K(i)*qvs(i)
         end do
+
+        if (diffusion) then
+            gamma_g = 0._wp
+            rho_dif_K = 0._wp
+            alphag_K = 0._wp
+            gam_num = 0._wp
+            gam_denom = 0._wp
+
+            do i = 1, Dif_size
+                alphag_K = alphag_K + alpha_K(Dif_idx(i))
+            end do
+
+            if (alphag_K > small_num_dif) then
+                
+                do i = 1, Dif_size
+                    rho_dif_K = rho_dif_K + alpha_rho_K(Dif_idx(i))
+                end do
+
+                do i = 1, Dif_size
+                    Y_dif_K(i) = alpha_rho_K(Dif_idx(i))/rho_dif_K
+                end do
+                do i = 1, Dif_size
+                    gam_num = gam_num + Y_dif_K(i)*(1._wp + gammas(Dif_idx(i))) / fluid_pp(Dif_idx(i))%W
+                    gam_denom = gam_denom + Y_dif_K(i)*gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                end do
+                gamma_g = gam_num / gam_denom
+                gamma_g = 1._wp / (gamma_g - 1._wp)
+            end if
+
+            if (num_fluids > Dif_size) then
+                gamma_K = gamma_g*alphag_K + &
+                          alpha_K(liq_idx)*gammas(liq_idx)
+
+            else 
+                gamma_K = gamma_g*alphag_K
+            end if
+
+        else
+            do i = 1, num_fluids
+                gamma_K = gamma_K + alpha_K(i)*gammas(i)
+            end do
+        end if
 
         if (present(G_K)) then
             G_K = 0._wp
@@ -894,6 +989,7 @@ contains
                     !$acc loop seq
                     do i = 1, num_fluids
                         alpha_rho_K(i) = qK_cons_vf(i)%sf(j, k, l)
+                        ! print *, "j: ", j, "i: ", i, "alpha_rho_k: ", alpha_rho_K(i)
                         alpha_K(i) = qK_cons_vf(advxb + i - 1)%sf(j, k, l)
                     end do
 
@@ -922,13 +1018,15 @@ contains
 #endif
                     end if
 
-                    if (diffusion) then
-                        rho_K = 0._wp
-                        !$acc loop seq
-                        do i = 1, Dif_size
-                            rho_K = rho_K + max(0._wp, qK_cons_vf(Dif_idx(i))%sf(j, k, l))
-                        end do
-                    end if
+                    ! print *, "gamma_k: ", gamma_K
+
+                    ! if (diffusion) then
+                    !     rho_K = 0._wp
+                    !     !$acc loop seq
+                    !     do i = 1, Dif_size
+                    !         rho_K = rho_K + max(0._wp, qK_cons_vf(Dif_idx(i))%sf(j, k, l))
+                    !     end do
+                    ! end if
 
                     if (chemistry) then
                         rho_K = 0._wp
@@ -964,6 +1062,8 @@ contains
                                                         /rho_K
                             dyn_pres_K = dyn_pres_K + 5e-1_wp*qK_cons_vf(i)%sf(j, k, l) &
                                          *qK_prim_vf(i)%sf(j, k, l)
+                            ! print *, "j: ", j, "rho_k: ", rho_K
+                            ! print *, "j: ", j, "vel: ", qK_prim_vf(i)%sf(j, k, l)
                         else
                             qK_prim_vf(i)%sf(j, k, l) = qK_cons_vf(i)%sf(j, k, l) &
                                                         /qK_cons_vf(1)%sf(j, k, l)
@@ -985,6 +1085,8 @@ contains
                                             qv_K, rhoYks, pres, T)
 
                     qK_prim_vf(E_idx)%sf(j, k, l) = pres
+
+                    ! print *, "pres: ", pres
 
                     if (chemistry) then
                         q_T_sf%sf(j, k, l) = T
@@ -1227,6 +1329,7 @@ contains
                         ! Computing the energy from the pressure
                         if ((model_eqns /= 4) .and. (bubbles_euler .neqv. .true.)) then
                             ! E = Gamma*P + \rho u u /2 + \pi_inf + (\alpha\rho qv)
+                            ! print *, "j: ", j, "pres: ", q_prim_vf(E_idx)%sf(j, k, l), "gamma: ", gamma
                             q_cons_vf(E_idx)%sf(j, k, l) = &
                                 gamma*q_prim_vf(E_idx)%sf(j, k, l) + dyn_pres + pi_inf &
                                 + qv
@@ -1491,7 +1594,7 @@ contains
     end subroutine s_finalize_variables_conversion_module
 
 #ifndef MFC_PRE_PROCESS
-    subroutine s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_sum, c_c, c, advg, gam_mix)
+    pure subroutine s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_sum, c_c, c, advg, gam_mix)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_speed_of_sound
 #else
@@ -1525,12 +1628,12 @@ contains
                     blkmod1 = ((gammas(liq_idx) + 1._wp)*pres + &
                             pi_infs(liq_idx))/gammas(liq_idx)
                             
-                    blkmod2 = gam_mix * pres
-                    c = (1._wp/(rho*(adv(liq_idx)/blkmod1 + advg/blkmod2)))
-                    ! print *, "liq adv: ", adv(liq_idx)
-                    ! print *, "gas adv: ", advg
-                    ! print *, "blkmod1: ", blkmod1
-                    ! print *, "blkmod2: ", blkmod2
+                    if (advg < small_num_dif) then
+                        c = (1._wp/(rho*(adv(liq_idx)/blkmod1)))
+                    else
+                        blkmod2 = gam_mix * pres
+                        c = (1._wp/(rho*(adv(liq_idx)/blkmod1 + advg/blkmod2)))
+                    end if
                 else                 
                     blkmod1 = ((gammas(1) + 1._wp)*pres + &
                             pi_infs(1))/gammas(1)

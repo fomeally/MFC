@@ -14,6 +14,8 @@ cmake_minimum_required(VERSION 3.20)
 
 project(MFC LANGUAGES C CXX Fortran)
 
+find_package(LAPACK REQUIRED)
+
 # Build options exposed to users and their default values.
 
 option(MFC_MPI           "Build with MPI"                                     ON)
@@ -392,6 +394,7 @@ function(MFC_SETUP_TARGET)
     cmake_parse_arguments(ARGS "OpenACC;MPI;SILO;HDF5;FFTW" "TARGET" "SOURCES" ${ARGN})
 
     add_executable(${ARGS_TARGET} ${ARGS_SOURCES})
+    target_link_libraries(${ARGS_TARGET} PRIVATE LAPACK::LAPACK)
     set(IPO_TARGETS ${ARGS_TARGET})
     # Here we need to split into "library" and "executable" to perform IPO on the NVIDIA compiler.
     # A little hacky, but it *is* an edge-case for *one* compiler.

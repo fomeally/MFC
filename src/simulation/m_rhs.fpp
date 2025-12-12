@@ -973,6 +973,9 @@ contains
                 do k = idwbuff(2)%beg, idwbuff(2)%end
                     do j = idwbuff(1)%beg, idwbuff(1)%end
                         q_cons_qp%vf(i)%sf(j, k, l) = q_cons_vf(i)%sf(j, k, l)
+                        if (i == 4) then
+                            ! print *, "j: ", j, "momentum x", q_cons_qp%vf(i)%sf(j, k, l)
+                        end if
                     end do
                 end do
             end do
@@ -1011,6 +1014,15 @@ contains
         call nvtxStartRange("RHS-COMMUNICATION")
         call s_populate_variables_buffers(q_prim_qp%vf, pb, mv)
         call nvtxEndRange
+
+        ! i = momxb
+        ! do l = idwbuff(3)%beg, idwbuff(3)%end
+        !     do k = idwbuff(2)%beg, idwbuff(2)%end
+        !         do j = idwbuff(1)%beg, idwbuff(1)%end
+        !             ! print *, "j: ", j, "vel conversion", q_prim_qp%vf(i)%sf(j, k, l)
+        !         end do
+        !     end do
+        ! end do
 
         ! Gets the buffer region
         ! call nvtxStartRange("RHS-DIFFUSION-COMMUNICATION")
@@ -1170,7 +1182,8 @@ contains
             !         end do
             !     end do
             ! end do
-
+            ! print *, "Gone through compute rhs"
+            
             ! Configuring Coordinate Direction Indexes
             if (id == 1) then
                 irx%beg = -1; iry%beg = 0; irz%beg = 0
@@ -1362,6 +1375,7 @@ contains
 
         integer :: i, j, k, l, q
 
+        ! print *, diffusion
         if (alt_soundspeed) then
             !$acc parallel loop collapse(3) gang vector default(present)
             do l = 0, p
@@ -1404,13 +1418,12 @@ contains
                                     gam_denom = gam_denom + Y_dif(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W 
                                 end do
                                 blkmod2(j, k, l) = gam_num / gam_denom * q_prim_vf%vf(E_idx)%sf(j, k, l)
+                                Kterm(j, k, l) = alpha1(j, k, l)*alpha2(j, k, l)*(blkmod2(j, k, l) - blkmod1(j, k, l))/ &
+                                         (alpha1(j, k, l)*blkmod2(j, k, l) + alpha2(j, k, l)*blkmod1(j, k, l))
                             else
-                                blkmod2(j, k, l) = 1._wp ! avoids division by zero, value won't be used (alpha2 = 0)
+                                Kterm(j, k, l) = 0._wp 
                             end if
                         end if
-                            
-                        Kterm(j, k, l) = alpha1(j, k, l)*alpha2(j, k, l)*(blkmod2(j, k, l) - blkmod1(j, k, l))/ &
-                                         (alpha1(j, k, l)*blkmod2(j, k, l) + alpha2(j, k, l)*blkmod1(j, k, l))
                     end do
                 end do
             end do
@@ -1440,6 +1453,15 @@ contains
                     end do
                 end do
             end do
+
+            ! j = momxb
+            ! do q = 0, p
+            !     do l = 0, n
+            !         do k = 0, m
+            !             print *, "k: ", k, "rhs_vf: ", rhs_vf(j)%sf(k,l,q)
+            !         end do
+            !     end do
+            ! end do
 
             ! zero out rhs contribution for mixture gas volume fractions
             if (diffusion) then
@@ -2104,11 +2126,17 @@ contains
                                     rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dx(j)* &
                                     (j_src_n(E_idx)%sf(j, k, l) - &
                                     j_src_n(E_idx)%sf(j - 1, k, l))
+
+                                ! print *, "j: ", j, "rhs E_idx:", rhs_vf(E_idx)%sf(j, k, l)
+                                ! print *, "j: ", j, "rhs Dif 1:", rhs_vf(Dif_idx(1))%sf(j, k, l)
+                                ! print *, "j: ", j, "rhs Dif 2:", rhs_vf(Dif_idx(2))%sf(j, k, l)
                             end do
                         end do
                     end do
                 end if
             end if
+
+            ! error stop
 
         elseif (idir == 2) then ! y-direction
 

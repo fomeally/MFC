@@ -3,7 +3,7 @@ import math, json
 
 
 p0 = 101325.0
-T0 = 298.0
+T0 = 293.15
 
 #water props
 # density - kg/m3
@@ -16,7 +16,7 @@ piw = 3.43e08
 Rbar = 8314.462618
 small_fluid = 1.0e-13
 # c02 props
-gamma_co2 = 1.28
+gamma_co2 = 1.289
 W_co2 = 44.01
 rho_co2 = p0*W_co2 / (Rbar * T0)
 Gamma_co2 = 1.0 / (gamma_co2 - 1.0)
@@ -30,7 +30,7 @@ h0_co2 = 0.0
 # N2 props
 gamma_n2 = 1.4
 #rho_n2 = 1.2506
-W_n2 = 28.02
+W_n2 = 28.013
 rho_n2 = p0*W_n2 / (Rbar * T0)
 Gamma_n2 = 1.0 / (gamma_n2 - 1.0)
 cv_n2 = Rbar * Gamma_n2 / W_n2
@@ -40,7 +40,7 @@ h0_n2 = 0.0
 
 # H2 props
 gamma_h2 = 1.405
-W_h2 = 2.02
+W_h2 = 2.016
 rho_h2 = p0*W_h2 / (Rbar * T0)
 Gamma_h2 = 1.0 / (gamma_h2 - 1.0)
 cv_h2 = Rbar * Gamma_h2 / W_h2
@@ -50,10 +50,13 @@ h0_h2 = 0.0
 
 # Binary diffusion coefficients
 D11 = 0.0e0
+#N2-CO2
 D12 = 16.8e-6
+#N2-H2
 D13 = 83.3e-6
 D21 = D12
 D22 = 0.0e0
+#CO2-H2
 D23 = 68.0e-6
 D31 = D13
 D32 = D23
@@ -80,10 +83,9 @@ print(
             "p": 0,
             "dt": 1.0e-6,
             "t_step_start": 0,
-            # "t_step_stop": 100000000,
-            # "t_step_save": 500000,
-            "t_step_stop": 100,
-            "t_step_save": 1 ,
+            "t_step_stop": 100000000,
+            "t_step_save": 500000,
+            "t_step_print": 500000,
             # Simulation Algorithm Parameters
             "num_patches": 2,
             "model_eqns": 2,

@@ -90,7 +90,7 @@ print(
             # Simulation Algorithm Parameters
             "num_patches": 2,
             "model_eqns": 2,
-            "alt_soundspeed": "T",
+            "alt_soundspeed": "F",
             "diffusion": "T",
             "num_fluids": 3,
             "mpp_lim": "F",

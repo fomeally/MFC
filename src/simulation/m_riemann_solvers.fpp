@@ -2696,10 +2696,15 @@ contains
                                     call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
                                                                 vel_R_rms, 0._wp, c_R, alphag_R, gam_mix_R)
 
-                                    !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
-                                    ! variables are placeholders to call the subroutine.
-                                    call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
-                                                                vel_avg_rms, c_sum_Yi_Phi, c_avg, alphag_avg, gam_mix_avg)
+                                    ! !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
+                                    ! ! variables are placeholders to call the subroutine.
+                                    ! call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
+                                    !                             vel_avg_rms, c_sum_Yi_Phi, c_avg, alphag_avg, gam_mix_avg)
+
+                                    ! print *, 'j: ', j, 'c_L: ', c_L, ' c_R: ', c_R
+
+                                    if (avg_state == 1) c_avg = (sqrt(rho_L)*c_L + sqrt(rho_R)*c_R)/ (sqrt(rho_L) + sqrt(rho_R))
+                                    if (avg_state == 2) c_avg = 0.5_wp*(c_L + c_R)
 
                                 else
                                     call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
@@ -2744,6 +2749,8 @@ contains
                                         s_S = (pres_R - pres_L + rho_L*vel_L(dir_idx(1))* &
                                                (s_L - vel_L(dir_idx(1))) - rho_R*vel_R(dir_idx(1))*(s_R - vel_R(dir_idx(1)))) &
                                               /(rho_L*(s_L - vel_L(dir_idx(1))) - rho_R*(s_R - vel_R(dir_idx(1))))
+                                        
+                                        ! print *, "j: ", j, "vel_L: ", vel_L(dir_idx(1)), "vel_R: ", vel_R(dir_idx(1))
 
                                     end if
                                 elseif (wave_speeds == 2) then
@@ -2819,6 +2826,8 @@ contains
                                                 dir_flg(idxi)*(pres_R)) &
                                         + (s_M/s_L)*(s_P/s_R)*dir_flg(idxi)*pcorr
                                 end do
+
+                                ! print *, 'j: ', j, ' flux_mom_x: ', flux_rs${XYZ}$_vf(j, k, l, contxe + idxi)
 
                                 ! ENERGY FLUX.
                                 ! f = u*(E-\sigma), q = E, q_star = \xi*E+(s-u)(\rho s_star - \sigma/(s-u))

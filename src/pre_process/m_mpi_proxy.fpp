@@ -67,7 +67,7 @@ contains
             & 'perturb_flow_mag', 'pref', 'rhoref', 'poly_sigma', 'R0ref',     &
             & 'Web', 'Ca', 'Re_inv', 'sigR', 'sigV', 'rhoRV', 'palpha_eps',    &
             & 'ptgalpha_eps', 'sigma', 'pi_fac', 'mixlayer_vel_coef',          &
-            & 'mixlayer_domain' ]
+            & 'mixlayer_domain', 'small_num_dif' ]
             call MPI_BCAST(${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 
@@ -121,7 +121,7 @@ contains
         ! Fluids physical parameters
         do i = 1, num_fluids_max
             #:for VAR in [ 'gamma','pi_inf','mul0','ss','pv','gamma_v','M_v',  &
-                & 'mu_v','k_v', 'G', 'cv', 'qv', 'qvp' ]
+                & 'mu_v','k_v', 'G', 'cv', 'qv', 'qvp', 'W' ]
                 call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
             call MPI_BCAST(fluid_pp(i)%gas_mixture, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)

@@ -30,6 +30,7 @@ s_compute_sum_alpha_g, &
 s_compute_diffusion_rhs, &
 s_correct_volume_fractions, &
 s_correct_riemann_volume_fractions, &
+s_calculate_multicomponent_diffusion_flux, &
 s_finalize_diffusion_module
 
     real(wp), allocatable, dimension(:, :) :: fd_coeff_x_d
@@ -257,7 +258,6 @@ contains
 
                         do i = 1, Dif_size
                             j_src_n(Dif_idx(i))%sf(k, l, q) = 0._wp
-                            ! j_src_n(advxb + Dif_idx(i) - 1)%sf(k, l, q) = 0._wp
                         end do
                         j_src_n(E_idx)%sf(k, l, q) = 0._wp
 
@@ -276,8 +276,11 @@ contains
                             alpha_R(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
                             alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
                             alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                        
                         end do
+
+                        alpha_m_L = q_prim_vf(advg_idx)%sf(k, l, q)
+                        alpha_m_R = q_prim_vf(advg_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                        alpha_m_f = 0.5_wp * (alpha_m_L + alpha_m_R)
 
                         do i = 1, Dif_size
                             alpha_f(i) = 0.5_wp * (alpha_L(i) + alpha_R(i))
@@ -287,18 +290,15 @@ contains
                         rho_L = 0._wp
                         rho_R = 0._wp
                         rho_f = 0._wp
-                        alpha_m_L = 0._wp
-                        alpha_m_R = 0._wp
-                        alpha_m_f = 0._wp
 
                         do i = 1, Dif_size
                             rho_L = rho_L + alpharho_L(i)
                             rho_R = rho_R + alpharho_R(i)
                             rho_f = rho_f + alpharho_f(i)
-                            alpha_m_L = alpha_m_L + alpha_L(i)
-                            alpha_m_R = alpha_m_R + alpha_R(i)
-                            alpha_m_f = alpha_m_f + alpha_f(i)
                         end do
+                        
+                        if (alpha_m_L < small_num_dif .or. alpha_m_R < small_num_dif) cycle
+
 
                         P_L = q_prim_vf(E_idx)%sf(k, l, q)
                         P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
@@ -365,28 +365,30 @@ contains
                         if (Dif_size == 2) then
                             j_flux(1) = -rho_f*Ds(1,2)*dY_ds_f(1)
                             j_flux(2) = -rho_f*Ds(2,1)*dY_ds_f(2)
-                        else if (Dif_size == 3) then
-                            j_flux(1) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
-                                            ( Ds(1,2)*Ds(1,3)*dY_ds_f(1)*(1._wp - Y_f(1)) - Y_f(1)*Ds(2,3)*(Ds(1,2)*dY_ds_f(2) + Ds(1,3)*dY_ds_f(3)) )
+                        ! else if (Dif_size == 3) then
+                        !     j_flux(1) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                        !                     ( Ds(1,2)*Ds(1,3)*dY_ds_f(1)*(1._wp - Y_f(1)) - Y_f(1)*Ds(2,3)*(Ds(1,2)*dY_ds_f(2) + Ds(1,3)*dY_ds_f(3)) )
 
-                            j_flux(2) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
-                                            ( Ds(2,1)*Ds(2,3)*dY_ds_f(2)*(1._wp - Y_f(2)) - Y_f(2)*Ds(3,1)*(Ds(2,1)*dY_ds_f(1) + Ds(2,3)*dY_ds_f(3)) )
+                        !     j_flux(2) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                        !                     ( Ds(2,1)*Ds(2,3)*dY_ds_f(2)*(1._wp - Y_f(2)) - Y_f(2)*Ds(3,1)*(Ds(2,1)*dY_ds_f(1) + Ds(2,3)*dY_ds_f(3)) )
 
-                            j_flux(3) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
-                                            ( Ds(3,1)*Ds(3,2)*dY_ds_f(3)*(1._wp - Y_f(3)) - Y_f(3)*Ds(1,2)*(Ds(3,1)*dY_ds_f(1) + Ds(3,2)*dY_ds_f(2)) )
+                        !     j_flux(3) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                        !                     ( Ds(3,1)*Ds(3,2)*dY_ds_f(3)*(1._wp - Y_f(3)) - Y_f(3)*Ds(1,2)*(Ds(3,1)*dY_ds_f(1) + Ds(3,2)*dY_ds_f(2)) )
+                        else
+                            call s_calculate_multicomponent_diffusion_flux(Dif_size, rho_f, Y_f, dY_ds_f, j_flux)
                         end if
 
                         ! Enforce mass conservation of diffusion fluxes
-                        sum_jflux = 0.0_wp
-                        if (alpha_m_f > small_num_dif) then
-                            do i = 1, Dif_size
-                                sum_jflux = sum_jflux + j_flux(i)
-                            end do
+                        ! sum_jflux = 0.0_wp
+                        ! if (alpha_m_f > small_num_dif) then
+                        !     do i = 1, Dif_size
+                        !         sum_jflux = sum_jflux + j_flux(i)
+                        !     end do
 
-                            do i = 1, Dif_size
-                                j_flux(i) = j_flux(i) - Y_f(i)*sum_jflux
-                            end do
-                        end if
+                        !     do i = 1, Dif_size
+                        !         j_flux(i) = j_flux(i) - Y_f(i)*sum_jflux
+                        !     end do
+                        ! end if
 
                         do i = 1, Dif_size
                             j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + j_flux(i)
@@ -774,6 +776,83 @@ contains
         end do
 
     end subroutine s_correct_riemann_volume_fractions
+
+    subroutine s_calculate_multicomponent_diffusion_flux(Dif_size, rho, Y, dY_ds, j_flux)
+
+        integer, intent(in) :: Dif_size
+        real(wp), intent(in) :: rho
+        real(wp), dimension(Dif_size), intent(in) :: Y
+        real(wp), dimension(Dif_size), intent(in) :: dY_ds
+        real(wp), dimension(Dif_size), intent(out) :: j_flux
+
+        integer :: i, j, k, Nm1, info
+        integer :: ipiv(Dif_size-1)
+        real(wp) :: A(Dif_size - 1, Dif_size - 1)
+        real(wp) :: b(Dif_size - 1)
+        real(wp) :: sum_diag, detA
+
+        Nm1 = Dif_size - 1
+
+        do i = 1, Nm1
+            b(i) = rho * dY_ds(i)
+        end do
+
+        do i = 1, Nm1
+
+            ! Diagonal A(i,i):
+            !  - sum_{k!=i, k=1..N-1} Y_k / D(i,k)
+            !  - (Y_i + Y_N) / D(i,N)
+            sum_diag = 0.0_wp  
+
+            do k = 1, Nm1
+                if (k == i) cycle
+                sum_diag = sum_diag + Y(k) / Ds(i, k)
+            end do
+
+            sum_diag = sum_diag + (Y(i) + Y(Dif_size)) / Ds(i, Dif_size)
+
+            A(i, i) = -sum_diag
+
+            ! Off-diagonals A(i,j) = Y_i * (1/D(i,j) - 1/D(i,N))
+            do j = 1, Nm1
+                if (j == i) cycle
+                A(i, j) = Y(i) * ( 1.0_wp/Ds(i, j) - 1.0_wp/Ds(i, Dif_size) )
+            end do
+
+        end do
+
+        ! if (Dif_size == 3) then
+
+        ! else if (Dif_size == 4) then
+        
+        ! else
+
+        ! Solve the linear system A * j = b
+        if (Nm1 == 6) then
+            ! For 2x2 system, use explicit formula
+            detA = A(1,1)*A(2,2) - A(1,2)*A(2,1)
+            j_flux(1) = ( A(2,2)*b(1) - A(1,2)*b(2) ) / detA
+            j_flux(2) = ( -A(2,1)*b(1) + A(1,1)*b(2) ) / detA
+        
+        elseif (Nm1 == 5) then
+            ! For 3x3 system, use explicit formula
+            detA = A(1,1)*(A(2,2)*A(3,3) - A(2,3)*A(3,2)) - A(1,2)*(A(2,1)*A(3,3) - A(2,3)*A(3,1)) + A(1,3)*(A(2,1)*A(3,2) - A(2,2)*A(3,1))
+            j_flux(1) = ( (A(2,2)*A(3,3) - A(2,3)*A(3,2))*b(1) - (A(1,2)*A(3,3) - A(1,3)*A(3,2))*b(2) + (A(1,2)*A(2,3) - A(1,3)*A(2,2))*b(3) ) / detA
+            j_flux(2) = ( -(A(2,1)*A(3,3) - A(2,3)*A(3,1))*b(1) + (A(1,1)*A(3,3) - A(1,3)*A(3,1))*b(2) - (A(1,1)*A(2,3) - A(1,3)*A(2,1))*b(3) ) / detA
+            j_flux(3) = ( (A(2,1)*A(3,2) - A(2,2)*A(3,1))*b(1) - (A(1,1)*A(3,2) - A(1,2)*A(3,1))*b(2) + (A(1,1)*A(2,2) - A(1,2)*A(2,1))*b(3) ) / detA
+        else
+            ! For larger systems, use LAPACK DGESV
+            call dgesv(Nm1, 1, A, Nm1, ipiv, b, Nm1, info)
+            do i = 1, Nm1
+                j_flux(i) = b(i)
+            end do
+        end if 
+
+        
+
+        j_flux(Dif_size) = -sum(j_flux(1:Nm1))
+
+    end subroutine s_calculate_multicomponent_diffusion_flux
 
     subroutine s_finalize_diffusion_module
 

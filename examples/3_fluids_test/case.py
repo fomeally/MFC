@@ -51,6 +51,7 @@ h0_h2 = 0.0
 # Binary diffusion coefficients
 D11 = 0.0e0
 D12 = 1.0e-1
+# D12 = 0.0e0
 D13 = 0.674e-2
 D21 = D12
 D22 = 0.0e0
@@ -63,6 +64,7 @@ Lx = 2.0
 
 Nx = 399
 
+small_fluid = 40.0e-2
 
 # Configuring case dictionary
 print(
@@ -78,19 +80,21 @@ print(
             "m": Nx,
             "n": 0,
             "p": 0,
-            "dt": 1.0e-6,
+            "dt": 2.5e-6,
             "t_step_start": 0,
-            # "t_step_stop": 10000,
+            # "t_step_stop": 2,
+            # "t_step_save": 1,
+            # "t_step_print": 1,
+            # "t_step_stop": 4000,
             # "t_step_save": 20,
-            "t_step_stop": 5000000,
-            "t_step_save": 50000,
-            "t_step_print": 50000,
-            # "t_step_stop": 10000000,
-            # "t_step_save": 50000,
+            # "t_step_print": 100,
+            "t_step_stop": 2000000,
+            "t_step_save": 20000,
+            "t_step_print": 1,
             # Simulation Algorithm Parameters
             "num_patches": 3,
             "model_eqns": 2,
-            "alt_soundspeed": "F",
+            "alt_soundspeed": "T",
             "diffusion": "T",
             "num_fluids": 3,
             "mpp_lim": "F",
@@ -101,6 +105,7 @@ print(
             "weno_Re_flux": "F",
             "weno_Dif_flux": "F",
             "Dif_fv" : "T",
+            "small_num_dif": 1.0e-12,
             "weno_avg": "F",
             "mapped_weno": "T",
             "null_weights": "F",
@@ -160,6 +165,20 @@ print(
             "patch_icpp(3)%alpha(1)": 0.0,
             "patch_icpp(3)%alpha(2)": 0.0,
             "patch_icpp(3)%alpha(3)": 1.0,
+
+
+            # # Acoustic source
+            # "acoustic_source": "T",
+            # "num_source": 1,
+            # "acoustic(1)%support": 1,
+            # "acoustic(1)%loc(1)": 0.25*Lx,
+            # "acoustic(1)%pulse": 2,
+            # "acoustic(1)%npulse": 1,
+            # "acoustic(1)%dir": 1.0,
+            # "acoustic(1)%mag": 800.0,
+            # "acoustic(1)%gauss_sigma_dist": 0.01,
+            # # "acoustic(1)%wavelength": 0.2,
+            # "acoustic(1)%delay": 0,
 
             # Fluids Physical Parameters
             # N2

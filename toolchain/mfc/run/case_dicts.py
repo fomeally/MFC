@@ -130,7 +130,7 @@ for f_id in range(1, 10+1):
     PRE_PROCESS[f'fluid_rho({f_id})'] = ParamType.REAL
 
     for real_attr in ["gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
-                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "gas_mixture" ]:
+                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "W","gas_mixture" ]:
         if real_attr == "gas_mixture":
             PRE_PROCESS[f"fluid_pp({f_id})%{real_attr}"] = ParamType.LOG
         else:
@@ -427,7 +427,7 @@ for fl_id in range(1,10+1):
         POST_PROCESS[f'{append}({fl_id})'] = ty
 
     for real_attr in ["gamma", "pi_inf", "ss", "pv", "gamma_v", "M_v", "mu_v", "k_v", "cp_v",
-                      "G", "mul0", "cv", "qv", "qvp", "gas_mixture" ]:
+                      "G", "mul0", "cv", "qv", "qvp", "W", "gas_mixture" ]:
         if real_attr == "gas_mixture":
             POST_PROCESS[f"fluid_pp({fl_id})%{real_attr}"] = ParamType.LOG
         else:

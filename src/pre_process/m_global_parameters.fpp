@@ -90,6 +90,7 @@ module m_global_parameters
     integer :: tensor_size           !< Number of components in the nonsymmetric tensor
     logical :: pre_stress            !< activate pre_stressed domain
     logical :: diffusion             !< activate binary diffusion
+    real(wp) :: small_num_dif         !< small number to avoid division by zero in diffusion calculations
     logical, parameter :: chemistry = .${chemistry}$. !< Chemistry modeling
 
     ! Annotations of the structure, i.e. the organization, of the state vectors
@@ -323,6 +324,7 @@ contains
 
         hypoelasticity = .false.
         diffusion = .false.
+        small_num_dif = 1.0e-8_wp
         hyperelasticity = .false.
         elasticity = .false.
         pre_stress = .false.
@@ -497,6 +499,7 @@ contains
             fluid_pp(i)%k_v = dflt_real
             fluid_pp(i)%cv = 0._wp
             fluid_pp(i)%qv = 0._wp
+            fluid_pp(i)%W = 0._wp
             fluid_pp(i)%qvp = 0._wp
             fluid_pp(i)%G = 0._wp
             fluid_pp(i)%gas_mixture = .false.
