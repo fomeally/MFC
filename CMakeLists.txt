@@ -391,7 +391,7 @@ HANDLE_SOURCES(syscheck OFF)
 #             being used.
 
 function(MFC_SETUP_TARGET)
-    cmake_parse_arguments(ARGS "OpenACC;MPI;SILO;HDF5;FFTW" "TARGET" "SOURCES" ${ARGN})
+    cmake_parse_arguments(ARGS "OpenACC;MPI;SILO;HDF5;FFTW;LAPACK" "TARGET" "SOURCES" ${ARGN})
 
     add_executable(${ARGS_TARGET} ${ARGS_SOURCES})
     target_link_libraries(${ARGS_TARGET} PRIVATE LAPACK::LAPACK)
