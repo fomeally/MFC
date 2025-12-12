@@ -14,8 +14,6 @@ cmake_minimum_required(VERSION 3.20)
 
 project(MFC LANGUAGES C CXX Fortran)
 
-find_package(LAPACK REQUIRED)
-
 # Build options exposed to users and their default values.
 
 option(MFC_MPI           "Build with MPI"                                     ON)
@@ -394,7 +392,7 @@ function(MFC_SETUP_TARGET)
     cmake_parse_arguments(ARGS "OpenACC;MPI;SILO;HDF5;FFTW;LAPACK" "TARGET" "SOURCES" ${ARGN})
 
     add_executable(${ARGS_TARGET} ${ARGS_SOURCES})
-    target_link_libraries(${ARGS_TARGET} PRIVATE LAPACK::LAPACK)
+    #target_link_libraries(${ARGS_TARGET} PRIVATE LAPACK::LAPACK)
     set(IPO_TARGETS ${ARGS_TARGET})
     # Here we need to split into "library" and "executable" to perform IPO on the NVIDIA compiler.
     # A little hacky, but it *is* an edge-case for *one* compiler.
@@ -458,6 +456,11 @@ function(MFC_SETUP_TARGET)
                 find_package(FFTW REQUIRED)
                 target_link_libraries(${a_target} PRIVATE FFTW::FFTW)
             endif()
+        endif()
+
+        if (ARGS_LAPACK)
+            find_package(LAPACK REQUIRED)
+            target_link_libraries(${a_target} PRIVATE LAPACK::LAPACK)
         endif()
 
         if (MFC_OpenACC AND ARGS_OpenACC)
@@ -545,13 +548,13 @@ endif()
 if (MFC_SIMULATION)
     MFC_SETUP_TARGET(TARGET  simulation
                      SOURCES "${simulation_SRCs}"
-                     MPI OpenACC FFTW)
+                     MPI OpenACC FFTW LAPACK)
 endif()
 
 if (MFC_POST_PROCESS)
     MFC_SETUP_TARGET(TARGET  post_process
                      SOURCES "${post_process_SRCs}"
-                     MPI SILO HDF5 FFTW)
+                     MPI SILO HDF5 FFTW LAPACK)
 
     # -O0 is in response to https://github.com/MFlowCode/MFC-develop/issues/95
     target_compile_options(post_process PRIVATE -O0)
