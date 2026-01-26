@@ -50,8 +50,8 @@ h0_h2 = 0.0
 
 # Binary diffusion coefficients
 D11 = 0.0e0
-D12 = 1.0e-1
-# D12 = 0.0e0
+# D12 = 1.0e-1
+D12 = 0.0e0
 D13 = 0.674e-2
 D21 = D12
 D22 = 0.0e0
@@ -63,9 +63,9 @@ D33 = 0.0e0
 Lx = 2.0
 
 Nx = 399
-interface_loc = 0.5*Lx
 
-small_fluid = 40.0e-2
+interface_loc = 0.55
+
 
 # Configuring case dictionary
 print(
@@ -86,12 +86,12 @@ print(
             # "t_step_stop": 2,
             # "t_step_save": 1,
             # "t_step_print": 1,
-            # "t_step_stop": 4000,
-            # "t_step_save": 40,
-            # "t_step_print": 100,
-            "t_step_stop": 2000000,
-            "t_step_save": 20000,
-            "t_step_print": 20000,
+            "t_step_stop": 4000,
+            "t_step_save": 20,
+            "t_step_print": 100,
+            # "t_step_stop": 2000000,
+            # "t_step_save": 20000,
+            # "t_step_print": 1,
             # Simulation Algorithm Parameters
             "num_patches": 3,
             "model_eqns": 2,
@@ -140,7 +140,7 @@ print(
             
             # Patch 2 CO2
             "patch_icpp(2)%geometry": 1,
-            "patch_icpp(2)%x_centroid": (Lx + 0.5) / Lx,
+            "patch_icpp(2)%x_centroid": (Lx + 0.5) / 2.0,
             "patch_icpp(2)%length_x": 0.75*Lx,
             "patch_icpp(2)%alter_patch(1)": "T",
             "patch_icpp(2)%vel(1)": 0.0,
@@ -169,17 +169,17 @@ print(
 
 
             # # Acoustic source
-            # "acoustic_source": "T",
-            # "num_source": 1,
-            # "acoustic(1)%support": 1,
-            # "acoustic(1)%loc(1)": 0.25*Lx,
-            # "acoustic(1)%pulse": 2,
-            # "acoustic(1)%npulse": 1,
-            # "acoustic(1)%dir": 1.0,
-            # "acoustic(1)%mag": 800.0,
-            # "acoustic(1)%gauss_sigma_dist": 0.01,
-            # # "acoustic(1)%wavelength": 0.2,
-            # "acoustic(1)%delay": 0,
+            "acoustic_source": "T",
+            "num_source": 1,
+            "acoustic(1)%support": 1,
+            "acoustic(1)%loc(1)": 0.25*Lx,
+            "acoustic(1)%pulse": 2,
+            "acoustic(1)%npulse": 1,
+            "acoustic(1)%dir": 1.0,
+            "acoustic(1)%mag": 800.0,
+            "acoustic(1)%gauss_sigma_dist": 0.01,
+            # "acoustic(1)%wavelength": 0.2,
+            "acoustic(1)%delay": 0,
 
             # Fluids Physical Parameters
             # N2

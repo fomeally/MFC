@@ -206,8 +206,9 @@ contains
         real(wp) :: W1, W2, W3, D12, D13, D23
         real(wp) :: R_univ
         real(wp) :: grid_spacing
-        real(wp) :: rho_L, rho_R, rho_f
+        real(wp) :: rho_L, rho_R, rho_f, rhog_f
         real(wp) :: alpha_m_L, alpha_m_R, alpha_m_f
+        real(wp) :: g_f
         real(wp) :: P_L, P_R, P_f
         real(wp) :: T_f, W_f
         real(wp) :: sum_jflux
@@ -296,43 +297,35 @@ contains
                             rho_R = rho_R + alpharho_R(i)
                             rho_f = rho_f + alpharho_f(i)
                         end do
-                        
+                    
                         if (alpha_m_L < small_num_dif .or. alpha_m_R < small_num_dif) cycle
 
+                        g_f = 2._wp*alpha_m_L*alpha_m_R / (alpha_m_L + alpha_m_R)
+                        g_f = min(alpha_m_R, alpha_m_L)
+
+                        ! g_f = 1.0_wp
+
+                        ! Total gas density at face
+                        rhog_f = rho_f / alpha_m_f
 
                         P_L = q_prim_vf(E_idx)%sf(k, l, q)
                         P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
                         P_f = 0.5_wp * (P_L + P_R)
 
-                        if (alpha_m_L > small_num_dif) then
-                            do i = 1, Dif_size
-                                Y_L(i) = alpharho_L(i) / rho_L
-                            end do
-                        else
-                            do i = 1, Dif_size
-                                Y_L(i) = 0._wp
-                            end do
-                        end if
+                        
+                        do i = 1, Dif_size
+                            Y_L(i) = alpharho_L(i) / rho_L
+                        end do
+                        
 
-                        if (alpha_m_R > small_num_dif) then
-                            do i = 1, Dif_size
-                                Y_R(i) = alpharho_R(i) / rho_R
-                            end do
-                        else
-                            do i = 1, Dif_size
-                                Y_R(i) = 0._wp
-                            end do
-                        end if
-
-                        if (alpha_m_f > small_num_dif) then
-                            do i = 1, Dif_size
-                                Y_f(i) = alpharho_f(i) / rho_f
-                            end do
-                        else
-                            do i = 1, Dif_size
-                                Y_f(i) = 0._wp
-                            end do
-                        end if
+                        do i = 1, Dif_size
+                            Y_R(i) = alpharho_R(i) / rho_R
+                        end do
+             
+                        do i = 1, Dif_size
+                            Y_f(i) = alpharho_f(i) / rho_f
+                        end do
+                        
 
                         do i = 1, Dif_size
                             dY_ds_f(i) = (Y_R(i) - Y_L(i)) / grid_spacing
@@ -345,37 +338,26 @@ contains
 
                         W_f = 1._wp / W_f
 
-                        if (alpha_m_f > small_num_dif) then
-                            T_f = P_f * W_f / (rho_f * R_univ)
-                        else
-                            T_f = 0._wp
-                        end if
+                        T_f = P_f * W_f / (rhog_f * R_univ)
 
-                        if (alpha_m_f > small_num_dif) then
-                            do i = 1, Dif_size
-                                h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
-                            end do
-                        else
-                            do i = 1, Dif_size
-                                h_f(i) = 0._wp
-                            end do
-                        end if 
+                        do i = 1, Dif_size
+                            h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
+                        end do
 
                         ! Compute diffusion fluxes
                         if (Dif_size == 2) then
-                            j_flux(1) = -rho_f*Ds(1,2)*dY_ds_f(1)
-                            j_flux(2) = -rho_f*Ds(2,1)*dY_ds_f(2)
-                        ! else if (Dif_size == 3) then
-                        !     j_flux(1) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
-                        !                     ( Ds(1,2)*Ds(1,3)*dY_ds_f(1)*(1._wp - Y_f(1)) - Y_f(1)*Ds(2,3)*(Ds(1,2)*dY_ds_f(2) + Ds(1,3)*dY_ds_f(3)) )
+                            j_flux(1) = -rhog_f*Ds(1,2)*dY_ds_f(1)
+                            j_flux(2) = -j_flux(1)
+                        else if (Dif_size == 3) then
+                            j_flux(1) = -rhog_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                                            ( Ds(1,2)*Ds(1,3)*dY_ds_f(1)*(1._wp - Y_f(1)) - Y_f(1)*Ds(2,3)*(Ds(1,2)*dY_ds_f(2) + Ds(1,3)*dY_ds_f(3)) )
 
-                        !     j_flux(2) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
-                        !                     ( Ds(2,1)*Ds(2,3)*dY_ds_f(2)*(1._wp - Y_f(2)) - Y_f(2)*Ds(3,1)*(Ds(2,1)*dY_ds_f(1) + Ds(2,3)*dY_ds_f(3)) )
+                            j_flux(2) = -rhog_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                                            ( Ds(2,1)*Ds(2,3)*dY_ds_f(2)*(1._wp - Y_f(2)) - Y_f(2)*Ds(3,1)*(Ds(2,1)*dY_ds_f(1) + Ds(2,3)*dY_ds_f(3)) )
 
-                        !     j_flux(3) = -rho_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
-                        !                     ( Ds(3,1)*Ds(3,2)*dY_ds_f(3)*(1._wp - Y_f(3)) - Y_f(3)*Ds(1,2)*(Ds(3,1)*dY_ds_f(1) + Ds(3,2)*dY_ds_f(2)) )
+                            j_flux(3) = -sum(j_flux(1:2))
                         else
-                            call s_calculate_multicomponent_diffusion_flux(Dif_size, rho_f, Y_f, dY_ds_f, j_flux)
+                            call s_calculate_multicomponent_diffusion_flux(Dif_size, rhog_f, Y_f, dY_ds_f, j_flux)
                         end if
 
                         ! Enforce mass conservation of diffusion fluxes
@@ -391,8 +373,8 @@ contains
                         ! end if
 
                         do i = 1, Dif_size
-                            j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + j_flux(i)
-                            j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) + h_f(i)*j_flux(i)
+                            j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + g_f*j_flux(i)
+                            j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) + g_f*h_f(i)*j_flux(i)
                         end do
                     end do
                 end do
@@ -828,13 +810,13 @@ contains
         ! else
 
         ! Solve the linear system A * j = b
-        if (Nm1 == 6) then
+        if (Nm1 == 2) then
             ! For 2x2 system, use explicit formula
             detA = A(1,1)*A(2,2) - A(1,2)*A(2,1)
             j_flux(1) = ( A(2,2)*b(1) - A(1,2)*b(2) ) / detA
             j_flux(2) = ( -A(2,1)*b(1) + A(1,1)*b(2) ) / detA
         
-        elseif (Nm1 == 5) then
+        elseif (Nm1 == 3) then
             ! For 3x3 system, use explicit formula
             detA = A(1,1)*(A(2,2)*A(3,3) - A(2,3)*A(3,2)) - A(1,2)*(A(2,1)*A(3,3) - A(2,3)*A(3,1)) + A(1,3)*(A(2,1)*A(3,2) - A(2,2)*A(3,1))
             j_flux(1) = ( (A(2,2)*A(3,3) - A(2,3)*A(3,2))*b(1) - (A(1,2)*A(3,3) - A(1,3)*A(3,2))*b(2) + (A(1,2)*A(2,3) - A(1,3)*A(2,2))*b(3) ) / detA
