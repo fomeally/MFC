@@ -302,20 +302,20 @@ contains
                             do i = 1, Dif_size
                                 Y_dif(i) = q_prim_vf(Dif_idx(i))%sf(j, k, l) / rho_dif
                             end do
+
+                            do i = 1, Dif_size
+                                gam_num = gam_num + Y_dif(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
+                                gam_denom = gam_denom + Y_dif(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                            end do
+
+                            gam_mix = gam_num / gam_denom
                         else
                             !$acc loop seq
                             do i = 1, Dif_size
                                 Y_dif(i) = 0._wp
                             end do 
                         end if
-
-                        do i = 1, Dif_size
-                            gam_num = gam_num + Y_dif(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
-                            gam_denom = gam_denom + Y_dif(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
-                        end do
-
-                        gam_mix = gam_num / gam_denom
-
+                        
                         call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c, q_prim_vf(advg_idx)%sf(j, k, l), gam_mix)
                     
                     else

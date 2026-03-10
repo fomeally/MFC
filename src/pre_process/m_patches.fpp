@@ -231,7 +231,7 @@ contains
         gamma = fluid_pp(1)%gamma
         lit_gamma = (1d0 + gamma)/gamma
 
-        b = 15._wp
+        b = 20._wp
         c = 0.5_wp
         d = 0.5_wp
 
@@ -421,6 +421,7 @@ contains
         logical, optional, intent(in) :: ib
 
         real(wp) :: radius
+        real(wp) :: delta_smooth
 
         integer :: i, j, k !< Generic loop iterators
 
@@ -454,7 +455,12 @@ contains
 
                 if (.not. present(ib) .and. patch_icpp(patch_id)%smoothen) then
 
-                    eta = tanh(smooth_coeff/min(dx, dy)* &
+                    ! eta = tanh(smooth_coeff/min(dx, dy)* &
+                    !            (sqrt((x_cc(i) - x_centroid)**2 &
+                    !                  + (y_cc(j) - y_centroid)**2) &
+                    !             - radius))*(-0.5_wp) + 0.5_wp
+                    delta_smooth = 0.01_wp
+                    eta = tanh(1._wp / delta_smooth* &
                                (sqrt((x_cc(i) - x_centroid)**2 &
                                      + (y_cc(j) - y_centroid)**2) &
                                 - radius))*(-0.5_wp) + 0.5_wp
@@ -1112,6 +1118,9 @@ contains
         integer :: i, j, k !< generic loop iterators
         real(wp) :: pi_inf, gamma, lit_gamma !< Equation of state parameters
 
+        real(wp) :: dx_rect, dy_rect, dist_rect
+        real(wp) :: hx, hy, delta_smooth
+
         pi_inf = fluid_pp(1)%pi_inf
         gamma = fluid_pp(1)%gamma
         lit_gamma = (1._wp + gamma)/gamma
@@ -1127,6 +1136,8 @@ contains
             y_centroid = patch_icpp(patch_id)%y_centroid
             length_x = patch_icpp(patch_id)%length_x
             length_y = patch_icpp(patch_id)%length_y
+            hx = 0.5_wp*length_x
+            hy = 0.5_wp*length_y
         end if
 
         ! Computing the beginning and the end x- and y-coordinates of the
@@ -1148,35 +1159,50 @@ contains
         ! variables of the current patch are assigned to this cell.
         do j = 0, n
             do i = 0, m
-                if (x_boundary%beg <= x_cc(i) .and. &
-                    x_boundary%end >= x_cc(i) .and. &
-                    y_boundary%beg <= y_cc(j) .and. &
-                    y_boundary%end >= y_cc(j)) then
-                    if (present(ib)) then
-                        ! Updating the patch identities bookkeeping variable
-                        patch_id_fp(i, j, 0) = patch_id
-                    else
-                        if (patch_icpp(patch_id)%alter_patch(patch_id_fp(i, j, 0))) &
-                            then
 
-                            call s_assign_patch_primitive_variables(patch_id, i, j, 0, &
-                                                                    eta, q_prim_vf, patch_id_fp)
+                if (.not. present(ib) .and. patch_icpp(patch_id)%smoothen) then
 
-                            @:analytical()
+                    dx_rect = abs(x_cc(i) - x_centroid) - hx
+                    dy_rect = abs(y_cc(j) - y_centroid) - hy
 
-                            if ((q_prim_vf(1)%sf(i, j, 0) < 1.e-10) .and. (model_eqns == 4)) then
-                                !zero density, reassign according to Tait EOS
-                                q_prim_vf(1)%sf(i, j, 0) = &
-                                    (((q_prim_vf(E_idx)%sf(i, j, 0) + pi_inf)/(pref + pi_inf))**(1._wp/lit_gamma))* &
-                                    rhoref*(1._wp - q_prim_vf(alf_idx)%sf(i, j, 0))
-                            end if
+                    dist_rect = sqrt(max(dx_rect, 0._wp)**2 + max(dy_rect, 0._wp)**2) + &
+                                min(max(dx_rect, dy_rect), 0._wp)
 
-                            ! Updating the patch identities bookkeeping variable
-                            if (1._wp - eta < 1e-16_wp) patch_id_fp(i, j, 0) = patch_id
+                    delta_smooth = 0.01_wp
+                    eta = 0.5_wp - 0.5_wp*tanh(dist_rect/delta_smooth)
 
+                    if (eta <= 1.e-16_wp) cycle
+
+                else
+
+                    if (.not. (x_boundary%beg <= x_cc(i) .and. x_boundary%end >= x_cc(i) .and. &
+                            y_boundary%beg <= y_cc(j) .and. y_boundary%end >= y_cc(j))) cycle
+
+                    eta = 1._wp
+
+                end if
+
+                if (present(ib)) then
+                    patch_id_fp(i, j, 0) = patch_id
+                else
+                    if (patch_icpp(patch_id)%alter_patch(patch_id_fp(i, j, 0))) then
+
+                        call s_assign_patch_primitive_variables(patch_id, i, j, 0, &
+                                                                eta, q_prim_vf, patch_id_fp)
+
+                        @:analytical()
+
+                        if ((q_prim_vf(1)%sf(i, j, 0) < 1.e-10) .and. (model_eqns == 4)) then
+                            q_prim_vf(1)%sf(i, j, 0) = &
+                                (((q_prim_vf(E_idx)%sf(i, j, 0) + pi_inf)/(pref + pi_inf))**(1._wp/lit_gamma))* &
+                                rhoref*(1._wp - q_prim_vf(alf_idx)%sf(i, j, 0))
                         end if
+
+                        if (1._wp - eta < 1e-16_wp) patch_id_fp(i, j, 0) = patch_id
+
                     end if
                 end if
+
             end do
         end do
 

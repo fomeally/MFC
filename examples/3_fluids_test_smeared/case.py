@@ -89,9 +89,9 @@ print(
             # "t_step_stop": 4000,
             # "t_step_save": 40,
             # "t_step_print": 100,
-            "t_step_stop": 16000000,
-            "t_step_save": 40000,
-            "t_step_print": 120000,
+            "t_step_stop": 3000000,
+            "t_step_save": 10000,
+            "t_step_print": 30000,
             # Simulation Algorithm Parameters
             "num_patches": 3,
             "model_eqns": 2,
@@ -153,19 +153,19 @@ print(
             "patch_icpp(2)%alpha(3)": 0.0,
 
             # Patch 3 Water
-            "patch_icpp(3)%geometry": 1,
-            "patch_icpp(3)%x_centroid": (Lx + interface_loc) / 2.0,
-            "patch_icpp(3)%length_x": Lx - interface_loc,
+            "patch_icpp(3)%geometry": 23,
+            "patch_icpp(3)%x_centroid": Lx / 2.0,
+            "patch_icpp(3)%length_x": Lx,
             "patch_icpp(3)%alter_patch(1)": "T",
             "patch_icpp(3)%alter_patch(2)": "T",            
             "patch_icpp(3)%vel(1)": 0.0,
             "patch_icpp(3)%pres": p0,
             "patch_icpp(3)%alpha_rho(1)": 0.0,
-            "patch_icpp(3)%alpha_rho(2)": rho_co2*0.4,
-            "patch_icpp(3)%alpha_rho(3)": rho0w*0.6,
+            "patch_icpp(3)%alpha_rho(2)": 0.0,
+            "patch_icpp(3)%alpha_rho(3)": rho0w,
             "patch_icpp(3)%alpha(1)": 0.0,
-            "patch_icpp(3)%alpha(2)": 0.4,
-            "patch_icpp(3)%alpha(3)": 0.6,
+            "patch_icpp(3)%alpha(2)": 0.0,
+            "patch_icpp(3)%alpha(3)": 1.0,
 
 
             # # Acoustic source

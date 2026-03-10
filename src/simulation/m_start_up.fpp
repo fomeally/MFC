@@ -153,8 +153,8 @@ contains
             fluid_pp, probe_wrt, prim_vars_wrt, &
             fd_order, probe, num_probes, t_step_old, &
             alt_soundspeed, mixture_err, weno_Re_flux, weno_Dif_flux, &
-            Dif_fv, small_num_dif, null_weights, precision, parallel_io, cyl_coord, &
-            rhoref, pref, bubbles_euler, bubble_model, &
+            Dif_fv, dif_order, small_num_dif, null_weights, precision, & 
+            parallel_io, cyl_coord, rhoref, pref, bubbles_euler, bubble_model, &
             R0ref, chem_params, &
 #:if not MFC_CASE_OPTIMIZATION
             nb, mapped_weno, wenoz, teno, wenoz_q, weno_order, num_fluids, &
@@ -623,7 +623,7 @@ contains
                 NVARS_MOK = int(sys_size, MPI_OFFSET_KIND)
 
                 ! Read the data for each variable
-                if (bubbles_euler .or. elasticity) then
+                if (bubbles_euler .or. elasticity .or. diffusion) then
 
                     do i = 1, sys_size!adv_idx%end
                         var_MOK = int(i, MPI_OFFSET_KIND)

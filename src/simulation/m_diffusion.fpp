@@ -26,6 +26,8 @@ module m_diffusion
     implicit none
 
     private; public :: s_initialize_diffusion_module, &
+s_fill_face_weights_1d_2nd, &
+s_fill_face_weights_1d_4th, &
 s_compute_sum_alpha_g, &
 s_compute_diffusion_rhs, &
 s_correct_volume_fractions, &
@@ -61,6 +63,9 @@ s_finalize_diffusion_module
 
     real(wp), allocatable, dimension(:, :, :) :: rho_dif, alpha_dif, dvel_dx, dvel_dy, dvel_dz, denom, rhogcg2, rho1c12, kdivu, W_dif, T_dif
     !$acc declare create(rho_dif, alpha_dif, dvel_dx, dvel_dy, dvel_dz, denom, rhogcg2, rho1c12, kdivu, W_dif, T_dif)
+
+    real(wp), allocatable, dimension(:, :, :) :: w_interp4, w_grad4, w_interp2, w_grad2
+    !$acc declare create(w_interp4, w_grad4, w_interp2, w_grad2)
 
 contains
 
@@ -109,63 +114,252 @@ contains
             h0s(i) = fluid_pp(Dif_idx(i))%h0
         end do
         !$acc update device(Ws, cps, T0s, h0s)
-        ! Allocate arrays
 
-        @:ALLOCATE(Y_dif(-2*fd_number:m_end_Y, -2*fd_number:n_end_Y, -2*fd_number:p_end_Y, 1:Dif_size))
-        @:ALLOCATE(h_dif(-2*fd_number:m_end_Y, -2*fd_number:n_end_Y, -2*fd_number:p_end_Y, 1:Dif_size))
-        @:ALLOCATE(dj_dx(-fd_number:m_end, 0:n, 0:p, 1:Dif_size))
-        @:ALLOCATE(djh_dx(-fd_number:m_end, 0:n, 0:p, 1:Dif_size))
-        @:ALLOCATE(dY_dx(-2*fd_number:m_end_Y, 0:n, 0:p, 1:Dif_size))
-        @:ALLOCATE(dvel_dx(0:m, 0:n, 0:p))
+        @:ALLOCATE(w_interp2(0:1, -1:max(m, n, p), 1:num_dims))
+        @:ALLOCATE(w_grad2(0:1, -1:max(m, n, p), 1:num_dims))
+
+        call s_fill_face_weights_1d_2nd(-1, m, 1)
         if (n > 0) then
-            @:ALLOCATE(dj_dy(0:m, -fd_number:n_end, 0:p, 1:Dif_size))
-            @:ALLOCATE(djh_dy(0:m, -fd_number:n_end, 0:p, 1:Dif_size))
-            @:ALLOCATE(dY_dy(0:m, -fd_number:n_end, 0:p, 1:Dif_size))
-            @:ALLOCATE(dvel_dy(0:m, 0:n, 0:p))
+            call s_fill_face_weights_1d_2nd(-1, n, 2)
+
             if (p > 0) then
-                @:ALLOCATE(dj_dz(0:m, 0:n, -fd_number:p_end, 1:Dif_size))
-                @:ALLOCATE(djh_dz(0:m, 0:n, -fd_number:p_end, 1:Dif_size))
-                @:ALLOCATE(dY_dz(0:m, 0:n, -fd_number:p_end, 1:Dif_size))
-                @:ALLOCATE(dvel_dz(0:m, 0:n, 0:p))
+                call s_fill_face_weights_1d_2nd(-1, p, 3)
             end if
         end if
+        !$acc update device(w_interp2, w_grad2)
 
-        @:ALLOCATE(alpha_K_dif(-2*fd_number:m_end_Y, -2*fd_number:n_end_Y, -2*fd_number:p_end_Y, 1:Dif_size))
-        @:ALLOCATE(alpharho_K_dif(-2*fd_number:m_end_Y, -2*fd_number:n_end_Y, -2*fd_number:p_end_Y, 1:Dif_size))
-        @:ALLOCATE(rho_dif(-2*fd_number:m_end_Y, -2*fd_number:n_end_Y, -2*fd_number:p_end_Y))
-        @:ALLOCATE(alpha_dif(-2*fd_number:m_end_Y, -2*fd_number:n_end_Y, -2*fd_number:p_end_Y))
-        @:ALLOCATE(T_dif(-2*fd_number:m_end_Y, -2*fd_number:n_end_Y, -2*fd_number:p_end_Y))
-        @:ALLOCATE(W_dif(-2*fd_number:m_end_Y, -2*fd_number:n_end_Y, -2*fd_number:p_end_Y))
-        @:ALLOCATE(denom(0:m, 0:n, 0:p))
-        @:ALLOCATE(rhogcg2(0:m, 0:n, 0:p))
-        @:ALLOCATE(rho1c12(0:m, 0:n, 0:p))
-        @:ALLOCATE(kdivu(0:m, 0:n, 0:p))
+        if (dif_order == 4) then
+            @:ALLOCATE(w_interp4(-1:2, -1:max(m, n, p), 1:num_dims))
+            @:ALLOCATE(w_grad4(-1:2, -1:max(m, n, p), 1:num_dims))
 
-        @:ALLOCATE(fd_coeff_x_d(-fd_number:fd_number,-fd_number:m_end))
-        if (n > 0) then
-            @:ALLOCATE(fd_coeff_y_d(-fd_number:fd_number, -fd_number:n_end))
-        end if
-        if (p > 0) then
-            @:ALLOCATE(fd_coeff_z_d(-fd_number:fd_number, -fd_number:p_end))
-        end if
+            call s_fill_face_weights_1d_4th(-1, m, 1)
+            if (n > 0) then
+                call s_fill_face_weights_1d_4th(-1, n, 2)
 
-
-        ! Computing centered finite difference coefficients
-        call s_compute_finite_difference_coefficients(m, x_cc, fd_coeff_x_d, buff_size, &
-                                                      fd_number, fd_order, offset_s(1))
-        !$acc update device(fd_coeff_x_d)
-        if (n > 0) then
-            call s_compute_finite_difference_coefficients(n, y_cc, fd_coeff_y_d, buff_size, &
-                                                          fd_number, fd_order, offset_s(2))
-            !$acc update device(fd_coeff_y_d)
-        end if
-        if (p > 0) then
-            call s_compute_finite_difference_coefficients(p, z_cc, fd_coeff_z_d, buff_size, &
-                                                          fd_number, fd_order, offset_s(3))
-            !$acc update device(fd_coeff_z_d)
+                if (p > 0) then
+                    call s_fill_face_weights_1d_4th(-1, p, 3)
+                end if
+            end if
+            !$acc update device(w_interp4, w_grad4)
         end if
 
     end subroutine s_initialize_diffusion_module
+
+    subroutine s_fill_face_weights_1d_2nd(ifbeg, ifend, idir)
+
+        integer,  intent(in) :: ifbeg, ifend, idir
+
+        integer :: i
+        real(wp) :: xf, dx_loc
+
+        select case (idir)
+        case (1)
+            do i = ifbeg, ifend
+
+                xf     = x_cb(i)
+                dx_loc = x_cc(i+1) - x_cc(i)
+
+                w_interp2( 0, i, idir) = (x_cc(i+1) - xf) / dx_loc
+                w_interp2( 1, i, idir) = (xf - x_cc(i))   / dx_loc
+
+                w_grad2( 0, i, idir) = -1._wp / dx_loc
+                w_grad2( 1, i, idir) =  1._wp / dx_loc
+
+            end do
+        
+        case (2)
+            do i = ifbeg, ifend
+
+                xf     = y_cb(i)
+                dx_loc = y_cc(i+1) - y_cc(i)
+
+                w_interp2( 0, i, idir) = (y_cc(i+1) - xf) / dx_loc
+                w_interp2( 1, i, idir) = (xf - y_cc(i))   / dx_loc
+
+                w_grad2( 0, i, idir) = -1._wp / dx_loc
+                w_grad2( 1, i, idir) =  1._wp / dx_loc
+
+            end do
+
+        case (3)
+            do i = ifbeg, ifend
+
+                xf     = z_cb(i)
+                dx_loc = z_cc(i+1) - z_cc(i)
+
+                w_interp2( 0, i, idir) = (z_cc(i+1) - xf) / dx_loc
+                w_interp2( 1, i, idir) = (xf - z_cc(i))   / dx_loc
+
+                w_grad2( 0, i, idir) = -1._wp / dx_loc
+                w_grad2( 1, i, idir) =  1._wp / dx_loc
+
+            end do
+
+        end select
+
+    end subroutine s_fill_face_weights_1d_2nd
+
+    subroutine s_fill_face_weights_1d_4th(ifbeg, ifend, idir)
+
+        integer,  intent(in) :: ifbeg, ifend, idir
+
+        integer :: i, a, b, c
+        integer :: offs(4)
+        real(wp) :: x(4), xf
+        real(wp) :: prod, denom
+
+        offs = (/ -1, 0, 1, 2 /)
+
+        select case (idir)
+
+        case (1)
+
+            do i = ifbeg, ifend
+
+                xf = x_cb(i)
+                x(1) = x_cc(i - 1); 
+                x(2) = x_cc(i) 
+                x(3) = x_cc(i + 1) 
+                x(4) = x_cc(i + 2)
+
+                ! ------------------------------------------------------------
+                ! Interpolation weights:
+                ! q_f = sum_{s=-1}^{2} w_interp(s,i,idir) * q(i+s)
+                ! ------------------------------------------------------------
+                do a = 1, 4
+                    prod = 1._wp
+                    do b = 1, 4
+                        if (b /= a) then
+                            prod = prod * (xf - x(b)) / (x(a) - x(b))
+                        end if
+                    end do
+                    w_interp4(offs(a), i, idir) = prod
+                end do
+
+                ! ------------------------------------------------------------
+                ! Gradient weights:
+                ! dqdx_f = sum_{s=-1}^{2} w_grad(s,i,idir) * q(i+s)
+                ! ------------------------------------------------------------
+                do a = 1, 4
+                    w_grad4(offs(a), i, idir) = 0._wp
+
+                    do b = 1, 4
+                        if (b /= a) then
+                            denom = x(a) - x(b)
+                            prod  = 1._wp / denom
+
+                            do c = 1, 4
+                                if (c /= a .and. c /= b) then
+                                    prod = prod * (xf - x(c)) / (x(a) - x(c))
+                                end if
+                            end do
+
+                            w_grad4(offs(a), i, idir) = w_grad4(offs(a), i, idir) + prod
+                        end if
+                    end do
+                end do
+            end do
+        
+        case (2)
+
+            do i = ifbeg, ifend
+
+                xf = y_cb(i)
+                x(1) = y_cc(i - 1); 
+                x(2) = y_cc(i) 
+                x(3) = y_cc(i + 1) 
+                x(4) = y_cc(i + 2)
+
+                ! ------------------------------------------------------------
+                ! Interpolation weights:
+                ! q_f = sum_{s=-1}^{2} w_interp(s,i,idir) * q(i+s)
+                ! ------------------------------------------------------------
+                do a = 1, 4
+                    prod = 1._wp
+                    do b = 1, 4
+                        if (b /= a) then
+                            prod = prod * (xf - x(b)) / (x(a) - x(b))
+                        end if
+                    end do
+                    w_interp4(offs(a), i, idir) = prod
+                end do
+
+                ! ------------------------------------------------------------
+                ! Gradient weights:
+                ! dqdx_f = sum_{s=-1}^{2} w_grad(s,i,idir) * q(i+s)
+                ! ------------------------------------------------------------
+                do a = 1, 4
+                    w_grad4(offs(a), i, idir) = 0._wp
+
+                    do b = 1, 4
+                        if (b /= a) then
+                            denom = x(a) - x(b)
+                            prod  = 1._wp / denom
+
+                            do c = 1, 4
+                                if (c /= a .and. c /= b) then
+                                    prod = prod * (xf - x(c)) / (x(a) - x(c))
+                                end if
+                            end do
+
+                            w_grad4(offs(a), i, idir) = w_grad4(offs(a), i, idir) + prod
+                        end if
+                    end do
+                end do
+            end do
+        
+        case (3)
+
+            do i = ifbeg, ifend
+
+                xf = z_cb(i)
+                x(1) = z_cc(i - 1); 
+                x(2) = z_cc(i) 
+                x(3) = z_cc(i + 1) 
+                x(4) = z_cc(i + 2)
+
+                ! ------------------------------------------------------------
+                ! Interpolation weights:
+                ! q_f = sum_{s=-1}^{2} w_interp(s,i,idir) * q(i+s)
+                ! ------------------------------------------------------------
+                do a = 1, 4
+                    prod = 1._wp
+                    do b = 1, 4
+                        if (b /= a) then
+                            prod = prod * (xf - x(b)) / (x(a) - x(b))
+                        end if
+                    end do
+                    w_interp4(offs(a), i, idir) = prod
+                end do
+
+                ! ------------------------------------------------------------
+                ! Gradient weights:
+                ! dqdx_f = sum_{s=-1}^{2} w_grad(s,i,idir) * q(i+s)
+                ! ------------------------------------------------------------
+                do a = 1, 4
+                    w_grad4(offs(a), i, idir) = 0._wp
+
+                    do b = 1, 4
+                        if (b /= a) then
+                            denom = x(a) - x(b)
+                            prod  = 1._wp / denom
+
+                            do c = 1, 4
+                                if (c /= a .and. c /= b) then
+                                    prod = prod * (xf - x(c)) / (x(a) - x(c))
+                                end if
+                            end do
+
+                            w_grad4(offs(a), i, idir) = w_grad4(offs(a), i, idir) + prod
+                        end if
+                    end do
+                end do
+            end do
+
+        end select
+
+
+    end subroutine s_fill_face_weights_1d_4th
 
     subroutine s_compute_sum_alpha_g(q_cons_vf, bounds)
 
@@ -206,42 +400,23 @@ contains
         real(wp) :: W1, W2, W3, D12, D13, D23
         real(wp) :: R_univ
         real(wp) :: grid_spacing
-        real(wp) :: rho_L, rho_R, rho_f, rhog_f
-        real(wp) :: alpha_m_L, alpha_m_R, alpha_m_f
+        real(wp) :: rho_L, rho_LL, rho_R, rho_RR, rho_f, rhog_f
+        real(wp) :: alpha_m_L, alpha_m_LL, alpha_m_R, alpha_m_RR, alpha_m_f
+        real(wp) :: n_gate
         real(wp) :: g_f
-        real(wp) :: P_L, P_R, P_f
+        real(wp) :: P_L, P_LL, P_R, P_RR, P_f
         real(wp) :: T_f, W_f
         real(wp) :: sum_jflux
         integer, dimension(3) :: offsets
 
-        real(wp) :: alpha_L(Dif_size), alpha_R(Dif_size), alpha_f(Dif_size)
-        real(wp) :: alpharho_L(Dif_size), alpharho_R(Dif_size), alpharho_f(Dif_size)
-        real(wp) :: Y_f(Dif_size), Y_L(Dif_size), Y_R(Dif_size)
+        real(wp) :: alpharho_L(Dif_size), alpharho_LL(Dif_size), alpharho_R(Dif_size), alpharho_RR(Dif_size), alpharho_f(Dif_size)
+        real(wp) :: Y_f(Dif_size), Y_L(Dif_size), Y_LL(Dif_size), Y_R(Dif_size), Y_RR(Dif_size)
         real(wp) :: dY_ds_f(Dif_size)
         real(wp) :: h_f(Dif_size)
         real(wp) :: j_flux(Dif_size)
 
-
-
-        ! real(wp), allocatable :: alpha_L(:), alpha_R(:), alpha_f(:)
-        ! real(wp), allocatable :: alpharho_L(:), alpharho_R(:), alpharho_f(:)
-        ! real(wp), allocatable :: Y_f(:), Y_L(:), Y_R(:)
-        ! real(wp), allocatable :: dY_ds_f(:)
-        ! real(wp), allocatable :: h_f(:)
-        ! real(wp), allocatable :: j_flux(:)
-
-
-
-
-
-        ! allocate(alpha_L(Dif_size), alpha_R(Dif_size), alpha_f(Dif_size))
-        ! allocate(alpharho_L(Dif_size), alpharho_R(Dif_size), alpharho_f(Dif_size))
-        ! allocate(Y_f(Dif_size), Y_L(Dif_size), Y_R(Dif_size))
-        ! allocate(dY_ds_f(Dif_size))
-        ! allocate(h_f(Dif_size))
-        ! allocate(j_flux(Dif_size))
-
         R_univ = 8314.462618_wp
+        n_gate = 2.0_wp
 
         isd1 = irx; isd2 = iry; isd3 = irz
 
@@ -262,74 +437,117 @@ contains
                         end do
                         j_src_n(E_idx)%sf(k, l, q) = 0._wp
 
+                        ! ! Calculate grid spacing using direction-based indexing
+                        ! select case (idir)
+                        ! case (1)
+                        !     grid_spacing = x_cc(k + 1) - x_cc(k)
+                        ! case (2)
+                        !     grid_spacing = y_cc(l + 1) - y_cc(l)
+                        ! case (3)
+                        !     grid_spacing = z_cc(q + 1) - z_cc(q)
+                        ! end select
+
                         ! Calculate grid spacing using direction-based indexing
                         select case (idir)
                         case (1)
-                            grid_spacing = x_cc(k + 1) - x_cc(k)
+                            r = k
                         case (2)
-                            grid_spacing = y_cc(l + 1) - y_cc(l)
+                            r = l
                         case (3)
-                            grid_spacing = z_cc(q + 1) - z_cc(q)
+                            r = q
                         end select
-
-                        do i = 1, Dif_size
-                            alpha_L(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
-                            alpha_R(i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                            alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-                            alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                        end do
 
                         alpha_m_L = q_prim_vf(advg_idx)%sf(k, l, q)
                         alpha_m_R = q_prim_vf(advg_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                        alpha_m_f = 0.5_wp * (alpha_m_L + alpha_m_R)
+                        alpha_m_LL = q_prim_vf(advg_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+                        alpha_m_RR = q_prim_vf(advg_idx)%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
 
-                        do i = 1, Dif_size
-                            alpha_f(i) = 0.5_wp * (alpha_L(i) + alpha_R(i))
-                            alpharho_f(i) = 0.5_wp * (alpharho_L(i) + alpharho_R(i))
-                        end do
-
-                        rho_L = 0._wp
-                        rho_R = 0._wp
-                        rho_f = 0._wp
-
-                        do i = 1, Dif_size
-                            rho_L = rho_L + alpharho_L(i)
-                            rho_R = rho_R + alpharho_R(i)
-                            rho_f = rho_f + alpharho_f(i)
-                        end do
-                    
                         if (alpha_m_L < small_num_dif .or. alpha_m_R < small_num_dif) cycle
+                        
+                        if (alpha_m_LL > small_num_dif .and. alpha_m_RR > small_num_dif .and. dif_order == 4) then
 
-                        g_f = 2._wp*alpha_m_L*alpha_m_R / (alpha_m_L + alpha_m_R)
-                        g_f = min(alpha_m_R, alpha_m_L)
+                            do i = 1, Dif_size
+                                alpharho_LL(i) = q_prim_vf(Dif_idx(i))%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+                                alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
+                                alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                                alpharho_RR(i) = q_prim_vf(Dif_idx(i))%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
+                                alpharho_f(i) = w_interp4(-1, r, idir)*alpharho_LL(i) + w_interp4(0, r, idir)*alpharho_L(i) + &
+                                                w_interp4(1, r, idir)*alpharho_R(i) + w_interp4(2, r, idir)*alpharho_RR(i)
+                            end do
 
-                        ! g_f = 1.0_wp
+                            alpha_m_f = w_interp4(-1, r, idir)*alpha_m_LL + w_interp4(0, r, idir)*alpha_m_L + &
+                                        w_interp4(1, r, idir)*alpha_m_R + w_interp4(2, r, idir)*alpha_m_RR
+
+                            P_LL = q_prim_vf(E_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+                            P_L = q_prim_vf(E_idx)%sf(k, l, q)
+                            P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                            P_RR = q_prim_vf(E_idx)%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
+                            P_f = w_interp4(-1, r, idir)*P_LL + w_interp4(0, r, idir)*P_L + &
+                                  w_interp4(1, r, idir)*P_R + w_interp4(2, r, idir)*P_RR
+                            rho_LL = 0.0_wp
+                            rho_L = 0.0_wp
+                            rho_R = 0.0_wp
+                            rho_RR = 0.0_wp
+                            rho_f = 0.0_wp
+
+                            do i = 1, Dif_size
+                                rho_LL = rho_LL + alpharho_LL(i)
+                                rho_L = rho_L + alpharho_L(i)
+                                rho_R = rho_R + alpharho_R(i)
+                                rho_RR = rho_RR + alpharho_RR(i)
+                                rho_f = rho_f + alpharho_f(i)
+                            end do
+
+                            do i = 1, Dif_size
+                                Y_LL(i) = alpharho_LL(i) / rho_LL
+                                Y_L(i) = alpharho_L(i) / rho_L
+                                Y_R(i) = alpharho_R(i) / rho_R
+                                Y_RR(i) = alpharho_RR(i) / rho_RR
+                                Y_f(i) = alpharho_f(i) / rho_f
+                            end do
+                            
+                            do i = 1, Dif_size
+                                dY_ds_f(i) = w_grad4(-1, r, idir)*Y_LL(i) + w_grad4(0, r, idir)*Y_L(i) + &
+                                     w_grad4(1, r, idir)*Y_R(i) + w_grad4(2, r, idir)*Y_RR(i)
+                            end do
+
+                        else !use 2nd order
+
+                            do i = 1, Dif_size
+                                alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
+                                alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                                alpharho_f(i) = w_interp2(0, r, idir)*alpharho_L(i) + w_interp2(1, r, idir)*alpharho_R(i)
+                            end do
+
+                            alpha_m_f = w_interp2(0, r, idir)*alpha_m_L + w_interp2(1, r, idir)*alpha_m_R
+                            P_L = q_prim_vf(E_idx)%sf(k, l, q)
+                            P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                            P_f = w_interp2(0, r, idir)*P_L + w_interp2(1, r, idir)*P_R
+
+                            rho_L = 0.0_wp
+                            rho_R = 0.0_wp
+                            rho_f = 0.0_wp
+                            do i = 1, Dif_size
+                                rho_L = rho_L + alpharho_L(i)
+                                rho_R = rho_R + alpharho_R(i)
+                                rho_f = rho_f + alpharho_f(i)
+                            end do
+
+                            do i = 1, Dif_size
+                                Y_L(i) = alpharho_L(i) / rho_L
+                                Y_R(i) = alpharho_R(i) / rho_R
+                                Y_f(i) = alpharho_f(i) / rho_f
+                            end do
+                            
+                            do i = 1, Dif_size
+                                dY_ds_f(i) = w_grad2(0, r, idir)*Y_L(i) + w_grad2(1, r, idir)*Y_R(i)
+                            end do
+                        end if
+
+                        g_f = 2.0_wp * (alpha_m_L**n_gate) * (alpha_m_R**n_gate) / ( (alpha_m_L**n_gate) + (alpha_m_R**n_gate) )
 
                         ! Total gas density at face
                         rhog_f = rho_f / alpha_m_f
-
-                        P_L = q_prim_vf(E_idx)%sf(k, l, q)
-                        P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                        P_f = 0.5_wp * (P_L + P_R)
-
-                        
-                        do i = 1, Dif_size
-                            Y_L(i) = alpharho_L(i) / rho_L
-                        end do
-                        
-
-                        do i = 1, Dif_size
-                            Y_R(i) = alpharho_R(i) / rho_R
-                        end do
-             
-                        do i = 1, Dif_size
-                            Y_f(i) = alpharho_f(i) / rho_f
-                        end do
-                        
-
-                        do i = 1, Dif_size
-                            dY_ds_f(i) = (Y_R(i) - Y_L(i)) / grid_spacing
-                        end do
 
                         W_f = 0._wp
                         do i = 1, Dif_size  
@@ -343,6 +561,71 @@ contains
                         do i = 1, Dif_size
                             h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
                         end do
+
+
+                            
+                        ! alpha_m_f = 0.5_wp * (alpha_m_L + alpha_m_R)
+
+                        ! do i = 1, Dif_size
+                        !     alpha_f(i) = 0.5_wp * (alpha_L(i) + alpha_R(i))
+                        !     alpharho_f(i) = 0.5_wp * (alpharho_L(i) + alpharho_R(i))
+                        ! end do
+
+                        ! rho_L = 0._wp
+                        ! rho_R = 0._wp
+                        ! rho_f = 0._wp
+
+                        ! do i = 1, Dif_size
+                        !     rho_L = rho_L + alpharho_L(i)
+                        !     rho_LL = rho_LL + alpharho_LL(i)
+                        !     rho_R = rho_R + alpharho_R(i)
+                        !     rho_RR = rho_RR + alpharho_RR(i)
+                        !     rho_f = rho_f + alpharho_f(i)
+                        ! end do
+
+                        ! g_f = 2.0_wp * (alpha_m_L**n_gate) * (alpha_m_R**n_gate) / ( (alpha_m_L**n_gate) + (alpha_m_R**n_gate) )
+                        ! g_f = min(alpha_m_R, alpha_m_L)
+
+                        ! g_f = 1.0_wp
+
+                        ! ! Total gas density at face
+                        ! rhog_f = rho_f / alpha_m_f
+
+                        ! ! rhog_f = 2._wp*(rho_L / alpha_m_L)*(rho_R / alpha_m_R) / ( (rho_L / alpha_m_L) + (rho_R / alpha_m_R) )
+
+                        ! P_L = q_prim_vf(E_idx)%sf(k, l, q)
+                        ! P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                        ! P_f = 0.5_wp * (P_L + P_R)
+                        
+                        ! do i = 1, Dif_size
+                        !     Y_L(i) = alpharho_L(i) / rho_L
+                        ! end do
+                        
+                        ! do i = 1, Dif_size
+                        !     Y_R (i) = alpharho_R(i) / rho_R
+                        ! end do
+             
+                        ! do i = 1, Dif_size
+                        !     Y_f(i) = alpharho_f(i) / rho_f
+                        ! end do
+                        
+
+                        ! do i = 1, Dif_size
+                        !     dY_ds_f(i) = (Y_R(i) - Y_L(i)) / grid_spacing
+                        ! end do
+
+                        ! W_f = 0._wp
+                        ! do i = 1, Dif_size  
+                        !     W_f = W_f + Y_f(i)/Ws(i)              
+                        ! end do
+
+                        ! W_f = 1._wp / W_f
+
+                        ! T_f = P_f * W_f / (rhog_f * R_univ)
+
+                        ! do i = 1, Dif_size
+                        !     h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
+                        ! end do
 
                         ! Compute diffusion fluxes
                         if (Dif_size == 2) then
@@ -379,276 +662,11 @@ contains
                     end do
                 end do
             end do
+
+            ! print *, "rank", proc_rank, "jmax", j_max
         ! #########################################################################
         ! #########################################################################
-        else
-            ! Pure Finite Difference Approach 
-            ! #########################################################################
-            ! #########################################################################
-            if (idir == 1) then
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = -2*fd_number, m + 2*fd_number
-                            do i = 1, Dif_size
-                                alpha_K_dif(k, l, q, i) = q_prim_vf(advxb + Dif_idx(i) - 1)%sf(k, l, q)
-                                alpharho_K_dif(k, l, q, i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-                            end do
-                            rho_dif(k, l, q) = 0._wp
-                            alpha_dif(k, l, q) = 0._wp
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = -2*fd_number, m + 2*fd_number
-                            do i = 1, Dif_size
-                                rho_dif(k, l, q) = rho_dif(k, l, q) + alpharho_K_dif(k, l, q, i)
-                                alpha_dif(k, l, q) = alpha_dif(k, l, q) + alpha_K_dif(k, l, q, i)
-                            end do
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-
-                !$acc parallel loop collapse(3) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = -2*fd_number, m + 2*fd_number
-                            W_dif(k, l, q) = 0._wp
-                            do i = 1, Dif_size
-                                W_dif(k, l, q) = W_dif(k, l, q) + alpha_K_dif(k, l, q, i)*Ws(i)
-                            end do
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = -2*fd_number, m + 2*fd_number
-                            ! gas cell
-                            if (alpha_dif(k, l, q) > small_num_dif) then
-                                T_dif(k, l, q) = q_prim_vf(E_idx)%sf(k, l, q) * W_dif(k, l, q) /( rho_dif(k, l, q)*R_univ )
-                            else
-                                T_dif(k, l, q) = 0._wp
-                            end if
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = -2*fd_number, m + 2*fd_number
-                            if (alpha_dif(k, l, q) > small_num_dif) then
-                                do i = 1, Dif_size
-                                    
-                                    Y_dif(k, l, q, i) = alpharho_K_dif(k, l, q, i) / rho_dif(k, l, q)
-                                    !h_dif(k, l, q, i) = (q_prim_vf(E_idx)%sf(k, l, q) * (gammas(Dif_idx(i)) + 1._wp)) * alpha_K_dif(k, l, q, i) / alpharho_K_dif(k, l, q, i)
-                                    h_dif(k, l, q, i) = h0s(i) + cps(i)*(T_dif(k, l, q) - T0s(i))
-                                
-                                end do
-                            end if
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = -fd_number, m + fd_number
-                            do i = 1, Dif_size
-                                dj_dx(k, l, q, i) = 0._wp
-                                djh_dx(k, l, q, i) = 0._wp
-                                dY_dx(k, l, q, i) = 0._wp
-                            end do
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-
-                !set ghost cell for buffer region equal to k point (to enforce del dot j = 0)
-                !$acc parallel loop collapse(5) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = -fd_number, m + fd_number
-                            if (alpha_dif(k, l, q) > small_num_dif) then
-                                do i = 1, Dif_size
-                                    do r = -fd_number, fd_number
-                                        if (alpha_dif(k + r, l, q) > small_num_dif) then
-                                            dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
-                                                + Y_dif(k + r, l, q, i)*fd_coeff_x_d(r, k)
-                                        else
-                                            dY_dx(k, l, q, i) = dY_dx(k, l, q, i) &
-                                                + Y_dif(k, l, q, i)*fd_coeff_x_d(r, k)
-                                        end if
-                                    end do
-                                end do
-                            end if
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-
-                if (Dif_size == 2) then
-                    !$acc parallel loop collapse(5) gang vector default(present)
-                    do q = 0, p
-                        do l = 0, n
-                            do k = 0, m
-                                if (alpha_dif(k, l, q) > small_num_dif) then
-                                    do i = 1, Dif_size
-                                        do r = -fd_number, fd_number
-                                            if (alpha_dif(k + r, l, q) > small_num_dif) then
-                                                dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                                    + dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
-                                                djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                                    + h_dif(k + r, l, q, i)*dY_dx(k + r, l, q, i)*rho_dif(k + r, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
-
-                                            else
-                                                dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                                    + dY_dx(k, l, q, i)*rho_dif(k, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
-                                                djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                                    + h_dif(k, l, q, i)*dY_dx(k, l, q, i)*rho_dif(k, l, q)*Ds(1,2)*fd_coeff_x_d(r, k)
-                                            end if
-                                        end do
-                                    end do
-                                end if
-                            end do
-                        end do
-                    end do
-                    !$acc end parallel loop
-                else if (Dif_size == 3) then
-                    !$acc parallel loop collapse(5) gang vector default(present)
-                    do q = 0, p
-                        do l = 0, n
-                            do k = 0, m
-                                if (alpha_dif(k, l, q) > small_num_dif) then
-                                    do r = -fd_number, fd_number
-                                        do i = 1, Dif_size
-                                            if (alpha_dif(k + r, l, q) > small_num_dif) then
-                                                select case (i)
-                                                    case (1)
-                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                                            + rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
-                                                            - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
-                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                                            + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
-                                                            - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
-                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                    case (2)
-                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                                            + rho_dif(k + r, l, q)*(Ds(1,2)*Ds(2,3)*(1._wp - Y_dif(k + r, l, q, 2))*dY_dx(k + r, l, q, 2) &
-                                                            - Y_dif(k + r, l, q, 2)*Ds(1,3)*(Ds(1,2)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 3))) &
-                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                                            + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 1))*dY_dx(k + r, l, q, 1) &
-                                                            - Y_dif(k + r, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k + r, l, q, 2) + Ds(1,3)*dY_dx(k + r, l, q, 3))) &
-                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                    case (3)
-                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                                            + rho_dif(k + r, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 3))*dY_dx(k + r, l, q, 3) &
-                                                            - Y_dif(k + r, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 2))) &
-                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                                            + h_dif(k + r, l, q, i)*rho_dif(k + r, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k + r, l, q, 3))*dY_dx(k + r, l, q, 3) &
-                                                            - Y_dif(k + r, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k + r, l, q, 1) + Ds(2,3)*dY_dx(k + r, l, q, 2))) &
-                                                            / ( Y_dif(k + r, l, q, 1)*Ds(2,3) + Y_dif(k + r, l, q, 2)*Ds(1,3) + Y_dif(k + r, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-                                                end select
-                                        
-                                            else
-                                                select case (i)
-                                                    case (1)
-                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                                            + rho_dif(k, l, q)*(Ds(1,2)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 1))*dY_dx(k, l, q, 1) &
-                                                            - Y_dif(k, l, q, 1)*Ds(2,3)*(Ds(1,2)*dY_dx(k, l, q, 2) + Ds(1,3)*dY_dx(k, l, q, 3))) &
-                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                                            + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
-                                                            - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
-                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                    case (2)
-                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                                            + rho_dif(k, l, q)*(Ds(1,2)*Ds(2,3)*(1._wp - Y_dif(k, l, q, 2))*dY_dx(k, l, q, 2) &
-                                                            - Y_dif(k, l, q, 2)*Ds(1,3)*(Ds(1,2)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 3))) &
-                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                                            + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
-                                                            - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
-                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                    case (3)
-                                                        dj_dx(k, l, q, i) = dj_dx(k, l, q, i) &
-                                                            + rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
-                                                            - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
-                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-
-                                                        djh_dx(k, l, q, i) = djh_dx(k, l, q, i) &
-                                                            + h_dif(k, l, q, i)*rho_dif(k, l, q)*(Ds(2,3)*Ds(1,3)*(1._wp - Y_dif(k, l, q, 3))*dY_dx(k, l, q, 3) &
-                                                            - Y_dif(k, l, q, 3)*Ds(1,2)*(Ds(1,3)*dY_dx(k, l, q, 1) + Ds(2,3)*dY_dx(k, l, q, 2))) &
-                                                            / ( Y_dif(k, l, q, 1)*Ds(2,3) + Y_dif(k, l, q, 2)*Ds(1,3) + Y_dif(k, l, q, 3)*Ds(1,2) )*fd_coeff_x_d(r, k)
-                                                end select
-
-                                            end if
-                                        end do
-                                        
-                                    end do
-                                end if 
-                            end do
-                        end do
-                    end do
-                    !$acc end parallel loop
-                end if
-
-                !Valid for any number of species
-                ! species continuity
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = 0, m
-                            if (alpha_dif(k, l, q) > small_num_dif) then
-                                do i = 1, Dif_size
-                                    rhs_vf(Dif_idx(i))%sf(k, l, q) = rhs_vf(Dif_idx(i))%sf(k, l, q) &
-                                        + dj_dx(k, l, q, i)
-                                end do
-                            end if
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-
-                !Valid for any number of species
-                !energy
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do q = 0, p
-                    do l = 0, n
-                        do k = 0, m
-                            if (alpha_dif(k, l, q) > small_num_dif) then
-                                do i = 1, Dif_size
-                                    rhs_vf(E_idx)%sf(k, l, q) = rhs_vf(E_idx)%sf(k, l, q) &
-                                        + djh_dx(k, l, q, i)
-                                end do
-                            end if
-                        end do
-                    end do
-                end do
-                !$acc end parallel loop
-            end if
+            
         end if
         ! #########################################################################
         ! #########################################################################
@@ -709,19 +727,26 @@ contains
 
     end subroutine s_correct_volume_fractions
 
-    subroutine s_correct_riemann_volume_fractions(q_rs_vf, bounds)
+    subroutine s_correct_riemann_volume_fractions(q_rs_vf, bounds1, bounds2, bounds3)
 
-        real(wp), dimension(startx:, starty:, startz:, 1:), intent(inout) :: q_rs_vf
-        type(int_bounds_info), dimension(1:3), intent(in) :: bounds
-
+        type(int_bounds_info), intent(in) :: bounds1, bounds2, bounds3
+        real(wp), dimension(bounds1%beg:, bounds2%beg:, bounds3%beg:, 1:), intent(inout) :: q_rs_vf
+        type(int_bounds_info) :: weno_bounds1, weno_bounds2, weno_bounds3
 
         integer :: x, y, z, i
         real(wp) :: rho, W
         real(wp) :: alpharho(Dif_size), Y_s(Dif_size)
 
-        do z = bounds(3)%beg, bounds(3)%end
-            do y = bounds(2)%beg, bounds(2)%end
-                do x = bounds(1)%beg, bounds(1)%end
+        weno_bounds1%beg = bounds1%beg + weno_polyn
+        weno_bounds1%end = bounds1%end - weno_polyn
+        weno_bounds2 = bounds2
+        weno_bounds3 = bounds3
+
+
+        
+        do z = weno_bounds3%beg, weno_bounds3%end
+            do y = weno_bounds2%beg, weno_bounds2%end
+                do x = weno_bounds1%beg, weno_bounds1%end
                     if (q_rs_vf(x, y, z, advg_idx) < small_num_dif) then
                         do i = 1, Dif_size
                             q_rs_vf(x, y, z, advxb + Dif_idx(i) - 1) = 0._wp
@@ -733,7 +758,7 @@ contains
                         do i = 1, Dif_size
                             alpharho(i) = q_rs_vf(x, y, z, Dif_idx(i))
                         end do
- 
+
                         do i = 1, Dif_size
                             rho = rho + alpharho(i)
                         end do
@@ -803,12 +828,6 @@ contains
 
         end do
 
-        ! if (Dif_size == 3) then
-
-        ! else if (Dif_size == 4) then
-        
-        ! else
-
         ! Solve the linear system A * j = b
         if (Nm1 == 2) then
             ! For 2x2 system, use explicit formula
@@ -843,26 +862,9 @@ contains
         @:DEALLOCATE(cps)
         @:DEALLOCATE(T0s)
         @:DEALLOCATE(h0s)
-        @:DEALLOCATE(alpha_K_dif, alpharho_K_dif, Y_dif, h_dif, T_dif)
-        @:DEALLOCATE(rho_dif, alpha_dif, denom, rhogcg2, rho1c12, kdivu, W_dif)
-        @:DEALLOCATE(fd_coeff_x_d)
-        @:DEALLOCATE(dj_dx)
-        @:DEALLOCATE(dY_dx)
-        @:DEALLOCATE(djh_dx)
-        @:DEALLOCATE(dvel_dx)
-        if (n > 0) then
-            @:DEALLOCATE(fd_coeff_y_d)
-            @:DEALLOCATE(dj_dy)
-            @:DEALLOCATE(djh_dy)
-            @:DEALLOCATE(dY_dy)
-            @:DEALLOCATE(dvel_dy)
-            if (p > 0) then
-                @:DEALLOCATE(fd_coeff_z_d)
-                @:DEALLOCATE(dj_dz)
-                @:DEALLOCATE(djh_dz)
-                @:DEALLOCATE(dY_dz)
-                @:DEALLOCATE(dvel_dz)
-            end if
+        @:DEALLOCATE(w_interp2, w_grad2)
+        if (dif_order == 4) then
+            @:DEALLOCATE(w_interp4, w_grad4)
         end if
 
     end subroutine s_finalize_diffusion_module

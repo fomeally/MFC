@@ -51,7 +51,6 @@ h0_h2 = 0.0
 # Binary diffusion coefficients
 D11 = 0.0e0
 D12 = 1.0e-1
-# D12 = 0.0e0
 D13 = 0.674e-2
 D21 = D12
 D22 = 0.0e0
@@ -60,12 +59,11 @@ D31 = D13
 D32 = D23
 D33 = 0.0e0
 
-Lx = 2.0
+Lx = 1.0
 
-Nx = 399
-interface_loc = 0.5*Lx
+Nx = 199
+Ny = Nx
 
-small_fluid = 40.0e-2
 
 # Configuring case dictionary
 print(
@@ -76,28 +74,28 @@ print(
             # Computational Domain Parameters
             "x_domain%beg": 0.0,
             "x_domain%end": Lx,
+            "y_domain%beg": 0.0,
+            "y_domain%end": Lx,
             "stretch_x": "F",
             "cyl_coord": "F",
             "m": Nx,
-            "n": 0,
+            "n": Ny,
             "p": 0,
-            "dt": 2.5e-6,
+            "dt": 1.0e-5,
             "t_step_start": 0,
-            # "t_step_stop": 2,
-            # "t_step_save": 1,
-            # "t_step_print": 1,
-            # "t_step_stop": 4000,
-            # "t_step_save": 40,
-            # "t_step_print": 100,
-            "t_step_stop": 16000000,
-            "t_step_save": 40000,
-            "t_step_print": 120000,
+            # "t_step_stop": 10000,
+            # "t_step_save": 20,
+            "t_step_stop": 500000,
+            "t_step_save": 5000,
+            "t_step_print": 5000,
+            # "t_step_stop": 10000000,
+            # "t_step_save": 50000,
             # Simulation Algorithm Parameters
-            "num_patches": 3,
+            "num_patches": 2,
             "model_eqns": 2,
-            "alt_soundspeed": "T",
-            "diffusion": "T",
-            "num_fluids": 3,
+            "alt_soundspeed": "F",
+            "diffusion": "F",
+            "num_fluids": 2,
             "mpp_lim": "F",
             "mixture_err": "F",
             "time_stepper": 3,
@@ -105,7 +103,7 @@ print(
             "weno_eps": 1.0e-16,
             "weno_Re_flux": "F",
             "weno_Dif_flux": "F",
-            "Dif_fv" : "T",
+            "Dif_fv" : "F",
             "small_num_dif": 1.0e-12,
             "weno_avg": "F",
             "mapped_weno": "T",
@@ -116,6 +114,8 @@ print(
             "avg_state": 2,
             "bc_x%beg": -2,
             "bc_x%end": -2,
+            "bc_y%beg": -2,
+            "bc_y%end": -2,
             # Formatted Database Files Structure Parameters
             "format": 1,
             "precision": 2,
@@ -126,60 +126,37 @@ print(
             "probe_wrt": "F",
             
             # Patch 1 N2
-            "patch_icpp(1)%geometry": 1,
+            "patch_icpp(1)%geometry": 3,
             "patch_icpp(1)%x_centroid": 0.50*Lx,
+            "patch_icpp(1)%y_centroid": 0.50*Lx,
             "patch_icpp(1)%length_x": Lx,
+            "patch_icpp(1)%length_y": Lx,
             "patch_icpp(1)%vel(1)": 0.0,
+            "patch_icpp(1)%vel(2)": 0.0,
             "patch_icpp(1)%pres": p0,
             "patch_icpp(1)%alpha_rho(1)": rho_n2,
             "patch_icpp(1)%alpha_rho(2)": 0.0,
-            "patch_icpp(1)%alpha_rho(3)": 0.0,
+            #"patch_icpp(1)%alpha_rho(3)": 0.0,
             "patch_icpp(1)%alpha(1)": 1.0,
             "patch_icpp(1)%alpha(2)": 0.0,
-            "patch_icpp(1)%alpha(3)": 0.0,
+            #"patch_icpp(1)%alpha(3)": 0.0,
             
             # Patch 2 CO2
-            "patch_icpp(2)%geometry": 1,
-            "patch_icpp(2)%x_centroid": (Lx + 0.5) / Lx,
-            "patch_icpp(2)%length_x": 0.75*Lx,
+            "patch_icpp(2)%geometry": 3,
+            "patch_icpp(2)%x_centroid": 0.75*Lx,
+            "patch_icpp(2)%y_centroid": 0.50*Lx,
+            "patch_icpp(2)%length_x": 0.50*Lx,
+            "patch_icpp(2)%length_y": Lx,
             "patch_icpp(2)%alter_patch(1)": "T",
             "patch_icpp(2)%vel(1)": 0.0,
+            "patch_icpp(2)%vel(2)": 0.0,
             "patch_icpp(2)%pres": p0,
             "patch_icpp(2)%alpha_rho(1)": 0.0,
             "patch_icpp(2)%alpha_rho(2)": rho_co2,
-            "patch_icpp(2)%alpha_rho(3)": 0.0,
+            #"patch_icpp(2)%alpha_rho(3)": 0.0,
             "patch_icpp(2)%alpha(1)": 0.0,
             "patch_icpp(2)%alpha(2)": 1.0,
-            "patch_icpp(2)%alpha(3)": 0.0,
-
-            # Patch 3 Water
-            "patch_icpp(3)%geometry": 1,
-            "patch_icpp(3)%x_centroid": (Lx + interface_loc) / 2.0,
-            "patch_icpp(3)%length_x": Lx - interface_loc,
-            "patch_icpp(3)%alter_patch(1)": "T",
-            "patch_icpp(3)%alter_patch(2)": "T",            
-            "patch_icpp(3)%vel(1)": 0.0,
-            "patch_icpp(3)%pres": p0,
-            "patch_icpp(3)%alpha_rho(1)": 0.0,
-            "patch_icpp(3)%alpha_rho(2)": rho_co2*0.4,
-            "patch_icpp(3)%alpha_rho(3)": rho0w*0.6,
-            "patch_icpp(3)%alpha(1)": 0.0,
-            "patch_icpp(3)%alpha(2)": 0.4,
-            "patch_icpp(3)%alpha(3)": 0.6,
-
-
-            # # Acoustic source
-            # "acoustic_source": "T",
-            # "num_source": 1,
-            # "acoustic(1)%support": 1,
-            # "acoustic(1)%loc(1)": 0.25*Lx,
-            # "acoustic(1)%pulse": 2,
-            # "acoustic(1)%npulse": 1,
-            # "acoustic(1)%dir": 1.0,
-            # "acoustic(1)%mag": 800.0,
-            # "acoustic(1)%gauss_sigma_dist": 0.01,
-            # # "acoustic(1)%wavelength": 0.2,
-            # "acoustic(1)%delay": 0,
+            #"patch_icpp(2)%alpha(3)": 0.0,
 
             # Fluids Physical Parameters
             # N2
@@ -189,9 +166,9 @@ print(
 	        "fluid_pp(1)%cp": cp_n2,
             "fluid_pp(1)%h0": h0_n2,
             "fluid_pp(1)%T0": T0_n2,
-            "fluid_pp(1)%D(1)": D11,
-            "fluid_pp(1)%D(2)": D12,
-            "fluid_pp(1)%gas_mixture" : "T",
+            # "fluid_pp(1)%D(1)": D11,
+            # "fluid_pp(1)%D(2)": D12,
+            # "fluid_pp(1)%gas_mixture" : "T",
 
             # CO2
             "fluid_pp(2)%gamma": Gamma_co2,
@@ -200,14 +177,11 @@ print(
 	        "fluid_pp(2)%cp": cp_co2,
             "fluid_pp(2)%h0": h0_co2,
             "fluid_pp(2)%T0": T0_co2,
-            "fluid_pp(2)%D(1)": D21,
-            "fluid_pp(2)%D(2)": D22,
-            "fluid_pp(2)%gas_mixture" : "T",
+            # "fluid_pp(2)%D(1)": D21,
+            # "fluid_pp(2)%D(2)": D22,
+            # "fluid_pp(2)%gas_mixture" : "T",
     
-            # Water
-            "fluid_pp(3)%gamma": 1.0e0 / (gamw - 1.0e0),
-            "fluid_pp(3)%pi_inf": gamw*piw / (gamw - 1.0e0),
-            "fluid_pp(3)%gas_mixture" : "F",
+
         }
     )
 )

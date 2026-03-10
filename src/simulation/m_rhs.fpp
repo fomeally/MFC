@@ -78,8 +78,8 @@ module m_rhs
     !! The primitive variables at cell-interior Gaussian quadrature points. These
     !! are calculated from the conservative variables and gradient magnitude (GM)
     !! of the volume fractions, q_cons_qp and gm_alpha_qp, respectively.
-    type(vector_field) :: q_prim_qp, j_vf_qp !<
-    !$acc declare create(q_prim_qp, j_vf_qp)
+    type(vector_field) :: q_prim_qp !<
+    !$acc declare create(q_prim_qp)
 
     !> @name The first-order spatial derivatives of the primitive variables at cell-
     !! interior Gaussian quadrature points. These are WENO-reconstructed from
@@ -88,9 +88,7 @@ module m_rhs
     !! of the primitive variables, located in qK_prim_n, where K = L or R.
     !> @{
     type(vector_field), allocatable, dimension(:) :: dq_prim_dx_qp, dq_prim_dy_qp, dq_prim_dz_qp
-    type(vector_field), allocatable, dimension(:) :: dj_prim_dx_qp, dj_prim_dy_qp, dj_prim_dz_qp
-    !$acc declare create(dq_prim_dx_qp, dq_prim_dy_qp, dq_prim_dz_qp, dj_prim_dx_qp, dj_prim_dy_qp, dj_prim_dz_qp)
-    !> @}
+    !$acc declare create(dq_prim_dx_qp, dq_prim_dy_qp, dq_prim_dz_qp)
 
     !> @name The left and right WENO-reconstructed cell-boundary values of the cell-
     !! average first-order spatial derivatives of the primitive variables. The
@@ -99,13 +97,9 @@ module m_rhs
     !> @{
     type(vector_field), allocatable, dimension(:) :: dqL_prim_dx_n, dqL_prim_dy_n, dqL_prim_dz_n
     type(vector_field), allocatable, dimension(:) :: dqR_prim_dx_n, dqR_prim_dy_n, dqR_prim_dz_n
-    type(vector_field), allocatable, dimension(:) :: djL_prim_dx_n, djL_prim_dy_n, djL_prim_dz_n
-    type(vector_field), allocatable, dimension(:) :: djR_prim_dx_n, djR_prim_dy_n, djR_prim_dz_n
 
     !$acc declare create(dqL_prim_dx_n, dqL_prim_dy_n, dqL_prim_dz_n)
     !$acc declare create(dqR_prim_dx_n, dqR_prim_dy_n, dqR_prim_dz_n)
-    !$acc declare create(djL_prim_dx_n, djL_prim_dy_n, djL_prim_dz_n)
-    !$acc declare create(djR_prim_dx_n, djR_prim_dy_n, djR_prim_dz_n)
     !> @}
 
     type(scalar_field), allocatable, dimension(:) :: tau_Re_vf
@@ -138,9 +132,7 @@ module m_rhs
     !> @}
 
     type(vector_field), allocatable, dimension(:) :: qL_prim, qR_prim
-    type(vector_field), allocatable, dimension(:) :: jL_prim, jR_prim
     !$acc declare create(qL_prim, qR_prim)
-    !$acc declare create(jL_prim, jR_prim)
     type(int_bounds_info) :: iv !< Vector field indical bounds
     !$acc declare create(iv)
 
@@ -161,14 +153,10 @@ module m_rhs
     !real(wp), allocatable, dimension(:, :, :) :: blkmod1, blkmod2, alpha1, alpha2, Kterm, dYdP, dYda, dPdt
     real(wp), allocatable, dimension(:, :, :) :: blkmod1, blkmod2, alpha1, alpha2, Kterm
     real(wp), allocatable, dimension(:, :, :, :) :: qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, qR_rsx_vf, qR_rsy_vf, qR_rsz_vf
-    real(wp), allocatable, dimension(:, :, :, :) :: jL_rsx_vf, jL_rsy_vf, jL_rsz_vf, jR_rsx_vf, jR_rsy_vf, jR_rsz_vf
     real(wp), allocatable, dimension(:, :, :, :) :: dqL_rsx_vf, dqL_rsy_vf, dqL_rsz_vf, dqR_rsx_vf, dqR_rsy_vf, dqR_rsz_vf
-    real(wp), allocatable, dimension(:, :, :, :) :: djL_rsx_vf, djL_rsy_vf, djL_rsz_vf, djR_rsx_vf, djR_rsy_vf, djR_rsz_vf
     !$acc declare create(blkmod1, blkmod2, alpha1, alpha2, Kterm)
     !$acc declare create(qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, qR_rsx_vf, qR_rsy_vf, qR_rsz_vf)
-    !$acc declare create(jL_rsx_vf, jL_rsy_vf, jL_rsz_vf, jR_rsx_vf, jR_rsy_vf, jR_rsz_vf)
     !$acc declare create(dqL_rsx_vf, dqL_rsy_vf, dqL_rsz_vf, dqR_rsx_vf, dqR_rsy_vf, dqR_rsz_vf)
-    !$acc declare create(djL_rsx_vf, djL_rsy_vf, djL_rsz_vf, djR_rsx_vf, djR_rsy_vf, djR_rsz_vf)
 
     real(wp), allocatable, dimension(:) :: gamma_min, pres_inf
     !$acc declare create(gamma_min, pres_inf)
@@ -214,7 +202,9 @@ contains
             end do
         else
             do l = adv_idx%end + 1, sys_size
-                @:ALLOCATE(q_prim_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
+                if (.not.(diffusion .and. l == advg_idx)) then
+                    @:ALLOCATE(q_prim_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
+                end if
             end do
 
         end if
@@ -239,22 +229,6 @@ contains
             !$acc enter data attach(q_prim_qp%vf(advg_idx)%sf)
         end if
         
-
-        !Franz not used in current implementation
-        if (diffusion) then 
-            @:ALLOCATE(j_vf_qp%vf(1:sys_size))
-            !These will be mass fractions and specific enthalpy
-            do l = 1, cont_idx%end
-                @:ALLOCATE(j_vf_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
-            end do
-
-            !Maybe make a new variable instead
-            !These will be enthalpies stored in volume fraction slots
-            do l = adv_idx%beg, adv_idx%end
-                @:ALLOCATE(j_vf_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
-            end do
-     
-        end if
 
         if (surface_tension) then
             q_prim_qp%vf(c_idx)%sf => &
@@ -305,9 +279,6 @@ contains
         @:ALLOCATE(qL_prim(1:num_dims))
         @:ALLOCATE(qR_prim(1:num_dims))
 
-        @:ALLOCATE(jL_prim(1:num_dims))
-        @:ALLOCATE(jR_prim(1:num_dims))
-
         do i = 1, num_dims
             @:ALLOCATE(qL_prim(i)%vf(1:sys_size))
             @:ALLOCATE(qR_prim(i)%vf(1:sys_size))
@@ -316,16 +287,6 @@ contains
                 @:ALLOCATE(qR_prim(i)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
             end do
             @:ACC_SETUP_VFs(qL_prim(i), qR_prim(i))
-        end do
-
-        do i = 1, num_dims
-            @:ALLOCATE(jL_prim(i)%vf(1:cont_idx%end))
-            @:ALLOCATE(jR_prim(i)%vf(1:cont_idx%end))
-            do l = 1, cont_idx%end
-                @:ALLOCATE(jL_prim(i)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
-                @:ALLOCATE(jR_prim(i)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
-            end do
-            @:ACC_SETUP_VFs(jL_prim(i), jR_prim(i))
         end do
 
 
@@ -339,22 +300,12 @@ contains
         @:ALLOCATE(qR_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
             idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
 
-        @:ALLOCATE(jL_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-            idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-        @:ALLOCATE(jR_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-            idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-
         if (n > 0) then
 
             @:ALLOCATE(qL_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
                 idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
             @:ALLOCATE(qR_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
                 idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
-
-            @:ALLOCATE(jL_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
-                idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-            @:ALLOCATE(jR_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
-                idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
             
         else
             @:ALLOCATE(qL_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
@@ -362,10 +313,6 @@ contains
             @:ALLOCATE(qR_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
 
-            @:ALLOCATE(jL_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-            @:ALLOCATE(jR_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
         end if
 
         if (p > 0) then
@@ -374,20 +321,11 @@ contains
             @:ALLOCATE(qR_rsz_vf(idwbuff(3)%beg:idwbuff(3)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:sys_size))
 
-            @:ALLOCATE(jL_rsz_vf(idwbuff(3)%beg:idwbuff(3)%end, &
-                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:cont_idx%end))
-            @:ALLOCATE(jR_rsz_vf(idwbuff(3)%beg:idwbuff(3)%end, &
-                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:cont_idx%end))
         else
             @:ALLOCATE(qL_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
             @:ALLOCATE(qR_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
                 idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
-
-            @:ALLOCATE(jL_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-            @:ALLOCATE(jR_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
 
         end if
 
@@ -454,69 +392,6 @@ contains
             end do
         end if
 
-        ! Allocation of dj_prim_ds_qp ======================================
-
-        @:ALLOCATE(dj_prim_dx_qp(1:1))
-        @:ALLOCATE(dj_prim_dy_qp(1:1))
-        @:ALLOCATE(dj_prim_dz_qp(1:1))
-
-        if (diffusion) then
-
-            @:ALLOCATE(dj_prim_dx_qp(1)%vf(cont_idx%beg:cont_idx%end))
-            @:ALLOCATE(dj_prim_dy_qp(1)%vf(cont_idx%beg:cont_idx%end))
-            @:ALLOCATE(dj_prim_dz_qp(1)%vf(cont_idx%beg:cont_idx%end))
-
-            do l = 1, num_fluids
-                @:ALLOCATE(dj_prim_dx_qp(1)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, &
-                        & idwbuff(2)%beg:idwbuff(2)%end, &
-                        & idwbuff(3)%beg:idwbuff(3)%end))
-            end do
-
-            @:ACC_SETUP_VFs(dj_prim_dx_qp(1))
-
-            if (n > 0) then
-
-                do l = 1, num_fluids
-                    @:ALLOCATE(dj_prim_dy_qp(1)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, &
-                            & idwbuff(2)%beg:idwbuff(2)%end, &
-                            & idwbuff(3)%beg:idwbuff(3)%end))
-                end do
-
-                @:ACC_SETUP_VFs(dj_prim_dy_qp(1))
-
-                if (p > 0) then
-
-                    do l = 1, num_fluids
-                        @:ALLOCATE(dj_prim_dz_qp(1)%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, &
-                                & idwbuff(2)%beg:idwbuff(2)%end, &
-                                & idwbuff(3)%beg:idwbuff(3)%end))
-                    end do
-                    @:ACC_SETUP_VFs(dj_prim_dz_qp(1))
-                end if
-
-            end if
-
-        else
-            @:ALLOCATE(dj_prim_dx_qp(1)%vf(1:cont_idx%end))
-            @:ALLOCATE(dj_prim_dy_qp(1)%vf(1:cont_idx%end))
-            @:ALLOCATE(dj_prim_dz_qp(1)%vf(1:cont_idx%end))
-
-            do l = 1, num_fluids
-                @:ALLOCATE(dj_prim_dx_qp(1)%vf(l)%sf(0, 0, 0))
-                @:ACC_SETUP_VFs(dj_prim_dx_qp(1))
-                if (n > 0) then
-                    @:ALLOCATE(dj_prim_dy_qp(1)%vf(l)%sf(0, 0, 0))
-                    @:ACC_SETUP_VFs(dj_prim_dy_qp(1))
-                    if (p > 0) then
-                        @:ALLOCATE(dj_prim_dz_qp(1)%vf(l)%sf(0, 0, 0))
-                        @:ACC_SETUP_VFs(dj_prim_dz_qp(1))
-                    end if
-                end if
-            end do
-
-        end if
-
-        ! END: Allocation of dj_prim_ds_qp
 
         ! Allocation/Association of dqK_prim_ds_n
         @:ALLOCATE(dqL_prim_dx_n(1:num_dims))
@@ -578,68 +453,6 @@ contains
         end if
         ! END: Allocation/Association of dqK_prim_ds_n ==================
 
-        ! Allocation/Association of djK_prim_ds_n=====
-
-        @:ALLOCATE(djL_prim_dx_n(1:num_dims))
-        @:ALLOCATE(djL_prim_dy_n(1:num_dims))
-        @:ALLOCATE(djL_prim_dz_n(1:num_dims))
-        @:ALLOCATE(djR_prim_dx_n(1:num_dims))
-        @:ALLOCATE(djR_prim_dy_n(1:num_dims))
-        @:ALLOCATE(djR_prim_dz_n(1:num_dims))
-
-        if (diffusion) then
-            do i = 1, num_dims
-                @:ALLOCATE(djL_prim_dx_n(i)%vf(1:cont_idx%end))
-                @:ALLOCATE(djL_prim_dy_n(i)%vf(1:cont_idx%end))
-                @:ALLOCATE(djL_prim_dz_n(i)%vf(1:cont_idx%end))
-                @:ALLOCATE(djR_prim_dx_n(i)%vf(1:cont_idx%end))
-                @:ALLOCATE(djR_prim_dy_n(i)%vf(1:cont_idx%end))
-                @:ALLOCATE(djR_prim_dz_n(i)%vf(1:cont_idx%end))
-
-                do l = 1, num_fluids
-                    @:ALLOCATE(djL_prim_dx_n(i)%vf(l)%sf( &
-                            & idwbuff(1)%beg:idwbuff(1)%end, &
-                            & idwbuff(2)%beg:idwbuff(2)%end, &
-                            & idwbuff(3)%beg:idwbuff(3)%end))
-                    @:ALLOCATE(djR_prim_dx_n(i)%vf(l)%sf( &
-                            & idwbuff(1)%beg:idwbuff(1)%end, &
-                            & idwbuff(2)%beg:idwbuff(2)%end, &
-                            & idwbuff(3)%beg:idwbuff(3)%end))
-                end do
-
-                if (n > 0) then
-                    do l = 1, num_fluids
-                        @:ALLOCATE(djL_prim_dy_n(i)%vf(l)%sf( &
-                                & idwbuff(1)%beg:idwbuff(1)%end, &
-                                & idwbuff(2)%beg:idwbuff(2)%end, &
-                                & idwbuff(3)%beg:idwbuff(3)%end))
-                        @:ALLOCATE(djR_prim_dy_n(i)%vf(l)%sf( &
-                                & idwbuff(1)%beg:idwbuff(1)%end, &      
-                                & idwbuff(2)%beg:idwbuff(2)%end, &
-                                & idwbuff(3)%beg:idwbuff(3)%end))
-                    end do
-                end if
-
-                if (p > 0) then
-                    do l = 1, num_fluids
-                        @:ALLOCATE(djL_prim_dz_n(i)%vf(l)%sf( &
-                                & idwbuff(1)%beg:idwbuff(1)%end, &
-                                & idwbuff(2)%beg:idwbuff(2)%end, &
-                                & idwbuff(3)%beg:idwbuff(3)%end))
-                        @:ALLOCATE(djR_prim_dz_n(i)%vf(l)%sf( &
-                                & idwbuff(1)%beg:idwbuff(1)%end, &
-                                & idwbuff(2)%beg:idwbuff(2)%end, &
-                                & idwbuff(3)%beg:idwbuff(3)%end))
-                    end do
-                end if
-
-                @:ACC_SETUP_VFs(djL_prim_dx_n(i), djL_prim_dy_n(i), djL_prim_dz_n(i))
-                @:ACC_SETUP_VFs(djR_prim_dx_n(i), djR_prim_dy_n(i), djR_prim_dz_n(i))
-            end do 
-        end if
-
-        ! END: Allocation/Association of djK_prim_ds_n =======================
-
         if (viscous) then
             if (weno_Re_flux) then
                 @:ALLOCATE(dqL_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
@@ -671,42 +484,6 @@ contains
                         idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, mom_idx%beg:mom_idx%end))
                     @:ALLOCATE(dqR_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
                         idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, mom_idx%beg:mom_idx%end))
-
-                end if
-            end if
-        end if
-
-        if (diffusion) then
-            if (weno_Dif_flux) then
-                @:ALLOCATE(djL_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                    idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-                @:ALLOCATE(djR_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                    idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-
-                if (n > 0) then
-
-                    @:ALLOCATE(djL_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
-                        idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-                    @:ALLOCATE(djR_rsy_vf(idwbuff(2)%beg:idwbuff(2)%end, &
-                        idwbuff(1)%beg:idwbuff(1)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-                else
-                    @:ALLOCATE(djL_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                        idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-                    @:ALLOCATE(djR_rsy_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                        idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-
-                end if
-
-                if (p > 0) then
-                    @:ALLOCATE(djL_rsz_vf(idwbuff(3)%beg:idwbuff(3)%end, &
-                        idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:cont_idx%end))
-                    @:ALLOCATE(djR_rsz_vf(idwbuff(3)%beg:idwbuff(3)%end, &
-                        idwbuff(2)%beg:idwbuff(2)%end, idwbuff(1)%beg:idwbuff(1)%end, 1:cont_idx%end))
-                else
-                    @:ALLOCATE(djL_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                        idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
-                    @:ALLOCATE(djR_rsz_vf(idwbuff(1)%beg:idwbuff(1)%end, &
-                        idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:cont_idx%end))
 
                 end if
             end if
@@ -800,14 +577,14 @@ contains
                                  & idwbuff(3)%beg:idwbuff(3)%end))
                     end if
 
-                    if (riemann_solver == 1) then
-                        do l = 1, Dif_size
-                            @:ALLOCATE(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf( &
-                                    & idwbuff(1)%beg:idwbuff(1)%end, &
-                                    & idwbuff(2)%beg:idwbuff(2)%end, &
-                                    & idwbuff(3)%beg:idwbuff(3)%end))
-                        end do
+                    do l = 1, Dif_size
+                        @:ALLOCATE(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf( &
+                                & idwbuff(1)%beg:idwbuff(1)%end, &
+                                & idwbuff(2)%beg:idwbuff(2)%end, &
+                                & idwbuff(3)%beg:idwbuff(3)%end))
+                    end do
 
+                    if (riemann_solver == 1) then
                         if (num_fluids > Dif_size) then
                             @:ALLOCATE(flux_src_n(i)%vf(advg_idx)%sf( &
                                      & idwbuff(1)%beg:idwbuff(1)%end, &
@@ -860,19 +637,19 @@ contains
                             !$acc enter data attach(flux_src_n(i)%vf(l)%sf)
                         end do
                     else
-                        if (num_fluids == Dif_size) then
-                            do l = 1, Dif_size
-                                flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf => flux_src_n(i)%vf(advg_idx)%sf
-                                !$acc enter data attach(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
-                            end do
-                        end if
+                        ! if (num_fluids == Dif_size) then
+                        !     do l = 1, Dif_size
+                        !         flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf => flux_src_n(i)%vf(advg_idx)%sf
+                        !         !$acc enter data attach(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
+                        !     end do
+                        ! end if
                         
                         
                         if (num_fluids > Dif_size) then
-                            do l = 1, Dif_size
-                                flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf => flux_src_n(i)%vf(advxb + liq_idx - 1)%sf
-                                !$acc enter data attach(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
-                            end do
+                            ! do l = 1, Dif_size
+                            !     flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf => flux_src_n(i)%vf(advxb + liq_idx - 1)%sf
+                            !     !$acc enter data attach(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
+                            ! end do
 
                             flux_src_n(i)%vf(advg_idx)%sf => flux_src_n(i)%vf(advxb + liq_idx - 1)%sf
                             !$acc enter data attach(flux_src_n(i)%vf(advg_idx)%sf)
@@ -973,9 +750,6 @@ contains
                 do k = idwbuff(2)%beg, idwbuff(2)%end
                     do j = idwbuff(1)%beg, idwbuff(1)%end
                         q_cons_qp%vf(i)%sf(j, k, l) = q_cons_vf(i)%sf(j, k, l)
-                        if (i == 4) then
-                            ! print *, "j: ", j, "momentum x", q_cons_qp%vf(i)%sf(j, k, l)
-                        end if
                     end do
                 end do
             end do
@@ -1014,25 +788,6 @@ contains
         call nvtxStartRange("RHS-COMMUNICATION")
         call s_populate_variables_buffers(q_prim_qp%vf, pb, mv)
         call nvtxEndRange
-
-        ! i = momxb
-        ! do l = idwbuff(3)%beg, idwbuff(3)%end
-        !     do k = idwbuff(2)%beg, idwbuff(2)%end
-        !         do j = idwbuff(1)%beg, idwbuff(1)%end
-        !             ! print *, "j: ", j, "vel conversion", q_prim_qp%vf(i)%sf(j, k, l)
-        !         end do
-        !     end do
-        ! end do
-
-        ! Gets the buffer region
-        ! call nvtxStartRange("RHS-DIFFUSION-COMMUNICATION")
-        ! if (diffusion) then
-        !     call s_convert_conservative_to_diffusion_variables( &
-        !         q_prim_qp%vf, &
-        !         j_vf_qp%vf, &
-        !         idwbuff)
-        ! end if
-        ! call nvtxEndRange
 
         call nvtxStartRange("RHS-ELASTIC")
         if (hyperelasticity) call s_hyperelastic_rmt_stress_update(q_cons_qp%vf, q_prim_qp%vf)
@@ -1073,7 +828,6 @@ contains
 
             call nvtxStartRange("RHS-WENO")
             
-            !Franz you are reconstructing mixture individual volume fracs, check if necessary
             if (.not. surface_tension .and. .not. diffusion) then
                 ! Reconstruct densitiess
                 iv%beg = 1; iv%end = sys_size
@@ -1100,7 +854,7 @@ contains
                         id)
                 end if    
 
-                iv%beg = advg_idx; iv%end = sys_size
+                iv%beg = advg_idx; iv%end = advg_idx
                 call s_reconstruct_cell_boundary_values( &
                     q_prim_qp%vf(iv%beg:iv%end), &
                     qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, &
@@ -1158,31 +912,19 @@ contains
             end if
 
             call nvtxEndRange ! WENO
-
+           
             if (diffusion) then
-                call s_correct_riemann_volume_fractions(qL_rsx_vf, idwbuff)
-                call s_correct_riemann_volume_fractions(qR_rsx_vf, idwbuff)
-                if (n > 0) then
-                    call s_correct_riemann_volume_fractions(qL_rsy_vf, idwbuff)
-                    call s_correct_riemann_volume_fractions(qR_rsy_vf, idwbuff)
-                    if (p > 0) then
-                        call s_correct_riemann_volume_fractions(qL_rsz_vf, idwbuff)
-                        call s_correct_riemann_volume_fractions(qR_rsz_vf, idwbuff)
-                    end if
-                end if
+                if (id == 3) then
+                    call s_correct_riemann_volume_fractions(qL_rsz_vf, idwbuff(3), idwbuff(2), idwbuff(1))
+                    call s_correct_riemann_volume_fractions(qR_rsz_vf, idwbuff(3), idwbuff(2), idwbuff(1))
+                else if (id == 2) then
+                    call s_correct_riemann_volume_fractions(qL_rsy_vf, idwbuff(2), idwbuff(1), idwbuff(3))
+                    call s_correct_riemann_volume_fractions(qR_rsy_vf, idwbuff(2), idwbuff(1), idwbuff(3))
+                else
+                     call s_correct_riemann_volume_fractions(qL_rsx_vf, idwbuff(1), idwbuff(2), idwbuff(3))
+                     call s_correct_riemann_volume_fractions(qR_rsx_vf, idwbuff(1), idwbuff(2), idwbuff(3))
+                end if 
             end if
-
-            ! do l = idwbuff(3)%beg, idwbuff(3)%end
-            !     do k = idwbuff(2)%beg, idwbuff(2)%end
-            !         do j = idwbuff(1)%beg, idwbuff(1)%end
-            !             print *, "at cell", j, "advg_idx rsx value:", qR_rsx_vf(j, k, l, advg_idx)
-            !             print *, "at cell", j, "liq_idx rsx value:", qR_rsx_vf(j, k, l, advxb + liq_idx - 1)
-            !             print *, "at cell", j, "gas 1 rsx value:", qR_rsx_vf(j, k, l, advxb)
-            !             print *, "at cell", j, "gas 2 rsx value:", qR_rsx_vf(j, k, l, advxb + 1) 
-            !         end do
-            !     end do
-            ! end do
-            ! print *, "Gone through compute rhs"
             
             ! Configuring Coordinate Direction Indexes
             if (id == 1) then
@@ -1375,7 +1117,6 @@ contains
 
         integer :: i, j, k, l, q
 
-        ! print *, diffusion
         if (alt_soundspeed) then
             !$acc parallel loop collapse(3) gang vector default(present)
             do l = 0, p
@@ -1393,6 +1134,9 @@ contains
                             else
                                 alpha2(j, k, l) = q_cons_vf%vf(advxe)%sf(j, k, l)
                             end if
+
+                            Kterm(j, k, l) = alpha1(j, k, l)*alpha2(j, k, l)*(blkmod2(j, k, l) - blkmod1(j, k, l))/ &
+                                         (alpha1(j, k, l)*blkmod2(j, k, l) + alpha2(j, k, l)*blkmod1(j, k, l))
                         else
                             
                             blkmod1(j, k, l) = ((gammas(liq_idx) + 1._wp)*q_prim_vf%vf(E_idx)%sf(j, k, l) + &
@@ -1441,30 +1185,47 @@ contains
                            flux_src_n(idir)%vf, idir, 1, irx, iry, irz)
             end if
 
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do j = 1, sys_size
-                do q = 0, p
-                    do l = 0, n
-                        do k = 0, m
-                            rhs_vf(j)%sf(k, l, q) = 1._wp/dx(k)* &
-                                                    (flux_n(1)%vf(j)%sf(k - 1, l, q) &
-                                                     - flux_n(1)%vf(j)%sf(k, l, q))
+            if (.not. diffusion) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do j = 1, sys_size
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                rhs_vf(j)%sf(k, l, q) = 1._wp/dx(k)* &
+                                                        (flux_n(1)%vf(j)%sf(k - 1, l, q) &
+                                                        - flux_n(1)%vf(j)%sf(k, l, q))
+                            end do
                         end do
                     end do
                 end do
-            end do
 
-            ! j = momxb
-            ! do q = 0, p
-            !     do l = 0, n
-            !         do k = 0, m
-            !             print *, "k: ", k, "rhs_vf: ", rhs_vf(j)%sf(k,l,q)
-            !         end do
-            !     end do
-            ! end do
+            else 
+                do j = 1, E_idx
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                rhs_vf(j)%sf(k, l, q) = 1._wp/dx(k)* &
+                                                        (flux_n(1)%vf(j)%sf(k - 1, l, q) &
+                                                        - flux_n(1)%vf(j)%sf(k, l, q))
+                            end do
+                        end do
+                    end do
+                end do
 
-            ! zero out rhs contribution for mixture gas volume fractions
-            if (diffusion) then
+                do j = advg_idx, sys_size
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                rhs_vf(j)%sf(k, l, q) = 1._wp/dx(k)* &
+                                                        (flux_n(1)%vf(j)%sf(k - 1, l, q) &
+                                                        - flux_n(1)%vf(j)%sf(k, l, q))
+                            end do
+                        end do
+                    end do
+                end do
+
+                ! zero out rhs contribution for mixture gas volume fractions
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do j = 1, Dif_size
                     do q = 0, p
@@ -1477,6 +1238,21 @@ contains
                         end do
                     end do
                 end do
+
+                if (num_fluids > Dif_size) then
+                    do j = advxb + liq_idx - 1, advxb + liq_idx - 1
+                        !$acc parallel loop collapse(4) gang vector default(present)
+                        do q = 0, p
+                            do l = 0, n
+                                do k = 0, m
+                                    rhs_vf(j)%sf(k, l, q) = 1._wp/dx(k)* &
+                                                            (flux_n(1)%vf(j)%sf(k - 1, l, q) &
+                                                            - flux_n(1)%vf(j)%sf(k, l, q))
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
             end if
 
             ! Franz update this for mixture gas model
@@ -1499,20 +1275,54 @@ contains
             end if
 
             if ((riemann_solver == 1) .and. (alt_soundspeed .neqv. .true.)) then
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do j = advxb, advxe
-                    do q = 0, p
-                        do l = 0, n
-                            do k = 0, m
-                                rhs_vf(j)%sf(k, l, q) = &
-                                    rhs_vf(j)%sf(k, l, q) + 1._wp/dx(k)* &
-                                    q_prim_vf%vf(contxe + idir)%sf(k, l, q)* &
-                                    (flux_src_n(1)%vf(j)%sf(k - 1, l, q) &
-                                     - flux_src_n(1)%vf(j)%sf(k, l, q))
+                if (.not. diffusion) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do j = advxb, advxe
+                        do q = 0, p
+                            do l = 0, n
+                                do k = 0, m
+                                    rhs_vf(j)%sf(k, l, q) = &
+                                        rhs_vf(j)%sf(k, l, q) + 1._wp/dx(k)* &
+                                        q_prim_vf%vf(contxe + idir)%sf(k, l, q)* &
+                                        (flux_src_n(1)%vf(j)%sf(k - 1, l, q) &
+                                        - flux_src_n(1)%vf(j)%sf(k, l, q))
+                                end do
                             end do
                         end do
                     end do
-                end do
+                else 
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do j = advg_idx, advg_idx
+                        do q = 0, p
+                            do l = 0, n
+                                do k = 0, m
+                                    rhs_vf(j)%sf(k, l, q) = &
+                                        rhs_vf(j)%sf(k, l, q) + 1._wp/dx(k)* &
+                                        q_prim_vf%vf(contxe + idir)%sf(k, l, q)* &
+                                        (flux_src_n(1)%vf(j)%sf(k - 1, l, q) &
+                                        - flux_src_n(1)%vf(j)%sf(k, l, q))
+                                end do
+                            end do
+                        end do
+                    end do
+
+                    if (num_fluids > Dif_size) then
+                        !$acc parallel loop collapse(4) gang vector default(present)
+                        do j = advxb + liq_idx - 1, advxb + liq_idx - 1
+                            do q = 0, p
+                                do l = 0, n
+                                    do k = 0, m
+                                        rhs_vf(j)%sf(k, l, q) = &
+                                            rhs_vf(j)%sf(k, l, q) + 1._wp/dx(k)* &
+                                            q_prim_vf%vf(contxe + idir)%sf(k, l, q)* &
+                                            (flux_src_n(1)%vf(j)%sf(k - 1, l, q) &
+                                            - flux_src_n(1)%vf(j)%sf(k, l, q))
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end if
+                end if
 
                 if (diffusion) then
                     !$acc parallel loop collapse(4) gang vector default(present)
@@ -1522,19 +1332,6 @@ contains
                                 do k = 0, m
                                     rhs_vf(advxb + Dif_idx(j) - 1)%sf(k, l, q) = 0.0_wp
                                 end do
-                            end do
-                        end do
-                    end do
-
-                    !$acc parallel loop collapse(3) gang vector default(present)
-                    do q = 0, p
-                        do l = 0, n
-                            do k = 0, m
-                                rhs_vf(advg_idx)%sf(k, l, q) = &
-                                                rhs_vf(advg_idx)%sf(k, l, q) + 1._wp/dx(k)* &
-                                                q_prim_vf%vf(contxe + idir)%sf(k, l, q)* &
-                                                (flux_src_n(1)%vf(advg_idx)%sf(k - 1, l, q) &
-                                                - flux_src_n(1)%vf(advg_idx)%sf(k, l, q))
                             end do
                         end do
                     end do
@@ -1572,10 +1369,10 @@ contains
                             end if
                         end do
                     else !diffusion
+                        !$acc parallel loop collapse(3) gang vector default(present)
                         do q = 0, p
                             do l = 0, n
                                 do k = 0, m
-                                    !$acc parallel loop collapse(3) gang vector default(present)
                                     rhs_vf(advxb + liq_idx - 1)%sf(k, l, q) = &
                                         rhs_vf(advxb + liq_idx - 1)%sf(k, l, q) + 1._wp/dx(k)* &
                                         (q_cons_vf%vf(advxb + liq_idx - 1)%sf(k, l, q) + Kterm(k, l, q))* &
@@ -1585,10 +1382,10 @@ contains
                             end do
                         end do
                         
+                        !$acc parallel loop collapse(3) gang vector default(present)
                         do q = 0, p
                             do l = 0, n
                                 do k = 0, m
-                                    !$acc parallel loop collapse(3) gang vector default(present)
                                     rhs_vf(advg_idx)%sf(k, l, q) = &
                                         rhs_vf(advg_idx)%sf(k, l, q) + 1._wp/dx(k)* &
                                         (q_cons_vf%vf(advg_idx)%sf(k, l, q) - Kterm(k, l, q))* &
@@ -1658,19 +1455,77 @@ contains
                            flux_src_n(idir)%vf, idir, 1, irx, iry, irz)
             end if
 
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do j = 1, sys_size
-                do l = 0, p
-                    do k = 0, n
-                        do q = 0, m
-                            rhs_vf(j)%sf(q, k, l) = &
-                                rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
-                                (flux_n(2)%vf(j)%sf(q, k - 1, l) &
-                                 - flux_n(2)%vf(j)%sf(q, k, l))
+            if (.not. diffusion) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do j = 1, sys_size
+                    do l = 0, p
+                        do k = 0, n
+                            do q = 0, m
+                                rhs_vf(j)%sf(q, k, l) = &
+                                    rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
+                                    (flux_n(2)%vf(j)%sf(q, k - 1, l) &
+                                    - flux_n(2)%vf(j)%sf(q, k, l))
+                            end do
                         end do
                     end do
                 end do
-            end do
+            else
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do j = 1, E_idx
+                    do l = 0, p
+                        do k = 0, n
+                            do q = 0, m
+                                rhs_vf(j)%sf(q, k, l) = &
+                                    rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
+                                    (flux_n(2)%vf(j)%sf(q, k - 1, l) &
+                                    - flux_n(2)%vf(j)%sf(q, k, l))
+                            end do
+                        end do
+                    end do
+                end do
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do j = advg_idx, sys_size
+                    do l = 0, p
+                        do k = 0, n
+                            do q = 0, m
+                                rhs_vf(j)%sf(q, k, l) = &
+                                    rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
+                                    (flux_n(2)%vf(j)%sf(q, k - 1, l) &
+                                    - flux_n(2)%vf(j)%sf(q, k, l))
+                            end do
+                        end do
+                    end do
+                end do
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do j = 1, Dif_size
+                    do l = 0, p
+                        do k = 0, n
+                            do q = 0, m
+                                rhs_vf(advxb + Dif_idx(j) - 1)%sf(q, k, l) = 0.0_wp
+                                ! rhs_vf(momxb + 1)%sf(q, k, l) = 0.0_wp
+                            end do
+                        end do
+                    end do
+                end do
+
+                if (num_fluids > Dif_size) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do j = advxb + liq_idx - 1, advxb + liq_idx - 1
+                        do l = 0, p
+                            do k = 0, n
+                                do q = 0, m
+                                    rhs_vf(j)%sf(q, k, l) = &
+                                        rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
+                                        (flux_n(2)%vf(j)%sf(q, k - 1, l) &
+                                        - flux_n(2)%vf(j)%sf(q, k, l))
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+            end if
 
             if (model_eqns == 3) then
                 !$acc parallel loop collapse(4) gang vector default(present)
@@ -1723,7 +1578,7 @@ contains
                     end do
                 end do
             end if
-
+            
             if (riemann_solver == 1) then
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do j = advxb, advxe
@@ -1739,66 +1594,120 @@ contains
                         end do
                     end do
                 end do
+
+                if (diffusion) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do j = 1, Dif_size
+                        do q = 0, p
+                            do l = 0, n
+                                do k = 0, m
+                                    rhs_vf(advxb + Dif_idx(j) - 1)%sf(k, l, q) = 0.0_wp
+                                end do
+                            end do
+                        end do
+                    end do
+
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do q = 0, p
+                        do l = 0, n
+                            do k = 0, m
+                                rhs_vf(advg_idx)%sf(k, l, q) = &
+                                                rhs_vf(advg_idx)%sf(k, l, q) + 1._wp/dy(l)* &
+                                                q_prim_vf%vf(contxe + idir)%sf(k, l, q)* &
+                                                (flux_src_n(2)%vf(advg_idx)%sf(k, l - 1, q) &
+                                                - flux_src_n(2)%vf(advg_idx)%sf(k, l, q))
+                            end do
+                        end do
+                    end do     
+                end if
             else
 
                 if (alt_soundspeed) then
-                    do j = advxb, advxe
-                        if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
-                            !$acc parallel loop collapse(3) gang vector default(present)
-                            do l = 0, p
-                                do k = 0, n
-                                    do q = 0, m
-                                        rhs_vf(j)%sf(q, k, l) = &
-                                            rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
-                                            (q_cons_vf%vf(j)%sf(q, k, l) - Kterm(q, k, l))* &
-                                            (flux_src_n(2)%vf(j)%sf(q, k, l) &
-                                             - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
-                                    end do
-                                end do
-                            end do
-                            if (cyl_coord) then
+                    if (.not. diffusion) then
+                        do j = advxb, advxe
+                            if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
-                                                rhs_vf(j)%sf(q, k, l) - &
-                                                (Kterm(q, k, l)/2._wp/y_cc(k))* &
+                                                rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
+                                                (q_cons_vf%vf(j)%sf(q, k, l) - Kterm(q, k, l))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
-                                                 + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
+                                                - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
                                     end do
                                 end do
-                            end if
-                        else if ((j == advxb) .and. (bubbles_euler .neqv. .true.)) then
-                            !$acc parallel loop collapse(3) gang vector default(present)
-                            do l = 0, p
-                                do k = 0, n
-                                    do q = 0, m
-                                        rhs_vf(j)%sf(q, k, l) = &
-                                            rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
-                                            (q_cons_vf%vf(j)%sf(q, k, l) + Kterm(q, k, l))* &
-                                            (flux_src_n(2)%vf(j)%sf(q, k, l) &
-                                             - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
+                                if (cyl_coord) then
+                                    !$acc parallel loop collapse(3) gang vector default(present)
+                                    do l = 0, p
+                                        do k = 0, n
+                                            do q = 0, m
+                                                rhs_vf(j)%sf(q, k, l) = &
+                                                    rhs_vf(j)%sf(q, k, l) - &
+                                                    (Kterm(q, k, l)/2._wp/y_cc(k))* &
+                                                    (flux_src_n(2)%vf(j)%sf(q, k, l) &
+                                                    + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
+                                            end do
+                                        end do
                                     end do
-                                end do
-                            end do
-                            if (cyl_coord) then
+                                end if
+                            else if ((j == advxb) .and. (bubbles_euler .neqv. .true.)) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
-                                                rhs_vf(j)%sf(q, k, l) + &
-                                                (Kterm(q, k, l)/2._wp/y_cc(k))* &
+                                                rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
+                                                (q_cons_vf%vf(j)%sf(q, k, l) + Kterm(q, k, l))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
-                                                 + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
+                                                - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
                                     end do
                                 end do
+                                if (cyl_coord) then
+                                    !$acc parallel loop collapse(3) gang vector default(present)
+                                    do l = 0, p
+                                        do k = 0, n
+                                            do q = 0, m
+                                                rhs_vf(j)%sf(q, k, l) = &
+                                                    rhs_vf(j)%sf(q, k, l) + &
+                                                    (Kterm(q, k, l)/2._wp/y_cc(k))* &
+                                                    (flux_src_n(2)%vf(j)%sf(q, k, l) &
+                                                    + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
+                                            end do
+                                        end do
+                                    end do
+                                end if
                             end if
-                        end if
-                    end do
+                        end do
+                    else !diffusion
+                        !$acc parallel loop collapse(3) gang vector default(present)
+                        do q = 0, p
+                            do l = 0, n
+                                do k = 0, m
+                                    rhs_vf(advxb + liq_idx - 1)%sf(k, l, q) = &
+                                        rhs_vf(advxb + liq_idx - 1)%sf(k, l, q) + 1._wp/dy(l)* &
+                                        (q_cons_vf%vf(advxb + liq_idx - 1)%sf(k, l, q) + Kterm(k, l, q))* &
+                                        (flux_src_n(2)%vf(advxb + liq_idx - 1)%sf(k, l, q) &
+                                        - flux_src_n(2)%vf(advxb + liq_idx - 1)%sf(k, l - 1, q))
+                                end do
+                            end do
+                        end do
+                        
+                        !$acc parallel loop collapse(3) gang vector default(present)
+                        do q = 0, p
+                            do l = 0, n
+                                do k = 0, m
+                                    rhs_vf(advg_idx)%sf(k, l, q) = &
+                                        rhs_vf(advg_idx)%sf(k, l, q) + 1._wp/dy(l)* &
+                                        (q_cons_vf%vf(advg_idx)%sf(k, l, q) - Kterm(k, l, q))* &
+                                        (flux_src_n(2)%vf(advg_idx)%sf(k, l, q) &
+                                        - flux_src_n(2)%vf(advg_idx)%sf(k, l - 1, q))
+                                end do
+                            end do
+                        end do
+                    end if
                 else
                     !$acc parallel loop collapse(4) gang vector default(present)
                     do j = advxb, advxe
@@ -1814,6 +1723,33 @@ contains
                             end do
                         end do
                     end do
+
+
+                    if (diffusion) then
+                        !$acc parallel loop collapse(4) gang vector default(present)
+                        do j = 1, Dif_size
+                            do q = 0, p
+                                do l = 0, n
+                                    do k = 0, m
+                                        rhs_vf(advxb + Dif_idx(j) - 1)%sf(k, l, q) = 0.0_wp
+                                    end do
+                                end do
+                            end do
+                        end do
+
+                        !$acc parallel loop collapse(3) gang vector default(present)
+                        do q = 0, p
+                            do l = 0, n
+                                do k = 0, m
+                                    rhs_vf(advg_idx)%sf(k, l, q) = &
+                                                    rhs_vf(advg_idx)%sf(k, l, q) + 1._wp/dy(l)* &
+                                                    q_cons_vf%vf(advg_idx)%sf(k, l, q)* &
+                                                    (flux_src_n(2)%vf(advg_idx)%sf(k, l, q) &
+                                                     - flux_src_n(2)%vf(advg_idx)%sf(k, l - 1, q))
+                                end do
+                            end do
+                        end do
+                    end if
                 end if
             end if
 
@@ -1863,19 +1799,77 @@ contains
                 end do
 
             else ! Cartesian Coordinates
-                !$acc parallel loop collapse(4) gang vector default(present)
-                do j = 1, sys_size
-                    do k = 0, p
-                        do q = 0, n
-                            do l = 0, m
-                                rhs_vf(j)%sf(l, q, k) = &
-                                    rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
-                                    (flux_n(3)%vf(j)%sf(l, q, k - 1) &
-                                     - flux_n(3)%vf(j)%sf(l, q, k))
+                if (.not. diffusion) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do j = 1, sys_size
+                        do k = 0, p
+                            do q = 0, n
+                                do l = 0, m
+                                    rhs_vf(j)%sf(l, q, k) = &
+                                        rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                        (flux_n(3)%vf(j)%sf(l, q, k - 1) &
+                                        - flux_n(3)%vf(j)%sf(l, q, k))
+                                end do
                             end do
                         end do
                     end do
-                end do
+                else
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do j = 1, E_idx
+                        do k = 0, p
+                            do q = 0, n
+                                do l = 0, m
+                                    rhs_vf(j)%sf(l, q, k) = &
+                                        rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                        (flux_n(3)%vf(j)%sf(l, q, k - 1) &
+                                        - flux_n(3)%vf(j)%sf(l, q, k))
+                                end do
+                            end do
+                        end do
+                    end do
+
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do j = advg_idx, sys_size
+                        do k = 0, p
+                            do q = 0, n
+                                do l = 0, m
+                                    rhs_vf(j)%sf(l, q, k) = &
+                                        rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                        (flux_n(3)%vf(j)%sf(l, q, k - 1) &
+                                        - flux_n(3)%vf(j)%sf(l, q, k))
+                                end do
+                            end do
+                        end do
+                    end do
+
+                    if (num_fluids > Dif_size) then
+                        !$acc parallel loop collapse(4) gang vector default(present)
+                        do j = advxb + liq_idx - 1, advxb + liq_idx - 1
+                            do k = 0, p
+                                do q = 0, n
+                                    do l = 0, m
+                                        rhs_vf(j)%sf(l, q, k) = &
+                                            rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                            (flux_n(3)%vf(j)%sf(l, q, k - 1) &
+                                            - flux_n(3)%vf(j)%sf(l, q, k))
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end if
+
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do j = 1, Dif_size
+                        do l = 0, p
+                            do k = 0, n
+                                do q = 0, m
+                                    rhs_vf(advxb + Dif_idx(j) - 1)%sf(q, k, l) = 0.0_wp
+                                    ! rhs_vf(momxb + 2)%sf(q, k, l) = 0.0_wp
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
             end if
 
             if (model_eqns == 3) then
@@ -2005,52 +1999,141 @@ contains
                             end do
                         end do
                     end do
-                else
-                    if (alt_soundspeed) then
-                        do j = advxb, advxe
-                            if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
-                                !$acc parallel loop collapse(3) gang vector default(present)
-                                do k = 0, p
-                                    do q = 0, n
-                                        do l = 0, m
-                                            rhs_vf(j)%sf(l, q, k) = &
-                                                rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
-                                                (q_cons_vf%vf(j)%sf(l, q, k) - Kterm(l, q, k))* &
-                                                (flux_src_n(3)%vf(j)%sf(l, q, k) &
-                                                 - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
-                                        end do
-                                    end do
-                                end do
-                            else if ((j == advxb) .and. (bubbles_euler .neqv. .true.)) then
-                                !$acc parallel loop collapse(3) gang vector default(present)
-                                do k = 0, p
-                                    do q = 0, n
-                                        do l = 0, m
-                                            rhs_vf(j)%sf(l, q, k) = &
-                                                rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
-                                                (q_cons_vf%vf(j)%sf(l, q, k) + Kterm(l, q, k))* &
-                                                (flux_src_n(3)%vf(j)%sf(l, q, k) &
-                                                 - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
-                                        end do
-                                    end do
-                                end do
-                            end if
-                        end do
-                    else
+
+                    if (diffusion) then
                         !$acc parallel loop collapse(4) gang vector default(present)
-                        do j = advxb, advxe
+                        do j = 1, Dif_size
                             do k = 0, p
                                 do q = 0, n
                                     do l = 0, m
-                                        rhs_vf(j)%sf(l, q, k) = &
-                                            rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
-                                            q_cons_vf%vf(j)%sf(l, q, k)* &
-                                            (flux_src_n(3)%vf(j)%sf(l, q, k) &
-                                             - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
+                                        rhs_vf(advxb + Dif_idx(j) - 1)%sf(l, q, k) = 0.0_wp
                                     end do
                                 end do
                             end do
                         end do
+
+                        !$acc parallel loop collapse(3) gang vector default(present)
+                        do k = 0, p
+                            do q = 0, n
+                                do l = 0, m
+                                    rhs_vf(advg_idx)%sf(l, q, k) = &
+                                                    rhs_vf(advg_idx)%sf(l, q, k) + 1._wp/dz(k)* &
+                                                    q_prim_vf%vf(contxe + idir)%sf(l, q, k)* &
+                                                    (flux_src_n(3)%vf(advg_idx)%sf(l, q, k - 1) &
+                                                     - flux_src_n(3)%vf(advg_idx)%sf(l, q, k))
+                                end do
+                            end do
+                        end do     
+                    end if
+                else
+                    if (alt_soundspeed) then
+                        if (.not. diffusion) then
+                            do j = advxb, advxe
+                                if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
+                                    !$acc parallel loop collapse(3) gang vector default(present)
+                                    do k = 0, p
+                                        do q = 0, n
+                                            do l = 0, m
+                                                rhs_vf(j)%sf(l, q, k) = &
+                                                    rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                                    (q_cons_vf%vf(j)%sf(l, q, k) - Kterm(l, q, k))* &
+                                                    (flux_src_n(3)%vf(j)%sf(l, q, k) &
+                                                    - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
+                                            end do
+                                        end do
+                                    end do
+                                else if ((j == advxb) .and. (bubbles_euler .neqv. .true.)) then
+                                    !$acc parallel loop collapse(3) gang vector default(present)
+                                    do k = 0, p
+                                        do q = 0, n
+                                            do l = 0, m
+                                                rhs_vf(j)%sf(l, q, k) = &
+                                                    rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                                    (q_cons_vf%vf(j)%sf(l, q, k) + Kterm(l, q, k))* &
+                                                    (flux_src_n(3)%vf(j)%sf(l, q, k) &
+                                                    - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
+                                            end do
+                                        end do
+                                    end do
+                                end if
+                            end do
+                        else !diffusion
+                            !$acc parallel loop collapse(3) gang vector default(present)
+                            do k = 0, p
+                                do q = 0, n
+                                    do l = 0, m
+                                        rhs_vf(advxb + liq_idx - 1)%sf(l, q, k) = &
+                                            rhs_vf(advxb + liq_idx - 1)%sf(l, q, k) + 1._wp/dz(k)* &
+                                            (q_cons_vf%vf(advxb + liq_idx - 1)%sf(l, q, k) + Kterm(l, q, k))* &
+                                            (flux_src_n(3)%vf(advxb + liq_idx - 1)%sf(l, q, k) &
+                                            - flux_src_n(3)%vf(advxb + liq_idx - 1)%sf(l, q, k - 1))
+                                    end do
+                                end do
+                            end do
+
+                            !$acc parallel loop collapse(3) gang vector default(present)
+                            do k = 0, p
+                                do q = 0, n
+                                    do l = 0, m
+                                        rhs_vf(advg_idx)%sf(l, q, k) = &
+                                            rhs_vf(advg_idx)%sf(l, q, k) + 1._wp/dz(k)* &
+                                            (q_cons_vf%vf(advg_idx)%sf(l, q, k) - Kterm(l, q, k))* &
+                                            (flux_src_n(3)%vf(advg_idx)%sf(l, q, k) &
+                                            - flux_src_n(3)%vf(advg_idx)%sf(l, q, k - 1))
+                                    end do
+                                end do
+                            end do
+                        end if
+                    else
+                        if (.not. diffusion) then
+                            !$acc parallel loop collapse(4) gang vector default(present)
+                            do j = advxb, advxe
+                                do k = 0, p
+                                    do q = 0, n
+                                        do l = 0, m
+                                            rhs_vf(j)%sf(l, q, k) = &
+                                                rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                                q_cons_vf%vf(j)%sf(l, q, k)* &
+                                                (flux_src_n(3)%vf(j)%sf(l, q, k) &
+                                                - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
+                                        end do
+                                    end do
+                                end do
+                            end do
+                        else
+                            !$acc parallel loop collapse(4) gang vector default(present)
+                            do j = advg_idx, advg_idx
+                                do k = 0, p
+                                    do q = 0, n
+                                        do l = 0, m
+                                            rhs_vf(j)%sf(l, q, k) = &
+                                                rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                                q_cons_vf%vf(j)%sf(l, q, k)* &
+                                                (flux_src_n(3)%vf(j)%sf(l, q, k) &
+                                                - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
+                                        end do
+                                    end do
+                                end do
+                            end do
+                            
+                            if (num_fluids > Dif_size) then
+                                !$acc parallel loop collapse(4) gang vector default(present)
+                                do j = advxb + liq_idx - 1, advxb + liq_idx - 1
+                                    do k = 0, p
+                                        do q = 0, n
+                                            do l = 0, m
+                                                rhs_vf(j)%sf(l, q, k) = &
+                                                    rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
+                                                    q_cons_vf%vf(j)%sf(l, q, k)* &
+                                                    (flux_src_n(3)%vf(j)%sf(l, q, k) &
+                                                    - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
+                                            end do
+                                        end do
+                                    end do
+                                end do
+                            end if
+
+                        end if 
                     end if
                 end if
             end if
@@ -2111,11 +2194,6 @@ contains
                         do k = 0, n
                             do j = 0, m
                                 do i = 1, Dif_size
-                                    ! rhs_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = &
-                                    !     rhs_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) - 1._wp/dx(j)* &
-                                    !     (j_src_n(advxb + Dif_idx(i) - 1)%sf(j, k, l) - &
-                                    !     j_src_n(advxb + Dif_idx(i) - 1)%sf(j - 1, k, l))
-
                                     rhs_vf(Dif_idx(i))%sf(j, k, l) = &
                                         rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dx(j)* &
                                         (j_src_n(Dif_idx(i))%sf(j, k, l) - &
@@ -2126,17 +2204,11 @@ contains
                                     rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dx(j)* &
                                     (j_src_n(E_idx)%sf(j, k, l) - &
                                     j_src_n(E_idx)%sf(j - 1, k, l))
-
-                                ! print *, "j: ", j, "rhs E_idx:", rhs_vf(E_idx)%sf(j, k, l)
-                                ! print *, "j: ", j, "rhs Dif 1:", rhs_vf(Dif_idx(1))%sf(j, k, l)
-                                ! print *, "j: ", j, "rhs Dif 2:", rhs_vf(Dif_idx(2))%sf(j, k, l)
                             end do
                         end do
                     end do
                 end if
             end if
-
-            ! error stop
 
         elseif (idir == 2) then ! y-direction
 
@@ -2204,20 +2276,45 @@ contains
                 end do
 
             else
-                !$acc parallel loop collapse(3) gang vector default(present)
-                do l = 0, p
-                    do k = 0, n
-                        do j = 0, m
-                            !$acc loop seq
-                            do i = momxb, E_idx
-                                rhs_vf(i)%sf(j, k, l) = &
-                                    rhs_vf(i)%sf(j, k, l) + 1._wp/dy(k)* &
-                                    (flux_src_n(i)%sf(j, k - 1, l) &
-                                     - flux_src_n(i)%sf(j, k, l))
+                if (viscous .or. surface_tension) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = 0, p
+                        do k = 0, n
+                            do j = 0, m
+                                !$acc loop seq
+                                do i = momxb, E_idx
+                                    rhs_vf(i)%sf(j, k, l) = &
+                                        rhs_vf(i)%sf(j, k, l) + 1._wp/dy(k)* &
+                                        (flux_src_n(i)%sf(j, k - 1, l) &
+                                        - flux_src_n(i)%sf(j, k, l))
+                                end do
                             end do
                         end do
                     end do
-                end do
+                end if
+
+                if (Dif_fv) then
+                    if (present(j_src_n)) then
+                        !$acc parallel loop collapse(3) gang vector default(present)
+                        do l = 0, p
+                            do k = 0, n
+                                do j = 0, m
+                                    do i = 1, Dif_size
+                                        rhs_vf(Dif_idx(i))%sf(j, k, l) = &
+                                            rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dy(k)* &
+                                            (j_src_n(Dif_idx(i))%sf(j, k, l) - &
+                                            j_src_n(Dif_idx(i))%sf(j, k - 1, l))
+                                    end do
+
+                                    rhs_vf(E_idx)%sf(j, k, l) = &
+                                        rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dy(k)* &
+                                        (j_src_n(E_idx)%sf(j, k, l) - &
+                                        j_src_n(E_idx)%sf(j, k - 1, l))
+                                end do
+                            end do
+                        end do
+                    end if
+                end if
             end if
 
             ! Applying the geometrical viscous Riemann source fluxes calculated as average
@@ -2290,20 +2387,45 @@ contains
                 end do
             end if
 
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do l = 0, p
-                do k = 0, n
-                    do j = 0, m
-                        !$acc loop seq
-                        do i = momxb, E_idx
-                            rhs_vf(i)%sf(j, k, l) = &
-                                rhs_vf(i)%sf(j, k, l) + 1._wp/dz(l)* &
-                                (flux_src_n(i)%sf(j, k, l - 1) &
-                                 - flux_src_n(i)%sf(j, k, l))
+            if (Dif_fv) then
+                if (present(j_src_n)) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = 0, p
+                        do k = 0, n
+                            do j = 0, m
+                                do i = 1, Dif_size
+                                    rhs_vf(Dif_idx(i))%sf(j, k, l) = &
+                                        rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dz(l)* &
+                                        (j_src_n(Dif_idx(i))%sf(j, k, l) - &
+                                        j_src_n(Dif_idx(i))%sf(j, k, l - 1))
+                                end do
+
+                                rhs_vf(E_idx)%sf(j, k, l) = &
+                                    rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dz(l)* &
+                                    (j_src_n(E_idx)%sf(j, k, l) - &
+                                    j_src_n(E_idx)%sf(j, k, l - 1))
+                            end do
+                        end do
+                    end do
+                end if
+            end if
+
+            if (viscous .or. surface_tension) then
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do l = 0, p
+                    do k = 0, n
+                        do j = 0, m
+                            !$acc loop seq
+                            do i = momxb, E_idx
+                                rhs_vf(i)%sf(j, k, l) = &
+                                    rhs_vf(i)%sf(j, k, l) + 1._wp/dz(l)* &
+                                    (flux_src_n(i)%sf(j, k, l - 1) &
+                                    - flux_src_n(i)%sf(j, k, l))
+                            end do
                         end do
                     end do
                 end do
-            end do
+            end if  
 
             if (grid_geometry == 3) then
                 !$acc parallel loop collapse(3) gang vector default(present)
@@ -2729,36 +2851,26 @@ contains
             nullify (q_prim_qp%vf(j)%sf)
         end do
 
+        if (diffusion) then
+            !$acc exit data detach(q_prim_qp%vf(advg_idx)%sf)
+            nullify (q_prim_qp%vf(advg_idx)%sf)
+        end if
+
         do j = mom_idx%beg, E_idx
             @:DEALLOCATE(q_cons_qp%vf(j)%sf)
             @:DEALLOCATE(q_prim_qp%vf(j)%sf)
         end do
 
-        if (diffusion) then
-            do j = cont_idx%beg, cont_idx%end
-                @:DEALLOCATE(j_vf_qp%vf(j)%sf)
-            end do
-
-            do j = adv_idx%beg, adv_idx%end
-                @:DEALLOCATE(j_vf_qp%vf(j)%sf)
-            end do
-        end if
 
         @:DEALLOCATE(q_cons_qp%vf, q_prim_qp%vf)
         @:DEALLOCATE(qL_rsx_vf, qR_rsx_vf)
-        @:DEALLOCATE(jL_rsx_vf, jR_rsx_vf)
-        if (diffusion) then
-            @:DEALLOCATE(j_vf_qp%vf)
-        end if
 
         if (n > 0) then
             @:DEALLOCATE(qL_rsy_vf, qR_rsy_vf)
-            @:DEALLOCATE(jL_rsy_vf, jR_rsy_vf)
         end if
 
         if (p > 0) then
             @:DEALLOCATE(qL_rsz_vf, qR_rsz_vf)
-            @:DEALLOCATE(jL_rsz_vf, jR_rsz_vf)
         end if
 
         if (viscous .and. weno_Re_flux) then
@@ -2770,18 +2882,6 @@ contains
 
             if (p > 0) then
                 @:DEALLOCATE(dqL_rsz_vf, dqR_rsz_vf)
-            end if
-        end if
-
-        if (diffusion .and. weno_Re_flux) then
-            @:DEALLOCATE(djL_rsx_vf, djR_rsx_vf)
-
-            if (n > 0) then
-                @:DEALLOCATE(djL_rsy_vf, djR_rsy_vf)
-            end if
-
-            if (p > 0) then
-                @:DEALLOCATE(djL_rsz_vf, djR_rsz_vf)
             end if
         end if
 
@@ -2812,30 +2912,6 @@ contains
             @:DEALLOCATE(dq_prim_dx_qp(1)%vf)
             @:DEALLOCATE(dq_prim_dy_qp(1)%vf)
             @:DEALLOCATE(dq_prim_dz_qp(1)%vf)
-        end if
-
-        if (diffusion) then
-            do l = 1, num_fluids
-                @:DEALLOCATE(dj_prim_dx_qp(1)%vf(l)%sf)
-            end do
-
-            if (n > 0) then
-
-                do l = 1, num_fluids
-                    @:DEALLOCATE(dj_prim_dy_qp(1)%vf(l)%sf)
-                end do
-
-                if (p > 0) then
-                    do l = 1, num_fluids
-                        @:DEALLOCATE(dj_prim_dz_qp(1)%vf(l)%sf)
-                    end do
-                end if
-
-            end if
-
-            @:DEALLOCATE(dj_prim_dx_qp(1)%vf)
-            @:DEALLOCATE(dj_prim_dy_qp(1)%vf)
-            @:DEALLOCATE(dj_prim_dz_qp(1)%vf)
         end if
 
         if (viscous) then
@@ -2871,41 +2947,6 @@ contains
 
         @:DEALLOCATE(dqL_prim_dx_n, dqL_prim_dy_n, dqL_prim_dz_n)
         @:DEALLOCATE(dqR_prim_dx_n, dqR_prim_dy_n, dqR_prim_dz_n)
-
-
-        if (diffusion) then
-            do i = num_dims, 1, -1
-
-                    do l = cont_idx%beg, cont_idx%end
-                        @:DEALLOCATE(djL_prim_dx_n(i)%vf(l)%sf)
-                        @:DEALLOCATE(djR_prim_dx_n(i)%vf(l)%sf)
-                    end do
-
-                    if (n > 0) then
-                        do l = cont_idx%beg, cont_idx%end
-                            @:DEALLOCATE(djL_prim_dy_n(i)%vf(l)%sf)
-                            @:DEALLOCATE(djR_prim_dy_n(i)%vf(l)%sf)
-                        end do
-                    end if
-
-                    if (p > 0) then
-                        do l = cont_idx%beg, cont_idx%end
-                            @:DEALLOCATE(djL_prim_dz_n(i)%vf(l)%sf)
-                            @:DEALLOCATE(djR_prim_dz_n(i)%vf(l)%sf)
-                        end do
-                    end if
-
-                @:DEALLOCATE(djL_prim_dx_n(i)%vf)
-                @:DEALLOCATE(djL_prim_dy_n(i)%vf)
-                @:DEALLOCATE(djL_prim_dz_n(i)%vf)
-                @:DEALLOCATE(djR_prim_dx_n(i)%vf)
-                @:DEALLOCATE(djR_prim_dy_n(i)%vf)
-                @:DEALLOCATE(djR_prim_dz_n(i)%vf)
-            end do
-        end if
-        
-        @:DEALLOCATE(djL_prim_dx_n, djL_prim_dy_n, djL_prim_dz_n)
-        @:DEALLOCATE(djR_prim_dx_n, djR_prim_dy_n, djR_prim_dz_n)
 
         do i = num_dims, 1, -1
             if (i /= 1) then
@@ -2955,19 +2996,16 @@ contains
 
                     @:DEALLOCATE(flux_src_n(i)%vf(adv_idx%beg)%sf)
                 else
-                    if (riemann_solver == 1) then
-                        do l = 1, Dif_size
-                            @:DEALLOCATE(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
-                        end do
 
+                    do l = 1, Dif_size
+                        @:DEALLOCATE(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
+                    end do
+
+                    if (riemann_solver == 1) then
                         if (num_fluids > Dif_size) then
                             @:DEALLOCATE(flux_src_n(i)%vf(advg_idx)%sf)
                         end if
                     else
-                        do l = 1, Dif_size
-                            nullify (flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
-                        end do
-
                         if (num_fluids > Dif_size) then
                             nullify (flux_src_n(i)%vf(advg_idx)%sf)
                             @:DEALLOCATE(flux_src_n(i)%vf(advxb + liq_idx - 1)%sf)

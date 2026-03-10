@@ -79,27 +79,31 @@ print(
             "probe_wrt": "F",
             
             # Patch 1 C02
-            "patch_icpp(1)%geometry": 1,
+            "patch_icpp(1)%geometry": 3,
             "patch_icpp(1)%x_centroid": 0.5,
+            "patch_icpp(1)%y_centroid": 0.5,
             "patch_icpp(1)%length_x": 1.0,
+            "patch_icpp(1)%length_y": 1.0,
             "patch_icpp(1)%vel(1)": 0.0,
             "patch_icpp(1)%pres": p0,
-            "patch_icpp(1)%alpha_rho(1)": rho_co2*(1.0 - small_fluid),
-            "patch_icpp(1)%alpha_rho(2)": rho_n2*small_fluid,
-            "patch_icpp(1)%alpha(1)": 1.0 - small_fluid,
-            "patch_icpp(1)%alpha(2)": small_fluid,
+            "patch_icpp(1)%alpha_rho(1)": rho_co2,
+            "patch_icpp(1)%alpha_rho(2)": 0.0,
+            "patch_icpp(1)%alpha(1)": 1.0,
+            "patch_icpp(1)%alpha(2)": 0.0,
             
             # Patch 2 N2
             "patch_icpp(2)%geometry": 1,
             "patch_icpp(2)%x_centroid": 0.75,
+            "patch_icpp(2)%y_centroid": 0.5,
             "patch_icpp(2)%length_x": 0.5,
+            "patch_icpp(2)%length_y": 1.0,
             "patch_icpp(2)%alter_patch(1)": "T",
             "patch_icpp(2)%vel(1)": 0.0,
             "patch_icpp(2)%pres": p0,
-            "patch_icpp(2)%alpha_rho(1)": rho_co2*small_fluid,
-            "patch_icpp(2)%alpha_rho(2)": rho_n2*(1.0 - small_fluid),
-            "patch_icpp(2)%alpha(1)": small_fluid,
-            "patch_icpp(2)%alpha(2)": 1.0 - small_fluid,
+            "patch_icpp(2)%alpha_rho(1)": 0.0,
+            "patch_icpp(2)%alpha_rho(2)": rho_n2,
+            "patch_icpp(2)%alpha(1)": 0.0,
+            "patch_icpp(2)%alpha(2)": 1.0,
             
             # Fluids Physical Parameters
             # CO2

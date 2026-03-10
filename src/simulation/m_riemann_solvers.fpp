@@ -2631,12 +2631,12 @@ contains
                                     if (alphag_L > small_num_dif) then
                                         !$acc loop seq
                                         do i = 1, Dif_size
-                                            rho_dif_L = rho_dif_L + alpha_rho_L(Dif_idx(i))
+                                            rho_dif_L = rho_dif_L + qL_prim_rs${XYZ}$_vf(j, k, l, Dif_idx(i))
                                         end do
 
                                         !$acc loop seq
                                         do i = 1, Dif_size
-                                            Y_dif_L(i) = alpha_rho_L(Dif_idx(i)) / rho_dif_L
+                                            Y_dif_L(i) = qL_prim_rs${XYZ}$_vf(j, k, l, Dif_idx(i)) / rho_dif_L
                                         end do
 
                                         gam_num_L = 0._wp
@@ -2661,12 +2661,12 @@ contains
                                     if (alphag_R > small_num_dif) then
                                         !$acc loop seq
                                         do i = 1, Dif_size
-                                            rho_dif_R = rho_dif_R + alpha_rho_R(Dif_idx(i))
+                                            rho_dif_R = rho_dif_R + qR_prim_rs${XYZ}$_vf(j + 1, k, l, Dif_idx(i))
                                         end do
 
                                         !$acc loop seq
                                         do i = 1, Dif_size
-                                            Y_dif_R(i) = alpha_rho_R(Dif_idx(i)) / rho_dif_R
+                                            Y_dif_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, Dif_idx(i)) / rho_dif_R
                                         end do
 
                                         gam_num_R = 0._wp
@@ -2701,7 +2701,6 @@ contains
                                     ! call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
                                     !                             vel_avg_rms, c_sum_Yi_Phi, c_avg, alphag_avg, gam_mix_avg)
 
-                                    ! print *, 'j: ', j, 'c_L: ', c_L, ' c_R: ', c_R
 
                                     if (avg_state == 1) c_avg = (sqrt(rho_L)*c_L + sqrt(rho_R)*c_R)/ (sqrt(rho_L) + sqrt(rho_R))
                                     if (avg_state == 2) c_avg = 0.5_wp*(c_L + c_R)
@@ -2897,6 +2896,10 @@ contains
                                             + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + liq_idx - 1) &
                                             *(vel_R(idx1) + s_P*(xi_R - 1._wp))
                                     end if
+                                    !$acc loop seq
+                                    do i = 1, Dif_size
+                                        flux_rs${XYZ}$_vf(j, k, l, advxb + Dif_idx(i) - 1) = 0.0_wp
+                                    end do
                                 end if
 
                                 ! VOLUME FRACTION SOURCE FLUX.
@@ -4741,17 +4744,57 @@ contains
 
         ! Reshaping Outputted Data in y-direction
         if (norm_dir == 2) then
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do i = 1, sys_size
-                do l = is3%beg, is3%end
-                    do j = is1%beg, is1%end
-                        do k = is2%beg, is2%end
-                            flux_vf(i)%sf(k, j, l) = &
-                                flux_rsy_vf(j, k, l, i)
+            if (.not. diffusion) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = 1, sys_size
+                    do l = is3%beg, is3%end
+                        do j = is1%beg, is1%end
+                            do k = is2%beg, is2%end
+                                flux_vf(i)%sf(k, j, l) = &
+                                    flux_rsy_vf(j, k, l, i)
+                            end do
                         end do
                     end do
                 end do
-            end do
+            else
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = 1, E_idx
+                    do l = is3%beg, is3%end
+                        do j = is1%beg, is1%end
+                            do k = is2%beg, is2%end
+                                flux_vf(i)%sf(k, j, l) = &
+                                    flux_rsy_vf(j, k, l, i)
+                            end do
+                        end do
+                    end do
+                end do
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = advg_idx, advg_idx
+                    do l = is3%beg, is3%end
+                        do j = is1%beg, is1%end
+                            do k = is2%beg, is2%end
+                                flux_vf(i)%sf(k, j, l) = &
+                                    flux_rsy_vf(j, k, l, i)
+                            end do
+                        end do
+                    end do
+                end do
+
+                if (num_fluids > Dif_size) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do i = advxb + liq_idx - 1, advxb + liq_idx - 1
+                        do l = is3%beg, is3%end
+                            do j = is1%beg, is1%end
+                                do k = is2%beg, is2%end
+                                    flux_vf(i)%sf(k, j, l) = &
+                                        flux_rsy_vf(j, k, l, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+            end if
 
             if (cyl_coord) then
                 !$acc parallel loop collapse(4) gang vector default(present)
@@ -4767,44 +4810,137 @@ contains
                 end do
             end if
 
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do l = is3%beg, is3%end
-                do j = is1%beg, is1%end
-                    do k = is2%beg, is2%end
-                        flux_src_vf(advxb)%sf(k, j, l) = &
-                            flux_src_rsy_vf(j, k, l, advxb)
+            if (.not. diffusion) then
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do l = is3%beg, is3%end
+                    do j = is1%beg, is1%end
+                        do k = is2%beg, is2%end
+                            flux_src_vf(advxb)%sf(k, j, l) = &
+                                flux_src_rsy_vf(j, k, l, advxb)
+                        end do
                     end do
                 end do
-            end do
 
-            if (riemann_solver == 1) then
+                if (riemann_solver == 1) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do i = advxb + 1, advxe
+                        do l = is3%beg, is3%end
+                            do j = is1%beg, is1%end
+                                do k = is2%beg, is2%end
+                                    flux_src_vf(i)%sf(k, j, l) = &
+                                        flux_src_rsy_vf(j, k, l, i)
+                                end do
+                            end do
+                        end do
+                    end do
+
+                end if
+            else
                 !$acc parallel loop collapse(4) gang vector default(present)
-                do i = advxb + 1, advxe
+                do i = 1, Dif_size
                     do l = is3%beg, is3%end
                         do j = is1%beg, is1%end
                             do k = is2%beg, is2%end
-                                flux_src_vf(i)%sf(k, j, l) = &
-                                    flux_src_rsy_vf(j, k, l, i)
+                                flux_src_vf(advxb + Dif_idx(i) - 1)%sf(k, j, l) = 0.0_wp
                             end do
                         end do
                     end do
                 end do
 
+                if (num_fluids > Dif_size) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = is3%beg, is3%end
+                        do j = is1%beg, is1%end
+                            do k = is2%beg, is2%end
+                                flux_src_vf(advxb + liq_idx - 1)%sf(k, j, l) = &
+                                    flux_src_rsy_vf(j, k, l, advxb + liq_idx - 1)
+                            end do
+                        end do
+                    end do
+
+                    if (riemann_solver == 1) then
+                        !$acc parallel loop collapse(3) gang vector default(present)
+                        do l = is3%beg, is3%end
+                            do j = is1%beg, is1%end
+                                do k = is2%beg, is2%end
+                                    flux_src_vf(advg_idx)%sf(k, j, l) = &
+                                        flux_src_rsy_vf(j, k, l, advg_idx)
+                                end do
+                            end do
+                        end do
+                    end if
+                else if (num_fluids == Dif_size) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = is3%beg, is3%end
+                        do j = is1%beg, is1%end
+                            do k = is2%beg, is2%end
+                                flux_src_vf(advg_idx)%sf(k, j, l) = &
+                                    flux_src_rsy_vf(j, k, l, advg_idx)
+                            end do
+                        end do
+                    end do
+                end if
             end if
             ! Reshaping Outputted Data in z-direction
         elseif (norm_dir == 3) then
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do i = 1, sys_size
-                do j = is1%beg, is1%end
-                    do k = is2%beg, is2%end
-                        do l = is3%beg, is3%end
 
-                            flux_vf(i)%sf(l, k, j) = &
-                                flux_rsz_vf(j, k, l, i)
+            if (.not. diffusion) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = 1, sys_size
+                    do j = is1%beg, is1%end
+                        do k = is2%beg, is2%end
+                            do l = is3%beg, is3%end
+
+                                flux_vf(i)%sf(l, k, j) = &
+                                    flux_rsz_vf(j, k, l, i)
+                            end do
                         end do
                     end do
                 end do
-            end do
+            else
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = 1, E_idx
+                    do j = is1%beg, is1%end
+                        do k = is2%beg, is2%end
+                            do l = is3%beg, is3%end
+
+                                flux_vf(i)%sf(l, k, j) = &
+                                    flux_rsz_vf(j, k, l, i)
+                            end do
+                        end do
+                    end do
+                end do
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = advg_idx, advg_idx
+                    do j = is1%beg, is1%end
+                        do k = is2%beg, is2%end
+                            do l = is3%beg, is3%end
+
+                                flux_vf(i)%sf(l, k, j) = &
+                                    flux_rsz_vf(j, k, l, i)
+                            end do
+                        end do
+                    end do
+                end do
+
+                if (num_fluids > Dif_size) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do i = advxb + liq_idx - 1, advxb + liq_idx - 1
+                        do j = is1%beg, is1%end
+                            do k = is2%beg, is2%end
+                                do l = is3%beg, is3%end
+
+                                    flux_vf(i)%sf(l, k, j) = &
+                                        flux_rsz_vf(j, k, l, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+            end if
+
+
             if (grid_geometry == 3) then
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do i = 1, sys_size
@@ -4820,42 +4956,133 @@ contains
                 end do
             end if
 
-            !$acc parallel loop collapse(3) gang vector default(present)
-            do j = is1%beg, is1%end
-                do k = is2%beg, is2%end
-                    do l = is3%beg, is3%end
-                        flux_src_vf(advxb)%sf(l, k, j) = &
-                            flux_src_rsz_vf(j, k, l, advxb)
+            if (.not. diffusion) then
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do j = is1%beg, is1%end
+                    do k = is2%beg, is2%end
+                        do l = is3%beg, is3%end
+                            flux_src_vf(advxb)%sf(l, k, j) = &
+                                flux_src_rsz_vf(j, k, l, advxb)
+                        end do
                     end do
                 end do
-            end do
 
-            if (riemann_solver == 1) then
+                if (riemann_solver == 1) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do i = advxb + 1, advxe
+                        do j = is1%beg, is1%end
+                            do k = is2%beg, is2%end
+                                do l = is3%beg, is3%end
+                                    flux_src_vf(i)%sf(l, k, j) = &
+                                        flux_src_rsz_vf(j, k, l, i)
+                                end do
+                            end do
+                        end do
+                    end do
+
+                end if
+            else
                 !$acc parallel loop collapse(4) gang vector default(present)
-                do i = advxb + 1, advxe
+                do i = 1, Dif_size
                     do j = is1%beg, is1%end
                         do k = is2%beg, is2%end
                             do l = is3%beg, is3%end
-                                flux_src_vf(i)%sf(l, k, j) = &
-                                    flux_src_rsz_vf(j, k, l, i)
+                                flux_src_vf(advxb + Dif_idx(i) - 1)%sf(l, k, j) = 0.0_wp
                             end do
                         end do
                     end do
                 end do
 
+                if (num_fluids > Dif_size) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do j = is1%beg, is1%end
+                        do k = is2%beg, is2%end
+                            do l = is3%beg, is3%end
+                                flux_src_vf(advxb + liq_idx - 1)%sf(l, k, j) = &
+                                    flux_src_rsz_vf(j, k, l, advxb + liq_idx - 1)
+                            end do
+                        end do
+                    end do
+
+                    if (riemann_solver == 1) then
+                        !$acc parallel loop collapse(3) gang vector default(present)
+                        do j = is1%beg, is1%end
+                            do k = is2%beg, is2%end
+                                do l = is3%beg, is3%end
+                                    flux_src_vf(advg_idx)%sf(l, k, j) = &
+                                        flux_src_rsz_vf(j, k, l, advg_idx)
+                                end do
+                            end do
+                        end do
+                    end if
+                else if (num_fluids == Dif_size) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do j = is1%beg, is1%end
+                        do k = is2%beg, is2%end
+                            do l = is3%beg, is3%end
+                                flux_src_vf(advg_idx)%sf(l, k, j) = &
+                                    flux_src_rsz_vf(j, k, l, advg_idx)
+                            end do
+                        end do
+                    end do
+                end if
+
             end if
         elseif (norm_dir == 1) then
-            !$acc parallel loop collapse(4) gang vector default(present)
-            do i = 1, sys_size
-                do l = is3%beg, is3%end
-                    do k = is2%beg, is2%end
-                        do j = is1%beg, is1%end
-                            flux_vf(i)%sf(j, k, l) = &
-                                flux_rsx_vf(j, k, l, i)
+            
+            if (.not. diffusion) then
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = 1, sys_size
+                    do l = is3%beg, is3%end
+                        do k = is2%beg, is2%end
+                            do j = is1%beg, is1%end
+                                flux_vf(i)%sf(j, k, l) = &
+                                    flux_rsx_vf(j, k, l, i)
+                            end do
                         end do
                     end do
                 end do
-            end do
+            else
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = 1, E_idx
+                    do l = is3%beg, is3%end
+                        do k = is2%beg, is2%end
+                            do j = is1%beg, is1%end
+                                flux_vf(i)%sf(j, k, l) = &
+                                    flux_rsx_vf(j, k, l, i)
+                            end do
+                        end do
+                    end do
+                end do
+
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = advg_idx, advg_idx
+                    do l = is3%beg, is3%end
+                        do k = is2%beg, is2%end
+                            do j = is1%beg, is1%end
+                                flux_vf(i)%sf(j, k, l) = &
+                                    flux_rsx_vf(j, k, l, i)
+                            end do
+                        end do
+                    end do
+                end do
+
+
+                if (num_fluids > Dif_size) then
+                    !$acc parallel loop collapse(4) gang vector default(present)
+                    do i = advxb + liq_idx - 1, advb + liq_idx - 1
+                        do l = is3%beg, is3%end
+                            do k = is2%beg, is2%end
+                                do j = is1%beg, is1%end
+                                    flux_vf(i)%sf(j, k, l) = &
+                                        flux_rsx_vf(j, k, l, i)
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+
+            end if
 
             if (.not. diffusion) then
 
@@ -4884,6 +5111,17 @@ contains
                 end if
 
             else
+                !$acc parallel loop collapse(4) gang vector default(present)
+                do i = 1, Dif_size
+                    do l = is3%beg, is3%end
+                        do k = is2%beg, is2%end
+                            do j = is1%beg, is1%end
+                                flux_src_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = 0._wp
+                            end do
+                        end do
+                    end do
+                end do
+                
                 if (num_fluids > Dif_size) then
                     !$acc parallel loop collapse(3) gang vector default(present)
                     do l = is3%beg, is3%end
@@ -4905,17 +5143,6 @@ contains
                                 end do
                             end do
                         end do
-
-                        !$acc parallel loop collapse(4) gang vector default(present)
-                        do i = 1, Dif_size
-                            do l = is3%beg, is3%end
-                                do k = is2%beg, is2%end
-                                    do j = is1%beg, is1%end
-                                        flux_src_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = 0._wp
-                                    end do
-                                end do
-                            end do
-                        end do
                     end if
                 else if (num_fluids == Dif_size) then
                     !$acc parallel loop collapse(3) gang vector default(present)
@@ -4927,20 +5154,8 @@ contains
                             end do
                         end do
                     end do
-
-                    if (riemann_solver == 1) then
-                        !$acc parallel loop collapse(4) gang vector default(present)
-                        do i = 1, Dif_size
-                            do l = is3%beg, is3%end
-                                do k = is2%beg, is2%end
-                                    do j = is1%beg, is1%end
-                                        flux_src_vf(advxb + Dif_idx(i) - 1)%sf(j, k, l) = 0._wp
-                                    end do
-                                end do
-                            end do
-                        end do
-                    end if
                 end if
+
             end if
         end if
 
