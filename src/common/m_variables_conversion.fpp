@@ -1461,6 +1461,7 @@ contains
         ! the shear and volume Reynolds numbers and the Weber numbers
         real(wp), dimension(num_fluids) :: alpha_rho_K
         real(wp), dimension(num_fluids) :: alpha_K
+        real(wp) :: alpha_g
         real(wp) :: rho_K
         real(wp), dimension(num_dims) :: vel_K
         real(wp) :: vel_K_sum
@@ -1497,6 +1498,9 @@ contains
                     do i = advxb, advxe
                         alpha_K(i - E_idx) = qK_prim_vf(j, k, l, i)
                     end do
+
+                    if (diffusion) alpha_g = qK_prim_vf(j, k, l, advg_idx)
+
                     !$acc loop seq
                     do i = 1, num_dims
                         vel_K(i) = qK_prim_vf(j, k, l, contxe + i)
@@ -1549,6 +1553,9 @@ contains
                             FK_src_vf(j, k, l, i) = alpha_K(i - E_idx)
                         end do
 
+                        if (diffusion) FK_vf(j, k, l, advg_idx) = 0._wp
+                        if (diffusion) FK_src_vf(j, k, l, advg_idx) = alpha_g
+
                     else
                         ! Could be bubbles_euler!
                         !$acc loop seq
@@ -1556,10 +1563,14 @@ contains
                             FK_vf(j, k, l, i) = vel_K(dir_idx(1))*alpha_K(i - E_idx)
                         end do
 
+                        if (diffusion) FK_vf(j, k, l, advg_idx) = vel_K(dir_idx(1))*alpha_g
+
                         !$acc loop seq
                         do i = advxb, advxe
                             FK_src_vf(j, k, l, i) = vel_K(dir_idx(1))
                         end do
+
+                        if (diffusion) FK_src_vf(j, k, l, advg_idx) = vel_K(dir_idx(1))
 
                     end if
 

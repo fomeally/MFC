@@ -365,19 +365,7 @@ contains
 
         if (diffusion) then
             call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
-        end if
-
-        ! i = momxb
-        ! do l = 0, p
-        !     do k = 0, n
-        !         do j = 0, m
-        !             print *, "j: ", j, "i: ", i, " q_prim_ts after diffusion: ", q_prim_vf(i)%sf(j, k, l)
-        !         end do
-        !     end do
-        ! end do
-        
-
-        
+        end if     
 
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then

@@ -187,7 +187,7 @@ contains
         #:for VAR in [ 'run_time_info','cyl_coord', 'mpp_lim',     &
             &  'mp_weno', 'rdma_mpi', 'weno_flat', 'riemann_flat', &
             & 'weno_Re_flux', 'weno_Dif_flux', 'Dif_fv', 'alt_soundspeed', 'null_weights', 'mixture_err',   &
-            & 'parallel_io', 'hypoelasticity', 'diffusion', 'bubbles_euler', 'polytropic',    &
+            & 'parallel_io', 'hypoelasticity', 'diffusion', 'conduction', 'bubbles_euler', 'polytropic',    &
             & 'polydisperse', 'qbmm', 'acoustic_source', 'probe_wrt', 'integral_wrt',   &
             & 'prim_vars_wrt', 'weno_avg', 'file_per_process', 'relax',          &
             & 'adv_n', 'adap_dt', 'ib', 'bodyForces', 'bf_x', 'bf_y', 'bf_z',    &
@@ -257,7 +257,7 @@ contains
 
         do i = 1, num_fluids_max
             #:for VAR in [ 'gamma','pi_inf','mul0','ss','pv','gamma_v','M_v',  &
-                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp', 'W', 'cp', 'T0', 'h0']
+                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp', 'W', 'cp', 'T0', 'h0', 'k']
                 call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
             call MPI_BCAST(fluid_pp(i)%gas_mixture, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)

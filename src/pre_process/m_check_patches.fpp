@@ -97,6 +97,8 @@ contains
                     call s_check_tanh_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == 24) then
                     call s_check_tanh_patch_geometry(i)
+                else if (patch_icpp(i)%geometry == 25) then
+                    call s_check_tanh_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == dflt_int) then
                     call s_prohibit_abort("Active patch undefined", "patch_icpp("//trim(iStr)//")%geometry must be set")
                 else

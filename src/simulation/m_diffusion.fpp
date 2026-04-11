@@ -26,6 +26,8 @@ module m_diffusion
     implicit none
 
     private; public :: s_initialize_diffusion_module, &
+s_initialize_fv4_weights_dir, &
+s_solve_4x4, &
 s_fill_face_weights_1d_2nd, &
 s_fill_face_weights_1d_4th, &
 s_compute_sum_alpha_g, &
@@ -132,18 +134,205 @@ contains
             @:ALLOCATE(w_interp4(-1:2, -1:max(m, n, p), 1:num_dims))
             @:ALLOCATE(w_grad4(-1:2, -1:max(m, n, p), 1:num_dims))
 
-            call s_fill_face_weights_1d_4th(-1, m, 1)
+            ! call s_fill_face_weights_1d_4th(-1, m, 1)
+            ! if (n > 0) then
+            !     call s_fill_face_weights_1d_4th(-1, n, 2)
+
+            !     if (p > 0) then
+            !         call s_fill_face_weights_1d_4th(-1, p, 3)
+            !     end if
+            ! end if
+
+            call s_initialize_fv4_weights_dir(-1, m, 1)
             if (n > 0) then
-                call s_fill_face_weights_1d_4th(-1, n, 2)
+                call s_initialize_fv4_weights_dir(-1, n, 2)
 
                 if (p > 0) then
-                    call s_fill_face_weights_1d_4th(-1, p, 3)
+                    call s_initialize_fv4_weights_dir(-1, p, 3)
                 end if
             end if
             !$acc update device(w_interp4, w_grad4)
         end if
 
     end subroutine s_initialize_diffusion_module
+
+    subroutine s_initialize_fv4_weights_dir(ifbeg, ifend, idir)
+
+        implicit none
+
+        integer, intent(in) :: ifbeg, ifend, idir
+
+        integer :: i, col, n, info
+        real(wp) :: xf_stencil(0:4)
+        real(wp) :: A(4,4), rhs(4)
+        real(wp) :: xL, xR, dx_loc, xf
+
+        do i = ifbeg, ifend
+
+            !------------------------------------------------------------
+            ! Build local face stencil from cb arrays
+            !------------------------------------------------------------
+            select case (idir)
+
+            case (1)
+                xf_stencil(0) = x_cb(i-1)
+                xf_stencil(1) = x_cb(i  )
+                xf_stencil(2) = x_cb(i+1)
+                xf_stencil(3) = x_cb(i+2)
+                xf_stencil(4) = x_cb(i+3)
+
+            case (2)
+                xf_stencil(0) = y_cb(i-1)
+                xf_stencil(1) = y_cb(i  )
+                xf_stencil(2) = y_cb(i+1)
+                xf_stencil(3) = y_cb(i+2)
+                xf_stencil(4) = y_cb(i+3)
+
+            case (3)
+                xf_stencil(0) = z_cb(i-1)
+                xf_stencil(1) = z_cb(i  )
+                xf_stencil(2) = z_cb(i+1)
+                xf_stencil(3) = z_cb(i+2)
+                xf_stencil(4) = z_cb(i+3)
+
+            end select
+
+            xf = xf_stencil(2)   ! target face
+
+            !------------------------------------------------------------
+            ! Build moment matrix A
+            !------------------------------------------------------------
+            do col = 1, 4
+                xL = xf_stencil(col-1)
+                xR = xf_stencil(col)
+                dx_loc = xR - xL
+
+                do n = 0, 3
+                    A(n+1,col) = (xR**(n+1) - xL**(n+1)) / ((n+1._wp) * dx_loc)
+                end do
+            end do
+
+            !------------------------------------------------------------
+            ! Interpolation weights
+            !------------------------------------------------------------
+            do n = 0, 3
+                rhs(n+1) = xf**n
+            end do
+
+            call s_solve_4x4(A, rhs, w_interp4(:, i, idir), info)
+            if (info /= 0) call s_mpi_abort('Error computing FV interp weights')
+
+            !------------------------------------------------------------
+            ! Rebuild A (solver overwrites it)
+            !------------------------------------------------------------
+            do col = 1, 4
+                xL = xf_stencil(col-1)
+                xR = xf_stencil(col)
+                dx_loc = xR - xL
+
+                do n = 0, 3
+                    A(n+1,col) = (xR**(n+1) - xL**(n+1)) / ((n+1._wp) * dx_loc)
+                end do
+            end do
+
+            !------------------------------------------------------------
+            ! Gradient weights
+            !------------------------------------------------------------
+            rhs(1) = 0._wp
+            do n = 1, 3
+                rhs(n+1) = real(n, wp) * xf**(n-1)
+            end do
+
+            call s_solve_4x4(A, rhs, w_grad4(:, i, idir), info)
+            if (info /= 0) call s_mpi_abort('Error computing FV grad weights')
+
+        end do
+
+    end subroutine s_initialize_fv4_weights_dir
+
+    subroutine s_solve_4x4(Ain, b, w, info)
+
+        implicit none
+
+        real(wp), intent(inout) :: Ain(4,4)
+        real(wp), intent(inout) :: b(4)
+        real(wp), intent(out)   :: w(-1:2)
+        integer,  intent(out)   :: info
+
+        integer :: i, j, k, piv
+        real(wp) :: maxval, factor, tmp
+        real(wp) :: rowtmp(4)
+
+        info = 0
+
+        !------------------------------------------------------------
+        ! Forward elimination with partial pivoting
+        !------------------------------------------------------------
+        do k = 1, 4
+
+            ! Find pivot row
+            piv = k
+            maxval = abs(Ain(k,k))
+
+            do i = k+1, 4
+                if (abs(Ain(i,k)) > maxval) then
+                    maxval = abs(Ain(i,k))
+                    piv = i
+                end if
+            end do
+
+            ! Check for singular matrix
+            if (maxval < 1.0e-14_wp) then
+                info = 1
+                return
+            end if
+
+            ! Swap rows if needed
+            if (piv /= k) then
+                rowtmp(:) = Ain(k,:)
+                Ain(k,:)  = Ain(piv,:)
+                Ain(piv,:) = rowtmp(:)
+
+                tmp   = b(k)
+                b(k)  = b(piv)
+                b(piv)= tmp
+            end if
+
+            ! Eliminate below pivot
+            do i = k+1, 4
+                factor = Ain(i,k) / Ain(k,k)
+
+                do j = k, 4
+                    Ain(i,j) = Ain(i,j) - factor * Ain(k,j)
+                end do
+
+                b(i) = b(i) - factor * b(k)
+            end do
+
+        end do
+
+        !------------------------------------------------------------
+        ! Back substitution
+        !------------------------------------------------------------
+        do i = 4, 1, -1
+            tmp = b(i)
+
+            do j = i+1, 4
+                tmp = tmp - Ain(i,j) * b(j)
+            end do
+
+            b(i) = tmp / Ain(i,i)
+        end do
+
+        !------------------------------------------------------------
+        ! Map solution to stencil indexing (-1:2)
+        !------------------------------------------------------------
+        w(-1) = b(1)
+        w(0) = b(2)
+        w(1) = b(3)
+        w(2) = b(4)
+
+    end subroutine s_solve_4x4
 
     subroutine s_fill_face_weights_1d_2nd(ifbeg, ifend, idir)
 
@@ -236,6 +425,11 @@ contains
                     w_interp4(offs(a), i, idir) = prod
                 end do
 
+                ! w_interp4(-1, i, idir) = -1._wp / 12._wp
+                ! w_interp4( 0, i, idir) =  7._wp / 12._wp
+                ! w_interp4( 1, i, idir) =  7._wp / 12._wp
+                ! w_interp4( 2, i, idir) = -1._wp / 12._wp
+
                 ! ------------------------------------------------------------
                 ! Gradient weights:
                 ! dqdx_f = sum_{s=-1}^{2} w_grad(s,i,idir) * q(i+s)
@@ -258,8 +452,12 @@ contains
                         end if
                     end do
                 end do
+
+                ! w_grad4(-1, i, idir) =  1._wp / (12._wp*(x(2) - x(1)))
+                ! w_grad4( 0, i, idir) = -15._wp / (12._wp*(x(2) - x(1)))
+                ! w_grad4( 1, i, idir) =  15._wp / (12._wp*(x(2) - x(1)))
+                ! w_grad4( 2, i, idir) = -1._wp / (12._wp*(x(2) - x(1)))
             end do
-        
         case (2)
 
             do i = ifbeg, ifend
@@ -399,6 +597,7 @@ contains
         integer :: i, k, l, q, r !< Loop variables
         real(wp) :: W1, W2, W3, D12, D13, D23
         real(wp) :: R_univ
+        real(wp) :: S_1, S_2, S_3 !< Shock sensor values
         real(wp) :: grid_spacing
         real(wp) :: rho_L, rho_LL, rho_R, rho_RR, rho_f, rhog_f
         real(wp) :: alpha_m_L, alpha_m_LL, alpha_m_R, alpha_m_RR, alpha_m_f
@@ -482,6 +681,11 @@ contains
                             P_L = q_prim_vf(E_idx)%sf(k, l, q)
                             P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
                             P_RR = q_prim_vf(E_idx)%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
+
+                            S_1 = abs(P_R - P_L) / max(P_L, P_R, small_num_dif)
+                            S_2 = abs(P_RR - P_R) / max(P_R, P_RR, small_num_dif)
+                            S_3 = abs(P_L - P_LL) / max(P_L, P_LL, small_num_dif)
+                            if (max(S_1, S_2, S_3) > 0.05_wp) cycle !crude shock sensor (dont calculate diffusion across shocks)
                             P_f = w_interp4(-1, r, idir)*P_LL + w_interp4(0, r, idir)*P_L + &
                                   w_interp4(1, r, idir)*P_R + w_interp4(2, r, idir)*P_RR
                             rho_LL = 0.0_wp
@@ -522,6 +726,8 @@ contains
                             alpha_m_f = w_interp2(0, r, idir)*alpha_m_L + w_interp2(1, r, idir)*alpha_m_R
                             P_L = q_prim_vf(E_idx)%sf(k, l, q)
                             P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+
+                            if (abs(P_R - P_L) / max(P_L, P_R, small_num_dif) > 0.05_wp ) cycle !crude shock sensor (dont calculate diffusion across shocks)
                             P_f = w_interp2(0, r, idir)*P_L + w_interp2(1, r, idir)*P_R
 
                             rho_L = 0.0_wp
@@ -545,9 +751,10 @@ contains
                         end if
 
                         g_f = 2.0_wp * (alpha_m_L**n_gate) * (alpha_m_R**n_gate) / ( (alpha_m_L**n_gate) + (alpha_m_R**n_gate) )
-
+                        ! g_f = 1.0_wp
                         ! Total gas density at face
                         rhog_f = rho_f / alpha_m_f
+                        ! rhog_f = 101325.0_wp * 28.02_wp / (R_univ * 298.0_wp)
 
                         W_f = 0._wp
                         do i = 1, Dif_size  
@@ -561,71 +768,6 @@ contains
                         do i = 1, Dif_size
                             h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
                         end do
-
-
-                            
-                        ! alpha_m_f = 0.5_wp * (alpha_m_L + alpha_m_R)
-
-                        ! do i = 1, Dif_size
-                        !     alpha_f(i) = 0.5_wp * (alpha_L(i) + alpha_R(i))
-                        !     alpharho_f(i) = 0.5_wp * (alpharho_L(i) + alpharho_R(i))
-                        ! end do
-
-                        ! rho_L = 0._wp
-                        ! rho_R = 0._wp
-                        ! rho_f = 0._wp
-
-                        ! do i = 1, Dif_size
-                        !     rho_L = rho_L + alpharho_L(i)
-                        !     rho_LL = rho_LL + alpharho_LL(i)
-                        !     rho_R = rho_R + alpharho_R(i)
-                        !     rho_RR = rho_RR + alpharho_RR(i)
-                        !     rho_f = rho_f + alpharho_f(i)
-                        ! end do
-
-                        ! g_f = 2.0_wp * (alpha_m_L**n_gate) * (alpha_m_R**n_gate) / ( (alpha_m_L**n_gate) + (alpha_m_R**n_gate) )
-                        ! g_f = min(alpha_m_R, alpha_m_L)
-
-                        ! g_f = 1.0_wp
-
-                        ! ! Total gas density at face
-                        ! rhog_f = rho_f / alpha_m_f
-
-                        ! ! rhog_f = 2._wp*(rho_L / alpha_m_L)*(rho_R / alpha_m_R) / ( (rho_L / alpha_m_L) + (rho_R / alpha_m_R) )
-
-                        ! P_L = q_prim_vf(E_idx)%sf(k, l, q)
-                        ! P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                        ! P_f = 0.5_wp * (P_L + P_R)
-                        
-                        ! do i = 1, Dif_size
-                        !     Y_L(i) = alpharho_L(i) / rho_L
-                        ! end do
-                        
-                        ! do i = 1, Dif_size
-                        !     Y_R (i) = alpharho_R(i) / rho_R
-                        ! end do
-             
-                        ! do i = 1, Dif_size
-                        !     Y_f(i) = alpharho_f(i) / rho_f
-                        ! end do
-                        
-
-                        ! do i = 1, Dif_size
-                        !     dY_ds_f(i) = (Y_R(i) - Y_L(i)) / grid_spacing
-                        ! end do
-
-                        ! W_f = 0._wp
-                        ! do i = 1, Dif_size  
-                        !     W_f = W_f + Y_f(i)/Ws(i)              
-                        ! end do
-
-                        ! W_f = 1._wp / W_f
-
-                        ! T_f = P_f * W_f / (rhog_f * R_univ)
-
-                        ! do i = 1, Dif_size
-                        !     h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
-                        ! end do
 
                         ! Compute diffusion fluxes
                         if (Dif_size == 2) then
@@ -663,7 +805,6 @@ contains
                 end do
             end do
 
-            ! print *, "rank", proc_rank, "jmax", j_max
         ! #########################################################################
         ! #########################################################################
             

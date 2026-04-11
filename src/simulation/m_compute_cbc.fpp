@@ -23,7 +23,7 @@ contains
         !!      Thompson (1990). At the slip wall (frictionless wall),
         !!      the normal component of velocity is zero at all times,
         !!      while the transverse velocities may be nonzero.
-    subroutine s_compute_slip_wall_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds)
+    subroutine s_compute_slip_wall_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dadvg_ds)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_slip_wall_L
 #else
@@ -36,6 +36,7 @@ contains
         real(wp), intent(in) :: dpres_ds
         real(wp), dimension(num_dims), intent(in) :: dvel_ds
         real(wp), dimension(num_fluids), intent(in) :: dadv_ds
+        real(wp), intent(in) :: dadvg_ds
 
         integer :: i
 
@@ -45,6 +46,9 @@ contains
             L(i) = 0._wp
         end do
 
+        if (diffusion) L(advg_idx) = 0._wp
+
+
         L(advxe) = L(1)
 
     end subroutine s_compute_slip_wall_L
@@ -53,7 +57,7 @@ contains
         !!      see pg. 13 of Thompson (1987). The nonreflecting subsonic
         !!      buffer reduces the amplitude of any reflections caused by
         !!      outgoing waves.
-    subroutine s_compute_nonreflecting_subsonic_buffer_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds)
+    subroutine s_compute_nonreflecting_subsonic_buffer_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dadvg_ds)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_nonreflecting_subsonic_buffer_L
 #else
@@ -66,6 +70,7 @@ contains
         real(wp), intent(in) :: dpres_ds
         real(wp), dimension(num_dims), intent(in) :: dvel_ds
         real(wp), dimension(num_fluids), intent(in) :: dadv_ds
+        real(wp), intent(in) :: dadvg_ds
 
         integer :: i !< Generic loop iterator
 
@@ -87,6 +92,8 @@ contains
                    *(dadv_ds(i - momxe))
         end do
 
+        if (diffusion) L(advg_idx) = (5e-1_wp - 5e-1_wp*sign(1._wp, lambda(2)))*lambda(2)*dadvg_ds
+
         L(advxe) = (5e-1_wp - 5e-1_wp*sign(1._wp, lambda(3)))*lambda(3) &
                    *(dpres_ds + rho*c*dvel_ds(dir_idx(1)))
 
@@ -95,7 +102,7 @@ contains
         !!      see pg. 455, Thompson (1990). This nonreflecting subsonic
         !!      CBC assumes an incoming flow and reduces the amplitude of
         !!      any reflections caused by outgoing waves.
-    subroutine s_compute_nonreflecting_subsonic_inflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds)
+    subroutine s_compute_nonreflecting_subsonic_inflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dadvg_ds)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_nonreflecting_subsonic_inflow_L
 #else
@@ -108,6 +115,7 @@ contains
         real(wp), intent(in) :: dpres_ds
         real(wp), dimension(num_dims), intent(in) :: dvel_ds
         real(wp), dimension(num_fluids), intent(in) :: dadv_ds
+        real(wp), intent(in) :: dadvg_ds
 
         integer :: i
 
@@ -117,13 +125,15 @@ contains
             L(i) = 0._wp
         end do
 
+        if (diffusion) L(advg_idx) = 0._wp
+
     end subroutine s_compute_nonreflecting_subsonic_inflow_L
 
     !>  The L variables for the nonreflecting subsonic outflow
         !!      CBC see pg. 454 of Thompson (1990). This nonreflecting
         !!      subsonic CBC presumes an outgoing flow and reduces the
         !!      amplitude of any reflections caused by outgoing waves.
-    subroutine s_compute_nonreflecting_subsonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds)
+    subroutine s_compute_nonreflecting_subsonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dadvg_ds)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_nonreflecting_subsonic_outflow_L
 #else
@@ -136,6 +146,7 @@ contains
         real(wp), intent(in) :: dpres_ds
         real(wp), dimension(num_dims), intent(in) :: dvel_ds
         real(wp), dimension(num_fluids), intent(in) :: dadv_ds
+        real(wp), intent(in) :: dadvg_ds
 
         integer :: i !> Generic loop iterator
 
@@ -152,6 +163,8 @@ contains
         do i = E_idx, advxe - 1
             L(i) = lambda(2)*(dadv_ds(i - momxe))
         end do
+
+        if (diffusion) L(advg_idx) = lambda(2)*dadvg_ds
 
         ! bubble index
         L(advxe) = 0._wp
@@ -165,7 +178,7 @@ contains
         !!      direction to the boundary. As a result, a fluid element
         !!      at the boundary is simply advected outward at the fluid
         !!      velocity.
-    subroutine s_compute_force_free_subsonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds)
+    subroutine s_compute_force_free_subsonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dadvg_ds)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_force_free_subsonic_outflow_L
 #else
@@ -178,6 +191,7 @@ contains
         real(wp), intent(in) :: dpres_ds
         real(wp), dimension(num_dims), intent(in) :: dvel_ds
         real(wp), dimension(num_fluids), intent(in) :: dadv_ds
+        real(wp), intent(in) :: dadvg_ds
 
         integer :: i !> Generic loop iterator
 
@@ -195,6 +209,8 @@ contains
             L(i) = lambda(2)*(dadv_ds(i - momxe))
         end do
 
+        if (diffusion) L(advg_idx) = lambda(2)*dadvg_ds
+
         L(advxe) = L(1) + 2._wp*rho*c*lambda(2)*dvel_ds(dir_idx(1))
 
     end subroutine s_compute_force_free_subsonic_outflow_L
@@ -203,7 +219,7 @@ contains
         !!      CBC see pg. 455 Thompson (1990). The constant pressure
         !!      subsonic outflow maintains a fixed pressure at the CBC
         !!      boundary in absence of any transverse effects.
-    subroutine s_compute_constant_pressure_subsonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds)
+    subroutine s_compute_constant_pressure_subsonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dadvg_ds)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_constant_pressure_subsonic_outflow_L
 #else
@@ -216,6 +232,7 @@ contains
         real(wp), intent(in) :: dpres_ds
         real(wp), dimension(num_dims), intent(in) :: dvel_ds
         real(wp), dimension(num_fluids), intent(in) :: dadv_ds
+        real(wp), intent(in) :: dadvg_ds
 
         integer :: i !> Generic loop iterator
 
@@ -233,6 +250,8 @@ contains
             L(i) = lambda(2)*(dadv_ds(i - momxe))
         end do
 
+        if (diffusion) L(advg_idx) = lambda(2)*dadvg_ds
+
         L(advxe) = -L(1)
 
     end subroutine s_compute_constant_pressure_subsonic_outflow_L
@@ -242,7 +261,7 @@ contains
         !!      state, or nearly a steady state, CBC in which only the
         !!      transverse terms may generate a time dependence at the
         !!      inflow boundary.
-    subroutine s_compute_supersonic_inflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds)
+    subroutine s_compute_supersonic_inflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dadvg_ds)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_supersonic_inflow_L
 #else
@@ -255,11 +274,14 @@ contains
         real(wp), intent(in) :: dpres_ds
         real(wp), dimension(num_dims), intent(in) :: dvel_ds
         real(wp), dimension(num_fluids), intent(in) :: dadv_ds
+        real(wp), intent(in) :: dadvg_ds
         integer :: i
 
         do i = 1, advxe
             L(i) = 0._wp
         end do
+
+        if (diffusion) L(advg_idx) = 0._wp
 
     end subroutine s_compute_supersonic_inflow_L
 
@@ -267,7 +289,7 @@ contains
         !!      of Thompson (1990). For the supersonic outflow CBC, the
         !!      flow evolution at the boundary is determined completely
         !!      by the interior data.
-    subroutine s_compute_supersonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds)
+    subroutine s_compute_supersonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dadvg_ds)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_supersonic_outflow_L
 #else
@@ -280,6 +302,7 @@ contains
         real(wp), intent(in) :: dpres_ds
         real(wp), dimension(num_dims), intent(in) :: dvel_ds
         real(wp), dimension(num_fluids), intent(in) :: dadv_ds
+        real(wp), intent(in) :: dadvg_ds
 
         integer :: i !< Generic loop iterator
 
@@ -296,6 +319,8 @@ contains
         do i = E_idx, advxe - 1
             L(i) = lambda(2)*(dadv_ds(i - momxe))
         end do
+
+        if (diffusion) L(advg_idx) = lambda(2)*dadvg_ds
 
         L(advxe) = lambda(3)*(dpres_ds + rho*c*dvel_ds(dir_idx(1)))
 

@@ -147,6 +147,7 @@ module m_global_parameters
     logical :: mixture_err     !< Mixture properties correction
     logical :: hypoelasticity  !< hypoelasticity modeling
     logical :: diffusion      !< Diffusion modeling
+    logical :: conduction       !< Heat conduction modeling
     logical :: hyperelasticity !< hyperelasticity modeling
     integer :: hyper_model     !< hyperelasticity solver algorithm
     logical :: elasticity      !< elasticity modeling, true for hyper or hypo
@@ -550,6 +551,7 @@ contains
         ptgalpha_eps = dflt_real
         hypoelasticity = .false.
         diffusion = .false.
+        conduction = .false.
         hyperelasticity = .false.
         elasticity = .false.
         hyper_model = dflt_int
@@ -610,6 +612,7 @@ contains
             fluid_pp(i)%cp = 0._wp
             fluid_pp(i)%T0 = 0._wp
             fluid_pp(i)%h0 = 0._wp
+            fluid_pp(i)%k = 0._wp
             fluid_pp(i)%gas_mixture = .false.
         end do
 
@@ -1087,14 +1090,7 @@ contains
                 do i = 1, num_fluids
                     if (fluid_pp(i)%gas_mixture) Dif_size = Dif_size + 1
                 end do
-
                 !$acc update device(Dif_size)
- 
-                if (proc_rank == 0) then                 
-                    if (alt_soundspeed .and. num_fluids /= Dif_size + 1) then
-                        error stop "For alt_soundspeed and diffusion, num_fluids must be equal to Dif_size + 1"
-                    end if
-                end if
 
                 @:ALLOCATE(Dif_idx(1:Dif_size))
 
@@ -1259,7 +1255,7 @@ contains
         !$acc update device(cfl_target, m, n, p)
 
         !$acc update device(alt_soundspeed, acoustic_source, num_source)
-        !$acc update device(dt, sys_size, buff_size, pref, rhoref, gamma_idx, pi_inf_idx, E_idx, alf_idx, stress_idx, mpp_lim, bubbles_euler, hypoelasticity, diffusion,  alt_soundspeed, avg_state, num_fluids, model_eqns, num_dims, mixture_err, grid_geometry, cyl_coord, mp_weno, weno_eps, teno_CT, hyperelasticity, hyper_model, elasticity, xi_idx, low_Mach)
+        !$acc update device(dt, sys_size, buff_size, pref, rhoref, gamma_idx, pi_inf_idx, E_idx, alf_idx, stress_idx, mpp_lim, bubbles_euler, hypoelasticity, diffusion, conduction, alt_soundspeed, avg_state, num_fluids, model_eqns, num_dims, mixture_err, grid_geometry, cyl_coord, mp_weno, weno_eps, teno_CT, hyperelasticity, hyper_model, elasticity, xi_idx, low_Mach)
 
         #:if not MFC_CASE_OPTIMIZATION
             !$acc update device(wenojs, mapped_weno, wenoz, teno)

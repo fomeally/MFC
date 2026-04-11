@@ -60,6 +60,8 @@ module m_rhs
     use m_chemistry
 
     use m_diffusion
+
+    use m_conduction
     ! ==========================================================================
 
     implicit none
@@ -128,7 +130,8 @@ module m_rhs
     type(vector_field), allocatable, dimension(:) :: flux_src_n
     type(vector_field), allocatable, dimension(:) :: flux_gsrc_n
     type(vector_field), allocatable, dimension(:) :: j_src_n
-    !$acc declare create(flux_n, flux_src_n, flux_gsrc_n, j_src_n)
+    type(vector_field), allocatable, dimension(:) :: q_src_n
+    !$acc declare create(flux_n, flux_src_n, flux_gsrc_n, j_src_n, q_src_n)
     !> @}
 
     type(vector_field), allocatable, dimension(:) :: qL_prim, qR_prim
@@ -498,6 +501,7 @@ contains
         @:ALLOCATE(flux_src_n(1:num_dims))
         @:ALLOCATE(flux_gsrc_n(1:num_dims))
         @:ALLOCATE(j_src_n(1:num_dims))
+        @:ALLOCATE(q_src_n(1:num_dims))
 
         do i = 1, num_dims
 
@@ -505,6 +509,7 @@ contains
             @:ALLOCATE(flux_src_n(i)%vf(1:sys_size))
             @:ALLOCATE(flux_gsrc_n(i)%vf(1:sys_size))
             @:ALLOCATE(j_src_n(i)%vf(1:sys_size))
+            @:ALLOCATE(q_src_n(i)%vf(1:sys_size))
 
             if (diffusion) then
                 
@@ -526,6 +531,13 @@ contains
                          & idwbuff(2)%beg:idwbuff(2)%end, &
                          & idwbuff(3)%beg:idwbuff(3)%end))
                 
+            end if
+
+            if (conduction) then
+                @:ALLOCATE(q_src_n(i)%vf(E_idx)%sf( &
+                         & idwbuff(1)%beg:idwbuff(1)%end, &
+                         & idwbuff(2)%beg:idwbuff(2)%end, &
+                         & idwbuff(3)%beg:idwbuff(3)%end))
             end if
 
             if (i == 1) then
@@ -594,21 +606,6 @@ contains
                     end if
                 end if
 
-
-                ! if (diffusion) then
-                !     do l = advxb, advxe
-                !         @:ALLOCATE(flux_src_n(i)%vf(l)%sf( &
-                !                  & idwbuff(1)%beg:idwbuff(1)%end, &
-                !                  & idwbuff(2)%beg:idwbuff(2)%end, &
-                !                  & idwbuff(3)%beg:idwbuff(3)%end))
-                !     end do
-
-                !     @:ALLOCATE(flux_src_n(i)%vf(advg_idx)%sf( &
-                !              & idwbuff(1)%beg:idwbuff(1)%end, &
-                !              & idwbuff(2)%beg:idwbuff(2)%end, &
-                !              & idwbuff(3)%beg:idwbuff(3)%end))
-                ! end if
-
                 if (chemistry) then
                     do l = chemxb, chemxe
                         @:ALLOCATE(flux_src_n(i)%vf(l)%sf( &
@@ -627,7 +624,7 @@ contains
                 end do
             end if
 
-            @:ACC_SETUP_VFs(flux_n(i), flux_src_n(i), flux_gsrc_n(i), j_src_n(i))
+            @:ACC_SETUP_VFs(flux_n(i), flux_src_n(i), flux_gsrc_n(i), j_src_n(i), q_src_n(i))
             !Franz possibly change this to be like above
             if (i == 1) then
                 if (riemann_solver /= 1) then
@@ -636,21 +633,8 @@ contains
                             flux_src_n(i)%vf(l)%sf => flux_src_n(i)%vf(adv_idx%beg)%sf
                             !$acc enter data attach(flux_src_n(i)%vf(l)%sf)
                         end do
-                    else
-                        ! if (num_fluids == Dif_size) then
-                        !     do l = 1, Dif_size
-                        !         flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf => flux_src_n(i)%vf(advg_idx)%sf
-                        !         !$acc enter data attach(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
-                        !     end do
-                        ! end if
-                        
-                        
+                    else                   
                         if (num_fluids > Dif_size) then
-                            ! do l = 1, Dif_size
-                            !     flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf => flux_src_n(i)%vf(advxb + liq_idx - 1)%sf
-                            !     !$acc enter data attach(flux_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
-                            ! end do
-
                             flux_src_n(i)%vf(advg_idx)%sf => flux_src_n(i)%vf(advxb + liq_idx - 1)%sf
                             !$acc enter data attach(flux_src_n(i)%vf(advg_idx)%sf)
                         end if
@@ -666,7 +650,7 @@ contains
             end if
         end do
 
-        ! END: Allocation/Association of flux_n, flux_src_n, and flux_gsrc_n, j_src_n
+        ! END: Allocation/Association of flux_n, flux_src_n, and flux_gsrc_n, j_src_n, q_src_n
 
         if (alt_soundspeed) then
             @:ALLOCATE(blkmod1(0:m, 0:n, 0:p), blkmod2(0:m, 0:n, 0:p), alpha1(0:m, 0:n, 0:p), alpha2(0:m, 0:n, 0:p), Kterm(0:m, 0:n, 0:p))
@@ -983,28 +967,28 @@ contains
                 call nvtxEndRange
             end if
 
+            ! RHS additions for conduction
+            if (conduction) then
+                call nvtxStartRange("RHS-CONDUCTION")
+                call s_compute_conduction_rhs(id, &
+                                             q_src_n(id)%vf, &
+                                             q_prim_qp%vf, &
+                                             irx, iry, irz)
+                call nvtxEndRange
+            end if
 
             ! RHS additions for viscosity
-            if (viscous .or. surface_tension .or. diffusion) then
-                call nvtxStartRange("RHS-ADD-PHYSICS")
-                if (diffusion) then 
-                    call s_compute_additional_physics_rhs(id, &
-                                                        q_prim_qp%vf, &
-                                                        rhs_vf, &
-                                                        flux_src_n(id)%vf, &
-                                                        dq_prim_dx_qp(1)%vf, &
-                                                        dq_prim_dy_qp(1)%vf, &
-                                                        dq_prim_dz_qp(1)%vf, &
-                                                        j_src_n(id)%vf)
-                else 
-                    call s_compute_additional_physics_rhs(id, &
-                                                        q_prim_qp%vf, &
-                                                        rhs_vf, &
-                                                        flux_src_n(id)%vf, &
-                                                        dq_prim_dx_qp(1)%vf, &
-                                                        dq_prim_dy_qp(1)%vf, &
-                                                        dq_prim_dz_qp(1)%vf)
-                end if
+            if (viscous .or. surface_tension .or. diffusion .or. conduction) then
+                call nvtxStartRange("RHS-ADD-PHYSICS")              
+                call s_compute_additional_physics_rhs(id, &
+                                                    q_prim_qp%vf, &
+                                                    rhs_vf, &
+                                                    flux_src_n(id)%vf, &
+                                                    j_src_n(id)%vf, &
+                                                    q_src_n(id)%vf, &
+                                                    dq_prim_dx_qp(1)%vf, &
+                                                    dq_prim_dy_qp(1)%vf, &
+                                                    dq_prim_dz_qp(1)%vf)
                 call nvtxEndRange
             end if
 
@@ -1174,7 +1158,6 @@ contains
         end if
 
         if (idir == 1) then
-            !Franz would have to update this to use with mixture gas model
             if (bc_x%beg <= -5 .and. bc_x%beg >= -13) then
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, &
                            flux_src_n(idir)%vf, idir, -1, irx, iry, irz)
@@ -2141,14 +2124,14 @@ contains
 
     end subroutine s_compute_advection_source_term
 
-    subroutine s_compute_additional_physics_rhs(idir, q_prim_vf, rhs_vf, flux_src_n, &
-                                                dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf, j_src_n)
+    subroutine s_compute_additional_physics_rhs(idir, q_prim_vf, rhs_vf, flux_src_n, j_src_n, q_src_n, &
+                                                dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf)
 
         integer, intent(in) :: idir
         type(scalar_field), dimension(sys_size), intent(in) :: q_prim_vf
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
         type(scalar_field), dimension(sys_size), intent(in) :: flux_src_n
-        type(scalar_field), dimension(sys_size), intent(in), optional :: j_src_n
+        type(scalar_field), dimension(sys_size), intent(in) :: j_src_n, q_src_n
         type(scalar_field), dimension(sys_size), intent(in) :: dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf
 
         integer :: i, j, k, l
@@ -2187,27 +2170,39 @@ contains
                 end do
             end if
             
-            if (Dif_fv) then 
-                if (present(j_src_n)) then
-                    !$acc parallel loop collapse(3) gang vector default(present)
-                    do l = 0, p
-                        do k = 0, n
-                            do j = 0, m
-                                do i = 1, Dif_size
-                                    rhs_vf(Dif_idx(i))%sf(j, k, l) = &
-                                        rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dx(j)* &
-                                        (j_src_n(Dif_idx(i))%sf(j, k, l) - &
-                                        j_src_n(Dif_idx(i))%sf(j - 1, k, l))
-                                end do
-
-                                rhs_vf(E_idx)%sf(j, k, l) = &
-                                    rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dx(j)* &
-                                    (j_src_n(E_idx)%sf(j, k, l) - &
-                                    j_src_n(E_idx)%sf(j - 1, k, l))
+            if (diffusion) then               
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do l = 0, p
+                    do k = 0, n
+                        do j = 0, m
+                            do i = 1, Dif_size
+                                rhs_vf(Dif_idx(i))%sf(j, k, l) = &
+                                    rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dx(j)* &
+                                    (j_src_n(Dif_idx(i))%sf(j, k, l) - &
+                                    j_src_n(Dif_idx(i))%sf(j - 1, k, l))
                             end do
+
+                            rhs_vf(E_idx)%sf(j, k, l) = &
+                                rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dx(j)* &
+                                (j_src_n(E_idx)%sf(j, k, l) - &
+                                j_src_n(E_idx)%sf(j - 1, k, l))
                         end do
                     end do
-                end if
+                end do
+            end if
+
+            if (conduction) then
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do l = 0, p
+                    do k = 0, n
+                        do j = 0, m
+                            rhs_vf(E_idx)%sf(j, k, l) = &
+                                rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dx(j)* &
+                                (q_src_n(E_idx)%sf(j, k, l) - &
+                                q_src_n(E_idx)%sf(j - 1, k, l))
+                        end do
+                    end do
+                end do
             end if
 
         elseif (idir == 2) then ! y-direction
@@ -2293,29 +2288,42 @@ contains
                     end do
                 end if
 
-                if (Dif_fv) then
-                    if (present(j_src_n)) then
-                        !$acc parallel loop collapse(3) gang vector default(present)
-                        do l = 0, p
-                            do k = 0, n
-                                do j = 0, m
-                                    do i = 1, Dif_size
-                                        rhs_vf(Dif_idx(i))%sf(j, k, l) = &
-                                            rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dy(k)* &
-                                            (j_src_n(Dif_idx(i))%sf(j, k, l) - &
-                                            j_src_n(Dif_idx(i))%sf(j, k - 1, l))
-                                    end do
-
-                                    rhs_vf(E_idx)%sf(j, k, l) = &
-                                        rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dy(k)* &
-                                        (j_src_n(E_idx)%sf(j, k, l) - &
-                                        j_src_n(E_idx)%sf(j, k - 1, l))
+                if (diffusion) then                   
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = 0, p
+                        do k = 0, n
+                            do j = 0, m
+                                do i = 1, Dif_size
+                                    rhs_vf(Dif_idx(i))%sf(j, k, l) = &
+                                        rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dy(k)* &
+                                        (j_src_n(Dif_idx(i))%sf(j, k, l) - &
+                                        j_src_n(Dif_idx(i))%sf(j, k - 1, l))
                                 end do
+
+                                rhs_vf(E_idx)%sf(j, k, l) = &
+                                    rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dy(k)* &
+                                    (j_src_n(E_idx)%sf(j, k, l) - &
+                                    j_src_n(E_idx)%sf(j, k - 1, l))
                             end do
                         end do
-                    end if
+                    end do
+                end if
+
+                if (conduction) then
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = 0, p
+                        do k = 0, n
+                            do j = 0, m
+                                rhs_vf(E_idx)%sf(j, k, l) = &
+                                    rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dy(k)* &
+                                    (q_src_n(E_idx)%sf(j, k, l) - &
+                                    q_src_n(E_idx)%sf(j, k - 1, l))
+                            end do
+                        end do
+                    end do
                 end if
             end if
+
 
             ! Applying the geometrical viscous Riemann source fluxes calculated as average
             ! of values at cell boundaries
@@ -2387,27 +2395,40 @@ contains
                 end do
             end if
 
-            if (Dif_fv) then
-                if (present(j_src_n)) then
-                    !$acc parallel loop collapse(3) gang vector default(present)
-                    do l = 0, p
-                        do k = 0, n
-                            do j = 0, m
-                                do i = 1, Dif_size
-                                    rhs_vf(Dif_idx(i))%sf(j, k, l) = &
-                                        rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dz(l)* &
-                                        (j_src_n(Dif_idx(i))%sf(j, k, l) - &
-                                        j_src_n(Dif_idx(i))%sf(j, k, l - 1))
-                                end do
-
-                                rhs_vf(E_idx)%sf(j, k, l) = &
-                                    rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dz(l)* &
-                                    (j_src_n(E_idx)%sf(j, k, l) - &
-                                    j_src_n(E_idx)%sf(j, k, l - 1))
+            
+            if (diffusion) then
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do l = 0, p
+                    do k = 0, n
+                        do j = 0, m
+                            do i = 1, Dif_size
+                                rhs_vf(Dif_idx(i))%sf(j, k, l) = &
+                                    rhs_vf(Dif_idx(i))%sf(j, k, l) - 1._wp/dz(l)* &
+                                    (j_src_n(Dif_idx(i))%sf(j, k, l) - &
+                                    j_src_n(Dif_idx(i))%sf(j, k, l - 1))
                             end do
+
+                            rhs_vf(E_idx)%sf(j, k, l) = &
+                                rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dz(l)* &
+                                (j_src_n(E_idx)%sf(j, k, l) - &
+                                j_src_n(E_idx)%sf(j, k, l - 1))
                         end do
                     end do
-                end if
+                end do
+            end if
+
+            if (conduction) then
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do l = 0, p
+                    do k = 0, n
+                        do j = 0, m
+                            rhs_vf(E_idx)%sf(j, k, l) = &
+                                rhs_vf(E_idx)%sf(j, k, l) - 1._wp/dz(l)* &
+                                (q_src_n(E_idx)%sf(j, k, l) - &
+                                q_src_n(E_idx)%sf(j, k, l - 1))
+                        end do
+                    end do
+                end do
             end if
 
             if (viscous .or. surface_tension) then
@@ -3028,11 +3049,20 @@ contains
  
                 @:DEALLOCATE(j_src_n(i)%vf)
             end if
+
+            if (conduction) then
+                @:DEALLOCATE(q_src_n(i)%vf(E_idx)%sf)
+                @:DEALLOCATE(q_src_n(i)%vf)
+            end if
         end do
 
         @:DEALLOCATE(flux_n, flux_src_n, flux_gsrc_n)
+
         if (diffusion) then
             @:DEALLOCATE(j_src_n)
+        end if
+        if (conduction) then
+            @:DEALLOCATE(q_src_n)
         end if
 
         if (viscous .and. cyl_coord) then

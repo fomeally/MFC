@@ -253,6 +253,7 @@ SIMULATION.update({
     'low_Mach': ParamType.INT,
     'surface_tension': ParamType.LOG,
     'viscous': ParamType.LOG,
+    'conduction': ParamType.LOG,
     'bubbles_lagrange': ParamType.LOG,
     'rkck_tolerance': ParamType.REAL,
 })
@@ -325,7 +326,7 @@ for f_id in range(1,10+1):
     for real_attr in [
         "gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
         "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "W", "D", "cp", 
-        "T0", "h0", "gas_mixture"
+        "T0", "h0", "k", "gas_mixture"
     ]:
         if real_attr == "D":
             for j in range(1, 10+1):

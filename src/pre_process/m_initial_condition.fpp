@@ -343,6 +343,9 @@ contains
 
                 elseif (patch_icpp(i)%geometry == 24) then
                     call s_1d_ntanh(i, patch_id_fp, q_prim_vf)
+
+                else if (patch_icpp(i)%geometry == 25) then
+                    call s_1d_sin(i, patch_id_fp, q_prim_vf)
                     
                 end if
 

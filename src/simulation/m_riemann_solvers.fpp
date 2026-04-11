@@ -5070,7 +5070,7 @@ contains
 
                 if (num_fluids > Dif_size) then
                     !$acc parallel loop collapse(4) gang vector default(present)
-                    do i = advxb + liq_idx - 1, advb + liq_idx - 1
+                    do i = advxb + liq_idx - 1, advxb + liq_idx - 1
                         do l = is3%beg, is3%end
                             do k = is2%beg, is2%end
                                 do j = is1%beg, is1%end
