@@ -45,6 +45,8 @@ contains
             call s_slip_wall(q_prim_vf, pb, mv, 1, -1)
         case (-16)    ! No-slip wall BC at beginning
             call s_no_slip_wall(q_prim_vf, pb, mv, 1, -1)
+        case (-17)     ! symmetry with no normal reversal
+            call s_symmetry_momentum(q_prim_vf, pb, mv, 1, -1)
         case default ! Processor BC at beginning
             call s_mpi_sendrecv_variables_buffers( &
                 q_prim_vf, pb, mv, 1, -1)
@@ -61,6 +63,8 @@ contains
             call s_slip_wall(q_prim_vf, pb, mv, 1, 1)
         case (-16)    ! No-slip wall bc at end
             call s_no_slip_wall(q_prim_vf, pb, mv, 1, 1)
+        case (-17)     ! symmetry with no normal reversal
+            call s_symmetry_momentum(q_prim_vf, pb, mv, 1, 1)
         case default ! Processor BC at end
             call s_mpi_sendrecv_variables_buffers( &
                 q_prim_vf, pb, mv, 1, 1)
@@ -105,6 +109,8 @@ contains
             call s_slip_wall(q_prim_vf, pb, mv, 2, -1)
         case (-16)    ! No-slip wall BC at beginning
             call s_no_slip_wall(q_prim_vf, pb, mv, 2, -1)
+        case (-17)     ! symmetry with no normal reversal
+            call s_symmetry_momentum(q_prim_vf, pb, mv, 2, -1)
         case default ! Processor BC at beginning
             call s_mpi_sendrecv_variables_buffers( &
                 q_prim_vf, pb, mv, 2, -1)
@@ -121,6 +127,8 @@ contains
             call s_slip_wall(q_prim_vf, pb, mv, 2, 1)
         case (-16)    ! No-slip wall BC at end
             call s_no_slip_wall(q_prim_vf, pb, mv, 2, 1)
+        case (-17)     ! symmetry with no normal reversal
+            call s_symmetry_momentum(q_prim_vf, pb, mv, 2, 1)
         case default ! Processor BC at end
             call s_mpi_sendrecv_variables_buffers( &
                 q_prim_vf, pb, mv, 2, 1)
@@ -165,6 +173,8 @@ contains
             call s_slip_wall(q_prim_vf, pb, mv, 3, -1)
         case (-16)    ! No-slip wall BC at beginning
             call s_no_slip_wall(q_prim_vf, pb, mv, 3, -1)
+        case (-17)     ! symmetry with no normal reversal
+            call s_symmetry_momentum(q_prim_vf, pb, mv, 3, -1)
         case default ! Processor BC at beginning
             call s_mpi_sendrecv_variables_buffers( &
                 q_prim_vf, pb, mv, 3, -1)
@@ -181,6 +191,8 @@ contains
             call s_slip_wall(q_prim_vf, pb, mv, 3, 1)
         case (-16)    ! No-slip wall BC at end
             call s_no_slip_wall(q_prim_vf, pb, mv, 3, 1)
+        case (-17)     ! symmetry with no normal reversal
+            call s_symmetry_momentum(q_prim_vf, pb, mv, 3, 1)
         case default ! Processor BC at end
             call s_mpi_sendrecv_variables_buffers( &
                 q_prim_vf, pb, mv, 3, 1)
@@ -633,6 +645,264 @@ contains
         end if
 
     end subroutine s_symmetry
+
+    subroutine s_symmetry_momentum(q_prim_vf, pb, mv, bc_dir, bc_loc)
+
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
+        real(wp), dimension(startx:, starty:, startz:, 1:, 1:), intent(inout) :: pb, mv
+        integer, intent(in) :: bc_dir, bc_loc
+
+        integer :: j, k, l, q, i
+
+        !< x-direction
+        if (bc_dir == 1) then
+
+            if (bc_loc == -1) then !< bc_x%beg
+
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do l = 0, p
+                    do k = 0, n
+                        do j = 1, buff_size
+                            !$acc loop seq
+                            do i = 1, sys_size
+                                q_prim_vf(i)%sf(-j, k, l) = &
+                                    q_prim_vf(i)%sf(j - 1, k, l)
+                            end do
+
+                            if (hyperelasticity) then
+                                q_prim_vf(xibeg)%sf(-j, k, l) = &
+                                    -q_prim_vf(xibeg)%sf(j - 1, k, l)
+                            end if
+
+                        end do
+                    end do
+                end do
+
+                if (qbmm .and. .not. polytropic) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do i = 1, nb
+                        do q = 1, nnode
+                            do l = 0, p
+                                do k = 0, n
+                                    do j = 1, buff_size
+                                        pb(-j, k, l, q, i) = &
+                                            pb(j - 1, k, l, q, i)
+                                        mv(-j, k, l, q, i) = &
+                                            mv(j - 1, k, l, q, i)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+
+            else !< bc_x%end
+
+                !$acc parallel loop collapse(3) default(present)
+                do l = 0, p
+                    do k = 0, n
+                        do j = 1, buff_size
+
+                            !$acc loop seq
+                            do i = 1, sys_size
+                                q_prim_vf(i)%sf(m + j, k, l) = &
+                                    q_prim_vf(i)%sf(m - (j - 1), k, l)
+                            end do
+
+                            if (hyperelasticity) then
+                                q_prim_vf(xibeg)%sf(m + j, k, l) = &
+                                    -q_prim_vf(xibeg)%sf(m - (j - 1), k, l)
+                            end if
+
+                        end do
+                    end do
+                end do
+
+                if (qbmm .and. .not. polytropic) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do i = 1, nb
+                        do q = 1, nnode
+                            do l = 0, p
+                                do k = 0, n
+                                    do j = 1, buff_size
+                                        pb(m + j, k, l, q, i) = &
+                                            pb(m - (j - 1), k, l, q, i)
+                                        mv(m + j, k, l, q, i) = &
+                                            mv(m - (j - 1), k, l, q, i)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+
+            end if
+
+            !< y-direction
+        elseif (bc_dir == 2) then
+
+            if (bc_loc == -1) then !< bc_y%beg
+
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do k = 0, p
+                    do j = 1, buff_size
+                        do l = -buff_size, m + buff_size
+                            !$acc loop seq
+                            do i = 1, sys_size
+                                q_prim_vf(i)%sf(l, -j, k) = &
+                                    q_prim_vf(i)%sf(l, j - 1, k)
+                            end do
+
+                            if (hyperelasticity) then
+                                q_prim_vf(xibeg + 1)%sf(l, -j, k) = &
+                                    -q_prim_vf(xibeg + 1)%sf(l, j - 1, k)
+                            end if
+                        end do
+                    end do
+                end do
+
+                if (qbmm .and. .not. polytropic) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do i = 1, nb
+                        do q = 1, nnode
+                            do k = 0, p
+                                do j = 1, buff_size
+                                    do l = -buff_size, m + buff_size
+                                        pb(l, -j, k, q, i) = &
+                                            pb(l, j - 1, k, q, i)
+                                        mv(l, -j, k, q, i) = &
+                                            mv(l, j - 1, k, q, i)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+
+            else !< bc_y%end
+
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do k = 0, p
+                    do j = 1, buff_size
+                        do l = -buff_size, m + buff_size
+                            !$acc loop seq
+                            do i = 1, sys_size
+                                q_prim_vf(i)%sf(l, n + j, k) = &
+                                    q_prim_vf(i)%sf(l, n - (j - 1), k)
+                            end do
+
+                            if (hyperelasticity) then
+                                q_prim_vf(xibeg + 1)%sf(l, n + j, k) = &
+                                    -q_prim_vf(xibeg + 1)%sf(l, n - (j - 1), k)
+                            end if
+                        end do
+                    end do
+                end do
+
+                if (qbmm .and. .not. polytropic) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do i = 1, nb
+                        do q = 1, nnode
+                            do k = 0, p
+                                do j = 1, buff_size
+                                    do l = -buff_size, m + buff_size
+                                        pb(l, n + j, k, q, i) = &
+                                            pb(l, n - (j - 1), k, q, i)
+                                        mv(l, n + j, k, q, i) = &
+                                            mv(l, n - (j - 1), k, q, i)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+
+            end if
+
+            !< z-direction
+        elseif (bc_dir == 3) then
+
+            if (bc_loc == -1) then !< bc_z%beg
+
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do j = 1, buff_size
+                    do l = -buff_size, n + buff_size
+                        do k = -buff_size, m + buff_size
+                            !$acc loop seq
+                            do i = 1, sys_size
+                                q_prim_vf(i)%sf(k, l, -j) = &
+                                    q_prim_vf(i)%sf(k, l, j - 1)
+                            end do
+
+                            if (hyperelasticity) then
+                                q_prim_vf(xiend)%sf(k, l, -j) = &
+                                    -q_prim_vf(xiend)%sf(k, l, j - 1)
+                            end if
+                        end do
+                    end do
+                end do
+
+                if (qbmm .and. .not. polytropic) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do i = 1, nb
+                        do q = 1, nnode
+                            do j = 1, buff_size
+                                do l = -buff_size, n + buff_size
+                                    do k = -buff_size, m + buff_size
+                                        pb(k, l, -j, q, i) = &
+                                            pb(k, l, j - 1, q, i)
+                                        mv(k, l, -j, q, i) = &
+                                            mv(k, l, j - 1, q, i)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+
+            else !< bc_z%end
+
+                !$acc parallel loop collapse(3) gang vector default(present)
+                do j = 1, buff_size
+                    do l = -buff_size, n + buff_size
+                        do k = -buff_size, m + buff_size
+                            !$acc loop seq
+                            do i = 1, sys_size
+                                q_prim_vf(i)%sf(k, l, p + j) = &
+                                    q_prim_vf(i)%sf(k, l, p - (j - 1))
+                            end do
+
+                            if (hyperelasticity) then
+                                q_prim_vf(xiend)%sf(k, l, p + j) = &
+                                    -q_prim_vf(xiend)%sf(k, l, p - (j - 1))
+                            end if
+                        end do
+                    end do
+                end do
+
+                if (qbmm .and. .not. polytropic) then
+                    !$acc parallel loop collapse(5) gang vector default(present)
+                    do i = 1, nb
+                        do q = 1, nnode
+                            do j = 1, buff_size
+                                do l = -buff_size, n + buff_size
+                                    do k = -buff_size, m + buff_size
+                                        pb(k, l, p + j, q, i) = &
+                                            pb(k, l, p - (j - 1), q, i)
+                                        mv(k, l, p + j, q, i) = &
+                                            mv(k, l, p - (j - 1), q, i)
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                end if
+
+            end if
+
+        end if
+
+    end subroutine s_symmetry_momentum
 
     subroutine s_periodic(q_prim_vf, pb, mv, bc_dir, bc_loc)
 

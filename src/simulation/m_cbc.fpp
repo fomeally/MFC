@@ -2106,16 +2106,17 @@ contains
         @:DEALLOCATE(vel_in, vel_out, pres_in, pres_out, Del_in, Del_out, alpha_rho_in, alpha_in, alphag_in)
 
         ! Deallocating CBC Coefficients in x-direction
-        if (any((/bc_x%beg, bc_x%end/) <= -5) .and. any((/bc_x%beg, bc_x%end/) >= -13)) then
-            @:DEALLOCATE(fd_coef_x)
-            if (weno_order > 1) then
-                @:DEALLOCATE(pi_coef_x)
-            end if
+        if ((bc_x%beg <= -5 .and. bc_x%beg >= -13) .or. &
+            (bc_x%end <= -5 .and. bc_x%end >= -13)) then
+                @:DEALLOCATE(fd_coef_x)
+                if (weno_order > 1) then
+                    @:DEALLOCATE(pi_coef_x)
+                end if
         end if
 
         ! Deallocating CBC Coefficients in y-direction
-        if (n > 0 .and. any((/bc_y%beg, bc_y%end/) <= -5) .and. &
-            any((/bc_y%beg, bc_y%end/) >= -13 .and. bc_y%beg /= -14)) then
+        if (n > 0 .and. ((bc_y%beg <= -5 .and. bc_y%beg >= -13) .or. &
+            (bc_y%end <= -5 .and. bc_y%end >= -13))) then
             @:DEALLOCATE(fd_coef_y)
             if (weno_order > 1) then
                 @:DEALLOCATE(pi_coef_y)
@@ -2123,7 +2124,8 @@ contains
         end if
 
         ! Deallocating CBC Coefficients in z-direction
-        if (p > 0 .and. any((/bc_z%beg, bc_z%end/) <= -5) .and. any((/bc_z%beg, bc_z%end/) >= -13)) then
+        if (p > 0 .and. ((bc_z%beg <= -5 .and. bc_z%beg >= -13) .or. &
+            (bc_z%end <= -5 .and. bc_z%end >= -13))) then
             @:DEALLOCATE(fd_coef_z)
             if (weno_order > 1) then
                 @:DEALLOCATE(pi_coef_z)

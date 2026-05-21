@@ -285,6 +285,10 @@ contains
                 elseif (patch_icpp(i)%geometry == 21) then
                     call s_model(i, patch_id_fp, q_prim_vf)
 
+                elseif (patch_icpp(i)%geometry == 26) then
+                    call s_sine_y_interface(i, patch_id_fp, q_prim_vf)
+                elseif (patch_icpp(i)%geometry == 27) then
+                    call s_sine_x_interface(i, patch_id_fp, q_prim_vf)
                 end if
                 !> @}
             end do

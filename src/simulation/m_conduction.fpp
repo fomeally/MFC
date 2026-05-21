@@ -188,9 +188,6 @@ contains
                         ds_L = z_cb(q) - z_cc(q)
                     end select
 
-                    print *, "ds_L, ds_R, grid_spacing: ", ds_L, ds_R, grid_spacing
-
-
                     P_L = q_prim_vf(E_idx)%sf(k, l, q)
                     P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
 
@@ -274,8 +271,9 @@ contains
                         do i = 1, num_fluids
                             if (q_prim_vf(E_idx + i)%sf(k, l, q) > small_num_dif .and. q_prim_vf(E_idx + i)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) > small_num_dif) then
                                 
-                                rho_i_R(i) = q_prim_vf(i)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) / q_prim_vf(i + E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                                rho_i_L(i) = q_prim_vf(i)%sf(k, l, q) / q_prim_vf(i + E_idx)%sf(k, l, q)
+                                rho_i_R(i) = q_prim_vf(i)%sf(k + offsets(1), l + offsets(2), q + offsets(3)) / &
+                                    q_prim_vf(E_idx + i)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                                rho_i_L(i) = q_prim_vf(i)%sf(k, l, q) / q_prim_vf(E_idx + i)%sf(k, l, q)
                                 T_R(i) = gammas(i) / (cvs(i) * rho_i_R(i)) * (P_R + pi_infs(i) / (gammas(i) + 1.0_wp))
                                 T_L(i) = gammas(i) / (cvs(i) * rho_i_L(i)) * (P_L + pi_infs(i) / (gammas(i) + 1.0_wp))
                                 dT_ds_f(i) = (T_R(i) - T_L(i)) / grid_spacing

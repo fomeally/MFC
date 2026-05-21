@@ -27,7 +27,14 @@ h0_co2 = 0.0
 mu_co2 = 1.0 / (1.37e-1)
 kappa_co2 = 1.0 / (2.0e-1)
 
-
+# air props
+gamma_air = 1.4
+W_air = 28.97
+Gamma_air = 1.0 / (gamma_air - 1.0)
+cv_air = Rbar*Gamma_air / W_air
+cp_air = gamma_air*cv_air
+T0_air = 0.0
+h0_air = 0.0
 
 # N2 props
 gamma_n2 = 1.4
@@ -54,7 +61,7 @@ h0_h2 = 0.0
 
 # Binary diffusion coefficients
 D11 = 0.0e0
-D12 = 1.0e-1
+D12 = 1.0
 D13 = 0.674e-2
 D21 = D12
 D22 = 0.0e0
@@ -63,7 +70,7 @@ D31 = D13
 D32 = D23
 D33 = 0.0e0
 
-Lx = 1.0
+Lx = 0.1
 
 Nx = 199
 
@@ -82,24 +89,24 @@ print(
             "m": Nx,
             "n": 0,
             "p": 0,
-            "dt": 5.0e-6,
+            "dt": 5.0e-7,
             "t_step_start": 0,
-            # "t_step_stop": 10000,
-            # "t_step_save": 20,
-            "t_step_stop": 50000,
-            "t_step_save": 100,
+            "t_step_stop": 1,
+            "t_step_save": 1,
+            # "t_step_stop": 32000,
+            # "t_step_save": 32000,
             # "t_step_stop": 100000,
             # "t_step_save": 500,
-            # "t_step_print": 1000,
+            # "t_step_print": 320,
             # Simulation Algorithm Parameters
             "num_patches": 2,
             "model_eqns": 2,
             "alt_soundspeed": "F",
-            "diffusion": "T",
             "conduction" : "F",
+            "diffusion" : "T",
             "num_fluids": 2,
-            "mpp_lim": "T",
-            "mixture_err": "T",
+            "mpp_lim": "F",
+            "mixture_err": "F",
             "time_stepper": 3,
             "weno_order": 5,
             "weno_eps": 1.0e-16,
@@ -115,9 +122,8 @@ print(
             "riemann_solver": 2,
             "wave_speeds": 1,
             "avg_state": 2,
-            "bc_x%beg": -6,
-            "bc_x%end": -6,
-            "viscous": "T",
+            "bc_x%beg": -2,
+            "bc_x%end": -2,
             # Formatted Database Files Structure Parameters
             "format": 1,
             "precision": 2,
@@ -127,59 +133,54 @@ print(
             'schlieren_wrt'                :'F',
             "probe_wrt": "F",
             
-            # Patch 1 N2
+            # Patch 1 air
             "patch_icpp(1)%geometry": 1,
             "patch_icpp(1)%x_centroid": 0.50*Lx,
             "patch_icpp(1)%length_x": Lx,
             "patch_icpp(1)%vel(1)": 0.0,
             "patch_icpp(1)%pres": p0,
-            "patch_icpp(1)%alpha_rho(1)": rho_n2,
-            "patch_icpp(1)%alpha_rho(2)": 0.0,
-            #"patch_icpp(1)%alpha_rho(3)": 0.0,
+            "patch_icpp(1)%alpha_rho(1)": 1.0,
             "patch_icpp(1)%alpha(1)": 1.0,
+            "patch_icpp(1)%alpha_rho(2)": 0.0,
             "patch_icpp(1)%alpha(2)": 0.0,
-            #"patch_icpp(1)%alpha(3)": 0.0,
-            
-            # Patch 2 CO2
-            "patch_icpp(2)%geometry": 23,
-            "patch_icpp(2)%x_centroid": 0.50*Lx,
-            "patch_icpp(2)%length_x": Lx,
-            "patch_icpp(2)%alter_patch(1)": "T",
+
+            # Patch 2 air
+            "patch_icpp(2)%geometry": 1,
+            "patch_icpp(2)%x_centroid": 0.25*Lx,
+            "patch_icpp(2)%length_x": 0.5*Lx,
             "patch_icpp(2)%vel(1)": 0.0,
             "patch_icpp(2)%pres": p0,
             "patch_icpp(2)%alpha_rho(1)": 0.0,
-            "patch_icpp(2)%alpha_rho(2)": rho_co2,
-            #"patch_icpp(2)%alpha_rho(3)": 0.0,
             "patch_icpp(2)%alpha(1)": 0.0,
+            "patch_icpp(2)%alpha_rho(2)": 1.0,
             "patch_icpp(2)%alpha(2)": 1.0,
-            #"patch_icpp(2)%alpha(3)": 0.0,
+
+            
 
             # Fluids Physical Parameters
-            # N2
-            "fluid_pp(1)%gamma": Gamma_n2,
+            # air
+            "fluid_pp(1)%gamma": Gamma_air,
             "fluid_pp(1)%pi_inf": 0.0,
-            "fluid_pp(1)%Re(1)" : mu_n2,
-            "fluid_pp(1)%Re(2)" : kappa_n2,
-	        "fluid_pp(1)%W": W_n2,
-	        "fluid_pp(1)%cp": cp_n2,
-            "fluid_pp(1)%h0": h0_n2,
-            "fluid_pp(1)%T0": T0_n2,
+            "fluid_pp(1)%W": W_air,
+            "fluid_pp(1)%cp": cp_air,
+            "fluid_pp(1)%h0": h0_air,
+            "fluid_pp(1)%T0": T0_air,
             "fluid_pp(1)%D(1)": D11,
             "fluid_pp(1)%D(2)": D12,
             "fluid_pp(1)%gas_mixture" : "T",
 
-            # CO2
-            "fluid_pp(2)%gamma": Gamma_co2,
+
+            #air
+            "fluid_pp(2)%gamma": Gamma_air,
             "fluid_pp(2)%pi_inf": 0.0,
-            "fluid_pp(2)%Re(1)" : mu_co2,
-            "fluid_pp(2)%Re(2)" : kappa_co2,
-	        "fluid_pp(2)%W": W_co2,
-	        "fluid_pp(2)%cp": cp_co2,
-            "fluid_pp(2)%h0": h0_co2,
-            "fluid_pp(2)%T0": T0_co2,
+            "fluid_pp(2)%W": W_air,
+            "fluid_pp(2)%cp": cp_air,
+            "fluid_pp(2)%h0": h0_air,
+            "fluid_pp(2)%T0": T0_air,
             "fluid_pp(2)%D(1)": D21,
             "fluid_pp(2)%D(2)": D22,
             "fluid_pp(2)%gas_mixture" : "T",
+
     
 
         }

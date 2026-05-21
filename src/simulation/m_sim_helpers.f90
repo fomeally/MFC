@@ -96,14 +96,16 @@ contains
         !! @param icfl_sf cell centered inviscid cfl number
         !! @param vcfl_sf (optional) cell centered viscous cfl number
         !! @param Rc_sf (optional) cell centered Rc
-    subroutine s_compute_stability_from_dt(vel, c, rho, Re_l, j, k, l, icfl_sf, vcfl_sf, Rc_sf)
+        !! @param dcfl_sf (optional) cell centered diffusive cfl number
+    subroutine s_compute_stability_from_dt(vel, c, rho, Re_l, j, k, l, D_max, icfl_sf, vcfl_sf, Rc_sf, dcfl_sf)
         !$acc routine seq
         real(wp), intent(in), dimension(num_dims) :: vel
         real(wp), intent(in) :: c, rho
         real(wp), dimension(0:m, 0:n, 0:p), intent(inout) :: icfl_sf
-        real(wp), dimension(0:m, 0:n, 0:p), intent(inout), optional :: vcfl_sf, Rc_sf
+        real(wp), dimension(0:m, 0:n, 0:p), intent(inout), optional :: vcfl_sf, Rc_sf, dcfl_sf
         real(wp), dimension(2), intent(in) :: Re_l
         integer, intent(in) :: j, k, l
+        real(wp) :: D_max
 
         real(wp) :: fltr_dtheta   !<
              !! Modified dtheta accounting for Fourier filtering in azimuthal direction.
@@ -154,6 +156,18 @@ contains
 
             end if
 
+            if (diffusion) then
+
+                if (grid_geometry == 3) then
+                    dcfl_sf(j, k, l) = D_max*dt &
+                                    /min(dx(j), dy(k), fltr_dtheta)**2._wp
+                else
+                    dcfl_sf(j, k, l) = D_max*dt &
+                                    /min(dx(j), dy(k), dz(l))**2._wp
+                end if
+
+            end if
+
         elseif (n > 0) then
             !2D
             icfl_sf(j, k, l) = dt/min(dx(j)/(abs(vel(1)) + c), &
@@ -169,6 +183,8 @@ contains
 
             end if
 
+            if (diffusion) dcfl_sf(j, k, l) = D_max*dt/min(dx(j), dy(k))**2._wp
+
         else
             !1D
             icfl_sf(j, k, l) = (dt/dx(j))*(abs(vel(1)) + c)
@@ -180,6 +196,8 @@ contains
                 Rc_sf(j, k, l) = dx(j)*(abs(vel(1)) + c)/maxval(1._wp/Re_l)
 
             end if
+
+            if (diffusion) dcfl_sf(j, k, l) = D_max*dt/dx(j)**2._wp
 
         end if
 
@@ -193,15 +211,16 @@ contains
         !! @param j x coordinate
         !! @param k y coordinate
         !! @param l z coordinate
-    subroutine s_compute_dt_from_cfl(vel, c, max_dt, rho, Re_l, j, k, l)
+    subroutine s_compute_dt_from_cfl(vel, c, max_dt, rho, Re_l, j, k, l, D_max)
         !$acc routine seq
         real(wp), dimension(num_dims), intent(in) :: vel
         real(wp), intent(in) :: c, rho
         real(wp), dimension(0:m, 0:n, 0:p), intent(inout) :: max_dt
         real(wp), dimension(2), intent(in) :: Re_l
         integer, intent(in) :: j, k, l
+        real(wp) :: D_max
 
-        real(wp) :: icfl_dt, vcfl_dt
+        real(wp) :: icfl_dt, vcfl_dt, dcfl_dt
         real(wp) :: fltr_dtheta   !<
              !! Modified dtheta accounting for Fourier filtering in azimuthal direction.
 
@@ -240,6 +259,14 @@ contains
                 end if
             end if
 
+            if (diffusion) then
+                if (grid_geometry == 3) then
+                    dcfl_dt = cfl_target*(min(dx(j), dy(k), fltr_dtheta)**2._wp)/D_max
+                else
+                    dcfl_dt = cfl_target*(min(dx(j), dy(k), dz(l))**2._wp)/D_max
+                end if
+            end if
+
         elseif (n > 0) then
             !2D
             icfl_dt = cfl_target*min(dx(j)/(abs(vel(1)) + c), &
@@ -249,6 +276,8 @@ contains
                 vcfl_dt = cfl_target*(min(dx(j), dy(k))**2._wp)/maxval((1/Re_l)/rho)
             end if
 
+            if (diffusion) dcfl_dt = cfl_target*(min(dx(j), dy(k))**2._wp)/D_max
+
         else
             !1D
             icfl_dt = cfl_target*(dx(j)/(abs(vel(1)) + c))
@@ -257,10 +286,16 @@ contains
                 vcfl_dt = cfl_target*(dx(j)**2._wp)/minval(1/(rho*Re_l))
             end if
 
+            if (diffusion) dcfl_dt = cfl_target*(dx(j)**2._wp)/D_max
+
         end if
 
-        if (any(re_size > 0)) then
+        if (any(re_size > 0) .and. diffusion) then
+            max_dt(j, k, l) = min(icfl_dt, vcfl_dt, dcfl_dt)
+        elseif (any(re_size > 0)) then
             max_dt(j, k, l) = min(icfl_dt, vcfl_dt)
+        elseif (diffusion) then
+            max_dt(j, k, l) = min(icfl_dt, dcfl_dt)
         else
             max_dt(j, k, l) = icfl_dt
         end if

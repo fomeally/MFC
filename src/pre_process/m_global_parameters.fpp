@@ -373,6 +373,8 @@ contains
             patch_icpp(i)%length_y = dflt_real
             patch_icpp(i)%length_z = dflt_real
             patch_icpp(i)%radius = dflt_real
+            patch_icpp(i)%amplitude = dflt_real
+            patch_icpp(i)%wavelength = dflt_real
             patch_icpp(i)%epsilon = dflt_real
             patch_icpp(i)%beta = dflt_real
             patch_icpp(i)%normal = dflt_real

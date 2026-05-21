@@ -363,9 +363,10 @@ contains
             end do
         end do
 
-        if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
-        end if     
+        if (model_eqns == 2 .and. mpp_lim) call s_correct_5eq_model(q_cons_ts(1)%vf)
+
+        if (diffusion) call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
+
 
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
@@ -472,9 +473,10 @@ contains
             end do
         end do
 
-        if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
-        end if
+        if (model_eqns == 2 .and. mpp_lim) call s_correct_5eq_model(q_cons_ts(2)%vf)
+
+        if (diffusion) call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
+
 
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
@@ -552,9 +554,10 @@ contains
             end do
         end do
 
-        if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
-        end if
+        if (model_eqns == 2 .and. mpp_lim) call s_correct_5eq_model(q_cons_ts(1)%vf)
+
+        if (diffusion) call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
+
 
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
@@ -668,9 +671,9 @@ contains
             end do
         end do
 
-        if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
-        end if
+        if (model_eqns == 2 .and. mpp_lim) call s_correct_5eq_model(q_cons_ts(2)%vf)
+
+        if (diffusion) call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
 
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
@@ -748,9 +751,9 @@ contains
             end do
         end do
 
-        if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
-        end if
+        if (model_eqns == 2 .and. mpp_lim) call s_correct_5eq_model(q_cons_ts(2)%vf)
+
+        if (diffusion) call s_correct_volume_fractions(q_cons_ts(2)%vf, q_prim_vf)
 
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
@@ -828,9 +831,10 @@ contains
             end do
         end do
 
-        if (diffusion) then
-            call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
-        end if
+        if (model_eqns == 2 .and. mpp_lim) call s_correct_5eq_model(q_cons_ts(1)%vf)
+
+        if (diffusion) call s_correct_volume_fractions(q_cons_ts(1)%vf, q_prim_vf)
+
 
         if (qbmm .and. (.not. polytropic)) then
             !$acc parallel loop collapse(5) gang vector default(present)
@@ -971,6 +975,17 @@ contains
         real(wp) :: gam_num, gam_den, gam_mix
         real(wp) :: Y_dif(Dif_size)
         real(wp) :: rho_dif
+        real(wp) :: D_max
+
+        D_max = 0._wp
+        if (diffusion) then
+
+            do i = 1, Dif_size - 1
+                do j = i + 1, Dif_size
+                    D_max = max(D_max, fluid_pp(Dif_idx(i))%D(j))
+                end do
+            end do
+        end if
 
         call s_convert_conservative_to_primitive_variables( &
             q_cons_ts(1)%vf, &
@@ -1004,7 +1019,7 @@ contains
                             gam_mix = gam_num / gam_den
                         end if
                     end if
-                    print *, "Here time steppers"
+
                     if (diffusion .and. alt_soundspeed) then
                         ! Compute mixture sound speed
                         call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c, q_prim_vf(advg_idx)%sf(j, k, l), gam_mix)
@@ -1012,7 +1027,7 @@ contains
                         call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c)
                     end if
 
-                    call s_compute_dt_from_cfl(vel, c, max_dt, rho, Re, j, k, l)
+                    call s_compute_dt_from_cfl(vel, c, max_dt, rho, Re, j, k, l, D_max)
                 end do
             end do
         end do

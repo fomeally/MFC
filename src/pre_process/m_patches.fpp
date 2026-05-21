@@ -39,6 +39,8 @@ module m_patches
               s_ellipse, &
               s_ellipsoid, &
               s_rectangle, &
+              s_sine_x_interface, &
+              s_sine_y_interface, &
               s_sweep_line, &
               s_2D_TaylorGreen_vortex, &
               s_1D_analytical, &
@@ -102,47 +104,57 @@ contains
         integer, dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
         type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
 
-        real(wp) :: pi_inf, gamma, lit_gamma
+        integer :: i, j, k
+        real(wp) :: left_dist
 
-        integer :: i, j, k !< Generic loop operators
+        j = 0
+        k = 0
 
-        pi_inf = fluid_pp(1)%pi_inf
-        gamma = fluid_pp(1)%gamma
-        lit_gamma = (1._wp + gamma)/gamma
-
-        ! Transferring the line segment's centroid and length information
         x_centroid = patch_icpp(patch_id)%x_centroid
-        length_x = patch_icpp(patch_id)%length_x
+        length_x   = patch_icpp(patch_id)%length_x
 
-        ! Computing the beginning and end x-coordinates of the line segment
-        ! based on its centroid and length
+        smooth_patch_id = patch_icpp(patch_id)%smooth_patch_id
+        smooth_coeff    = patch_icpp(patch_id)%smooth_coeff
+
         x_boundary%beg = x_centroid - 0.5_wp*length_x
         x_boundary%end = x_centroid + 0.5_wp*length_x
 
-        ! Since the line segment patch does not allow for its boundaries to
-        ! be smoothed out, the pseudo volume fraction is set to 1 to ensure
-        ! that only the current patch contributes to the fluid state in the
-        ! cells that this patch covers.
-        eta = 1._wp
-
-        ! Checking whether the line segment covers a particular cell in the
-        ! domain and verifying whether the current patch has the permission
-        ! to write to that cell. If both queries check out, the primitive
-        ! variables of the current patch are assigned to this cell.
         do i = 0, m
-            if (x_boundary%beg <= x_cc(i) .and. &
-                x_boundary%end >= x_cc(i) .and. &
-                patch_icpp(patch_id)%alter_patch(patch_id_fp(i, 0, 0))) then
+
+            eta = 1._wp
+
+            if (patch_icpp(patch_id)%smoothen) then
+
+                ! Smooth left edge only; keep right edge sharp
+                if (x_cc(i) > x_boundary%end) cycle
+
+                left_dist = x_cc(i) - x_boundary%beg
+
+                eta = 0.5_wp + 0.5_wp*tanh(smooth_coeff/dx*left_dist)
+
+                if (eta <= sgm_eps) cycle
+
+            else
+
+                ! Sharp line segment
+                if (.not. (x_boundary%beg <= x_cc(i) .and. &
+                        x_boundary%end >= x_cc(i))) cycle
+
+                eta = 1._wp
+
+            end if
+
+            if (patch_icpp(patch_id)%alter_patch(patch_id_fp(i, 0, 0))) then
 
                 call s_assign_patch_primitive_variables(patch_id, i, 0, 0, &
                                                         eta, q_prim_vf, patch_id_fp)
 
                 @:analytical()
 
-                ! Updating the patch identities bookkeeping variable
-                if (1._wp - eta < 1e-16_wp) patch_id_fp(i, 0, 0) = patch_id
+                if (1._wp - eta < sgm_eps) patch_id_fp(i, 0, 0) = patch_id
 
             end if
+
         end do
 
     end subroutine s_line_segment
@@ -520,16 +532,16 @@ contains
 
                 if (.not. present(ib) .and. patch_icpp(patch_id)%smoothen) then
 
-                    ! eta = tanh(smooth_coeff/min(dx, dy)* &
-                    !            (sqrt((x_cc(i) - x_centroid)**2 &
-                    !                  + (y_cc(j) - y_centroid)**2) &
-                    !             - radius))*(-0.5_wp) + 0.5_wp
-                    delta_smooth = 0.01_wp
-                    ! delta_smooth = delta_smooth / 100.0_wp
-                    eta = tanh(1._wp / delta_smooth* &
+                    eta = tanh(smooth_coeff/min(dx, dy)* &
                                (sqrt((x_cc(i) - x_centroid)**2 &
                                      + (y_cc(j) - y_centroid)**2) &
                                 - radius))*(-0.5_wp) + 0.5_wp
+                    ! delta_smooth = 0.01_wp
+                    ! ! delta_smooth = delta_smooth / 100.0_wp
+                    ! eta = tanh(1._wp / delta_smooth* &
+                    !            (sqrt((x_cc(i) - x_centroid)**2 &
+                    !                  + (y_cc(j) - y_centroid)**2) &
+                    !             - radius))*(-0.5_wp) + 0.5_wp
 
                 end if
 
@@ -1184,8 +1196,8 @@ contains
         integer :: i, j, k !< generic loop iterators
         real(wp) :: pi_inf, gamma, lit_gamma !< Equation of state parameters
 
-        real(wp) :: dx_rect, dy_rect, dist_rect
-        real(wp) :: hx, hy, delta_smooth
+        real(wp) :: hx, hy
+        real(wp) :: left_dist
 
         pi_inf = fluid_pp(1)%pi_inf
         gamma = fluid_pp(1)%gamma
@@ -1202,45 +1214,42 @@ contains
             y_centroid = patch_icpp(patch_id)%y_centroid
             length_x = patch_icpp(patch_id)%length_x
             length_y = patch_icpp(patch_id)%length_y
+            smooth_patch_id = patch_icpp(patch_id)%smooth_patch_id
+            smooth_coeff = patch_icpp(patch_id)%smooth_coeff
+
             hx = 0.5_wp*length_x
             hy = 0.5_wp*length_y
         end if
 
-        ! Computing the beginning and the end x- and y-coordinates of the
-        ! rectangle based on its centroid and lengths
+        ! Computing the beginning and end x- and y-coordinates
         x_boundary%beg = x_centroid - 0.5_wp*length_x
         x_boundary%end = x_centroid + 0.5_wp*length_x
         y_boundary%beg = y_centroid - 0.5_wp*length_y
         y_boundary%end = y_centroid + 0.5_wp*length_y
 
-        ! Since the rectangular patch does not allow for its boundaries to
-        ! be smoothed out, the pseudo volume fraction is set to 1 to ensure
-        ! that only the current patch contributes to the fluid state in the
-        ! cells that this patch covers.
         eta = 1._wp
 
-        ! Checking whether the rectangle covers a particular cell in the
-        ! domain and verifying whether the current patch has the permission
-        ! to write to that cell. If both queries check out, the primitive
-        ! variables of the current patch are assigned to this cell.
         do j = 0, n
             do i = 0, m
 
+                eta = 1._wp
+
                 if (.not. present(ib) .and. patch_icpp(patch_id)%smoothen) then
 
-                    dx_rect = abs(x_cc(i) - x_centroid) - hx
-                    dy_rect = abs(y_cc(j) - y_centroid) - hy
+                    ! Smooth only the left boundary of the rectangle.
+                    ! The y-boundaries and right x-boundary remain sharp.
+                    if (.not. (y_boundary%beg <= y_cc(j) .and. y_boundary%end >= y_cc(j) .and. &
+                            x_cc(i) <= x_boundary%end)) cycle
 
-                    dist_rect = sqrt(max(dx_rect, 0._wp)**2 + max(dy_rect, 0._wp)**2) + &
-                                min(max(dx_rect, dy_rect), 0._wp)
+                    left_dist = x_cc(i) - x_boundary%beg
 
-                    delta_smooth = 0.01_wp
-                    eta = 0.5_wp - 0.5_wp*tanh(dist_rect/delta_smooth)
+                    eta = 0.5_wp + 0.5_wp*tanh(smooth_coeff/dx*left_dist)
 
                     if (eta <= 1.e-16_wp) cycle
 
                 else
 
+                    ! Standard sharp rectangle
                     if (.not. (x_boundary%beg <= x_cc(i) .and. x_boundary%end >= x_cc(i) .and. &
                             y_boundary%beg <= y_cc(j) .and. y_boundary%end >= y_cc(j))) cycle
 
@@ -1249,8 +1258,11 @@ contains
                 end if
 
                 if (present(ib)) then
+
                     patch_id_fp(i, j, 0) = patch_id
+
                 else
+
                     if (patch_icpp(patch_id)%alter_patch(patch_id_fp(i, j, 0))) then
 
                         call s_assign_patch_primitive_variables(patch_id, i, j, 0, &
@@ -1258,21 +1270,186 @@ contains
 
                         @:analytical()
 
-                        if ((q_prim_vf(1)%sf(i, j, 0) < 1.e-10) .and. (model_eqns == 4)) then
+                        if ((q_prim_vf(1)%sf(i, j, 0) < 1.e-10_wp) .and. (model_eqns == 4)) then
                             q_prim_vf(1)%sf(i, j, 0) = &
                                 (((q_prim_vf(E_idx)%sf(i, j, 0) + pi_inf)/(pref + pi_inf))**(1._wp/lit_gamma))* &
                                 rhoref*(1._wp - q_prim_vf(alf_idx)%sf(i, j, 0))
                         end if
 
-                        if (1._wp - eta < 1e-16_wp) patch_id_fp(i, j, 0) = patch_id
+                        ! Only mark the patch as fully owning the cell when eta is effectively 1.
+                        if (1._wp - eta < 1.e-16_wp) patch_id_fp(i, j, 0) = patch_id
 
                     end if
+
                 end if
 
             end do
         end do
 
     end subroutine s_rectangle
+
+    subroutine s_sine_x_interface(patch_id, patch_id_fp, q_prim_vf)
+
+        integer, intent(in) :: patch_id
+        integer, dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
+        type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
+
+        integer :: i, j, k
+        real(wp) :: amp, lambda, k_wave
+        real(wp) :: x0, x_s
+
+        x_centroid      = patch_icpp(patch_id)%x_centroid
+        y_centroid      = patch_icpp(patch_id)%y_centroid
+        length_x        = patch_icpp(patch_id)%length_x
+        length_y        = patch_icpp(patch_id)%length_y
+        smooth_patch_id = patch_icpp(patch_id)%smooth_patch_id
+        smooth_coeff    = patch_icpp(patch_id)%smooth_coeff
+        amp             = patch_icpp(patch_id)%amplitude
+        lambda          = patch_icpp(patch_id)%wavelength
+
+        k_wave = 2._wp*pi/lambda
+
+        x_boundary%beg = x_centroid - 0.5_wp*length_x
+        x_boundary%end = x_centroid + 0.5_wp*length_x
+        y_boundary%beg = y_centroid - 0.5_wp*length_y
+        y_boundary%end = y_centroid + 0.5_wp*length_y
+
+        ! Mean right interface location
+        x0 = x_boundary%end
+
+        k = 0
+
+        do j = 0, n
+            do i = 0, m
+
+                eta = 1._wp
+
+                ! Sinusoidal right side of the patch
+                x_s = x0 + amp*cos(k_wave*(y_cc(j) - y_boundary%beg))
+
+                if (patch_icpp(patch_id)%smoothen) then
+
+                    ! eta -> 1 inside/left of sine interface
+                    ! eta -> 0 outside/right of sine interface
+                    !
+                    ! smooth_coeff = 4.6/N gives approximately
+                    ! 0.01 -> 0.99 smoothing over N grid cells.
+                    eta = 0.5_wp*(1._wp + tanh(smooth_coeff/min(dx, dy)*(x_s - x_cc(i))))
+
+                end if
+
+                if (((x_boundary%beg <= x_cc(i) .and. x_cc(i) <= x_s .and. &
+                    y_boundary%beg <= y_cc(j) .and. y_cc(j) <= y_boundary%end) &
+                    .and. &
+                    patch_icpp(patch_id)%alter_patch(patch_id_fp(i, j, 0))) &
+                    .or. &
+                    (patch_icpp(patch_id)%smoothen .and. &
+                    patch_id_fp(i, j, 0) == smooth_patch_id)) then
+
+                    call s_assign_patch_primitive_variables(patch_id, i, j, 0, &
+                                                            eta, q_prim_vf, patch_id_fp)
+
+                    @:analytical()
+
+                end if
+
+            end do
+        end do
+
+    end subroutine s_sine_x_interface
+
+    subroutine s_sine_y_interface(patch_id, patch_id_fp, q_prim_vf, ib)
+
+        integer, intent(in) :: patch_id
+        integer, dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
+        type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
+        logical, optional, intent(in) :: ib
+
+        integer :: i, j, k
+        real(wp) :: amp, lambda, k_wave
+        real(wp) :: y0, y_s, arg
+        real(wp) :: delta_smooth
+
+        if (present(ib)) then
+            x_centroid = patch_ib(patch_id)%x_centroid
+            y_centroid = patch_ib(patch_id)%y_centroid
+            length_x   = patch_ib(patch_id)%length_x
+            length_y   = patch_ib(patch_id)%length_y
+        else
+            x_centroid      = patch_icpp(patch_id)%x_centroid
+            y_centroid      = patch_icpp(patch_id)%y_centroid
+            length_x        = patch_icpp(patch_id)%length_x
+            length_y        = patch_icpp(patch_id)%length_y
+            smooth_patch_id = patch_icpp(patch_id)%smooth_patch_id
+            smooth_coeff    = patch_icpp(patch_id)%smooth_coeff
+            amp             = patch_icpp(patch_id)%amplitude
+            lambda          = patch_icpp(patch_id)%wavelength
+        end if
+
+        x_boundary%beg = x_centroid - 0.5_wp*length_x
+        x_boundary%end = x_centroid + 0.5_wp*length_x
+        y_boundary%beg = y_centroid - 0.5_wp*length_y
+        y_boundary%end = y_centroid + 0.5_wp*length_y
+
+        ! Sine interface parameters
+        ! amp    = 0.229e-2_wp
+        ! lambda = 5.933e-2_wp
+        k_wave = 2._wp*pi/lambda
+
+        ! Mean interface height
+        y0 = y_boundary%end
+
+        ! Physical smoothing thickness.
+        ! Use cm if your domain is in cm.
+        delta_smooth = smooth_coeff
+
+        eta = 1._wp
+
+        do j = 0, n
+            do i = 0, m
+
+                ! Sinusoidal top of the patch
+                y_s = y0 + amp*cos(k_wave*(x_cc(i) - x_boundary%beg))
+
+                if (.not. present(ib) .and. patch_icpp(patch_id)%smoothen) then
+
+                    ! Smooth volume fraction:
+                    ! eta -> 1 below the sine interface
+                    ! eta -> 0 above the sine interface
+                    arg = sqrt(pi)*(y_s - y_cc(j))/delta_smooth
+                    eta = 0.5_wp*(1._wp + erf(arg))
+
+                end if
+
+                if (present(ib) .and. &
+                    (x_boundary%beg <= x_cc(i) .and. x_cc(i) <= x_boundary%end .and. &
+                    y_boundary%beg <= y_cc(j) .and. y_cc(j) <= y_s)) then
+
+                    patch_id_fp(i, j, 0) = patch_id
+
+                else
+
+                    if (((x_boundary%beg <= x_cc(i) .and. x_cc(i) <= x_boundary%end .and. &
+                        y_boundary%beg <= y_cc(j) .and. y_cc(j) <= y_s) &
+                        .and. &
+                        patch_icpp(patch_id)%alter_patch(patch_id_fp(i, j, 0))) &
+                        .or. &
+                        (.not. present(ib) .and. patch_icpp(patch_id)%smoothen .and. &
+                        patch_id_fp(i, j, 0) == smooth_patch_id)) then
+
+                        call s_assign_patch_primitive_variables(patch_id, i, j, 0, &
+                                                                eta, q_prim_vf, patch_id_fp)
+
+                        @:analytical()
+
+                    end if
+
+                end if
+
+            end do
+        end do
+
+    end subroutine s_sine_y_interface
 
     !> The swept line patch is a 2D geometry that may be used,
         !!      for example, in creating a solid boundary, or pre-/post-

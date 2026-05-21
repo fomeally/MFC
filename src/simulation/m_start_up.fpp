@@ -951,11 +951,11 @@ contains
         ! coordinate direction, based on the selected boundary condition. In
         ! order, these are the ghost-cell extrapolation, symmetry, periodic,
         ! and processor boundary conditions.
-        if (bc_x%beg <= -3) then
+        if (bc_x%beg <= -3 .and. bc_x%beg /= -17) then
             do i = 1, buff_size
                 dx(-i) = dx(0)
             end do
-        elseif (bc_x%beg == -2) then
+        elseif (bc_x%beg == -2 .or. bc_x%beg == -17) then
             do i = 1, buff_size
                 dx(-i) = dx(i - 1)
             end do
@@ -982,11 +982,11 @@ contains
         ! coordinate direction, based on desired boundary condition. These
         ! include, in order, ghost-cell extrapolation, symmetry, periodic,
         ! and processor boundary conditions.
-        if (bc_x%end <= -3) then
+        if (bc_x%end <= -3 .and. bc_x%end /= -17) then
             do i = 1, buff_size
                 dx(m + i) = dx(m)
             end do
-        elseif (bc_x%end == -2) then
+        elseif (bc_x%end == -2 .or. bc_x%end == -17) then
             do i = 1, buff_size
                 dx(m + i) = dx(m - (i - 1))
             end do
@@ -1019,11 +1019,11 @@ contains
         ! and processor boundary conditions.
         if (n == 0) then
             return
-        elseif (bc_y%beg <= -3 .and. bc_y%beg /= -14) then
+        elseif (bc_y%beg <= -3 .and. bc_y%beg /= -14 .and. bc_y%beg /= -17) then
             do i = 1, buff_size
                 dy(-i) = dy(0)
             end do
-        elseif (bc_y%beg == -2 .or. bc_y%beg == -14) then
+        elseif (bc_y%beg == -2 .or. bc_y%beg == -14 .or. bc_y%beg == -17) then
             do i = 1, buff_size
                 dy(-i) = dy(i - 1)
             end do
@@ -1050,11 +1050,11 @@ contains
         ! coordinate direction, based on desired boundary condition. These
         ! include, in order, ghost-cell extrapolation, symmetry, periodic,
         ! and processor boundary conditions.
-        if (bc_y%end <= -3) then
+        if (bc_y%end <= -3 .and. bc_y%end /= -17) then
             do i = 1, buff_size
                 dy(n + i) = dy(n)
             end do
-        elseif (bc_y%end == -2) then
+        elseif (bc_y%end == -2 .or. bc_y%end == -17) then
             do i = 1, buff_size
                 dy(n + i) = dy(n - (i - 1))
             end do
@@ -1087,11 +1087,11 @@ contains
         ! and processor boundary conditions.
         if (p == 0) then
             return
-        elseif (bc_z%beg <= -3) then
+        elseif (bc_z%beg <= -3 .and. bc_z%beg /= -17) then
             do i = 1, buff_size
                 dz(-i) = dz(0)
             end do
-        elseif (bc_z%beg == -2) then
+        elseif (bc_z%beg == -2 .or. bc_z%beg == -17) then
             do i = 1, buff_size
                 dz(-i) = dz(i - 1)
             end do
@@ -1118,11 +1118,11 @@ contains
         ! coordinate direction, based on desired boundary condition. These
         ! include, in order, ghost-cell extrapolation, symmetry, periodic,
         ! and processor boundary conditions.
-        if (bc_z%end <= -3) then
+        if (bc_z%end <= -3 .and. bc_z%end /= -17) then
             do i = 1, buff_size
                 dz(p + i) = dz(p)
             end do
-        elseif (bc_z%end == -2) then
+        elseif (bc_z%end == -2 .or. bc_z%end == -17) then
             do i = 1, buff_size
                 dz(p + i) = dz(p - (i - 1))
             end do

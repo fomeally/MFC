@@ -99,6 +99,8 @@ contains
                     call s_check_tanh_patch_geometry(i)
                 else if (patch_icpp(i)%geometry == 25) then
                     call s_check_tanh_patch_geometry(i)
+                else if (patch_icpp(i)%geometry == 26 .or. patch_icpp(i)%geometry == 27) then
+                    call s_check_sine_interface_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == dflt_int) then
                     call s_prohibit_abort("Active patch undefined", "patch_icpp("//trim(iStr)//")%geometry must be set")
                 else
@@ -137,7 +139,10 @@ contains
                              patch_icpp(i)%geometry == 10 .or. &
                              patch_icpp(i)%geometry == 11 .or. &
                              patch_icpp(i)%geometry == 12 .or. &
-                             patch_icpp(i)%geometry == 14)) then
+                             patch_icpp(i)%geometry == 14 .or. &
+                             patch_icpp(i)%geometry == 1 .or. &
+                             patch_icpp(i)%geometry == 26 .or. &
+                             patch_icpp(i)%geometry == 27)) then
                 call s_check_supported_patch_smoothing(i)
             else
                 call s_check_unsupported_patch_smoothing(i)
@@ -227,6 +232,40 @@ contains
         @:PROHIBIT(patch_icpp(patch_id)%length_y <= 0._wp, "Rectangle patch "//trim(iStr)//": length_y must be greater than zero")
 
     end subroutine s_check_rectangle_patch_geometry
+
+    !>  This subroutine checks the sine interface patch input
+!!  @param patch_id Patch identifier
+    subroutine s_check_sine_interface_patch_geometry(patch_id)
+
+        integer, intent(in) :: patch_id
+
+        call s_int_to_str(patch_id, iStr)
+
+        @:PROHIBIT(n == 0, "Sine x-interface patch "//trim(iStr)//": n must be greater than zero")
+        @:PROHIBIT(p > 0, "Sine x-interface patch "//trim(iStr)//": p must be zero")
+
+        @:PROHIBIT(f_is_default(patch_icpp(patch_id)%x_centroid), &
+                "Sine x-interface patch "//trim(iStr)//": x_centroid must be set")
+        @:PROHIBIT(f_is_default(patch_icpp(patch_id)%y_centroid), &
+                "Sine x-interface patch "//trim(iStr)//": y_centroid must be set")
+
+        @:PROHIBIT(patch_icpp(patch_id)%length_x <= 0._wp, &
+                "Sine x-interface patch "//trim(iStr)//": length_x must be greater than zero")
+        @:PROHIBIT(patch_icpp(patch_id)%length_y <= 0._wp, &
+                "Sine x-interface patch "//trim(iStr)//": length_y must be greater than zero")
+
+        @:PROHIBIT(f_is_default(patch_icpp(patch_id)%amplitude), &
+                "Sine x-interface patch "//trim(iStr)//": amplitude must be set")
+        @:PROHIBIT(f_is_default(patch_icpp(patch_id)%wavelength), &
+                "Sine x-interface patch "//trim(iStr)//": wavelength must be set")
+        @:PROHIBIT(patch_icpp(patch_id)%wavelength <= 0._wp, &
+                "Sine x-interface patch "//trim(iStr)//": wavelength must be greater than zero")
+
+        @:PROHIBIT(patch_icpp(patch_id)%smoothen .and. &
+                patch_icpp(patch_id)%smooth_coeff <= 0._wp, &
+                "Sine x-interface patch "//trim(iStr)//": smooth_coeff must be greater than zero when smoothen is true")
+
+    end subroutine s_check_sine_interface_patch_geometry
 
     !> This subroutine checks the line sweep patch input
         !!  @param patch_id Patch identifier

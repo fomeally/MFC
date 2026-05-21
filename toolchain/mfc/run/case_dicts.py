@@ -142,7 +142,7 @@ for p_id in range(1, 10+1):
                       ("smooth_patch_id", ParamType.INT), ("hcid", ParamType.INT)]:
         PRE_PROCESS[f"patch_icpp({p_id})%{attribute}"] = ty
 
-    for real_attr in ["radius",  "radii", "epsilon", "beta", "normal", "alpha_rho",
+    for real_attr in ["radius",  "radii", "amplitude", "wavelength", "epsilon", "beta", "normal", "alpha_rho",
                       'non_axis_sym', "normal", "smooth_coeff", "rho", "vel",
                       "alpha", "gamma", "pi_inf", "r0", "v0", "p0", "m0", "cv",
                       "qv", "qvp"]:

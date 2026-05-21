@@ -68,6 +68,7 @@ module m_rhs
 
     private; public :: s_initialize_rhs_module, &
  s_compute_rhs, &
+ s_correct_5eq_model, &
  s_pressure_relaxation_procedure, &
  s_finalize_rhs_module
 
@@ -2469,6 +2470,134 @@ contains
         end if
 
     end subroutine s_compute_additional_physics_rhs
+
+
+    subroutine s_correct_5eq_model(q_cons_vf)
+
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+
+        integer :: i, j, k, l
+        real(wp) :: sum_alpha
+        real(wp) :: alpha_i
+        real(wp) :: alpharho_i
+        real(wp) :: alpha_g
+        real(wp) :: alpha_l
+        real(wp) :: alpharho_l
+
+        !$acc parallel loop collapse(3) gang vector default(present) &
+        !$acc private(sum_alpha, alpha_i, alpharho_i, alpha_g, alpha_l, alpharho_l)
+        do l = 0, p
+            do k = 0, n
+                do j = 0, m
+
+                    sum_alpha = 0._wp
+
+                    if (.not. diffusion) then
+
+                        ! Non-diffusion case:
+                        ! Couple each alpha_i with alpha_i*rho_i.
+                        !$acc loop seq
+                        do i = 1, num_fluids
+
+                            alpharho_i = q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                            alpha_i    = q_cons_vf(i + advxb  - 1)%sf(j, k, l)
+
+                            if (alpha_i    > 1._wp) alpha_i    = 1._wp
+
+                            ! If either alpha_i or alpha_i*rho_i vanishes,
+                            ! remove the phase consistently.
+                            if (alpharho_i <= 0._wp .or. alpha_i <= 0._wp) then
+                                alpharho_i = 0._wp
+                                alpha_i    = 0._wp
+                            end if
+
+                            q_cons_vf(i + contxb - 1)%sf(j, k, l) = alpharho_i
+                            q_cons_vf(i + advxb  - 1)%sf(j, k, l) = alpha_i
+
+                            sum_alpha = sum_alpha + alpha_i
+
+                        end do
+
+                        ! Renormalize all phase volume fractions.
+                        !$acc loop seq
+                        do i = 1, num_fluids
+                            q_cons_vf(i + advxb - 1)%sf(j, k, l) = &
+                                q_cons_vf(i + advxb - 1)%sf(j, k, l)/sum_alpha
+                        end do
+
+                    else
+
+                        ! Diffusion case:
+                        ! Independent volume fractions are alpha_g and,
+                        ! if present, alpha_l. Individual diffusive gas
+                        ! alphas are reconstructed elsewhere.
+
+                        ! First enforce positivity on all partial densities.
+                        !$acc loop seq
+                        do i = 1, num_fluids
+                            alpharho_i = q_cons_vf(i + contxb - 1)%sf(j, k, l)
+
+                            if (alpharho_i < 0._wp) alpharho_i = 0._wp
+
+                            q_cons_vf(i + contxb - 1)%sf(j, k, l) = alpharho_i
+                        end do
+
+                        ! Correct composite gas volume fraction alpha_g.
+                        alpha_g = q_cons_vf(advg_idx)%sf(j, k, l)
+
+                        if (alpha_g < 0._wp) alpha_g = 0._wp
+                        if (alpha_g > 1._wp) alpha_g = 1._wp
+
+                        q_cons_vf(advg_idx)%sf(j, k, l) = alpha_g
+
+                        ! If alpha_g vanishes, remove all gas partial densities.
+                        if (alpha_g <= 0._wp) then
+                            !$acc loop seq
+                            do i = 1, Dif_size
+                                q_cons_vf(contxb + Dif_idx(i) - 1)%sf(j, k, l) = 0._wp
+                            end do
+                        end if
+
+                        sum_alpha = sum_alpha + alpha_g
+
+                        if (Dif_size < num_fluids) then
+
+                            ! Correct liquid volume fraction and liquid partial density.
+                            alpha_l    = q_cons_vf(advxb  + liq_idx - 1)%sf(j, k, l)
+                            alpharho_l = q_cons_vf(contxb + liq_idx - 1)%sf(j, k, l)
+
+                            if (alpha_l > 1._wp) alpha_l = 1._wp
+
+                            ! Couple liquid alpha_l with alpha_l*rho_l.
+                            if (alpha_l <= 0._wp .or. alpharho_l <= 0._wp) then
+                                alpha_l    = 0._wp
+                                alpharho_l = 0._wp
+                            end if
+
+                            q_cons_vf(advxb  + liq_idx - 1)%sf(j, k, l) = alpha_l
+                            q_cons_vf(contxb + liq_idx - 1)%sf(j, k, l) = alpharho_l
+
+                            sum_alpha = sum_alpha + alpha_l
+
+                        end if
+
+                        ! Renormalize only alpha_g and alpha_l.
+                        q_cons_vf(advg_idx)%sf(j, k, l) = &
+                            q_cons_vf(advg_idx)%sf(j, k, l)/sum_alpha
+
+                        if (Dif_size < num_fluids) then
+                            q_cons_vf(advxb + liq_idx - 1)%sf(j, k, l) = &
+                                q_cons_vf(advxb + liq_idx - 1)%sf(j, k, l)/sum_alpha
+                        end if
+
+                    end if
+
+                end do
+            end do
+        end do
+
+    end subroutine s_correct_5eq_model
+
 
     !>  The purpose of this procedure is to infinitely relax
         !!      the pressures from the internal-energy equations to a

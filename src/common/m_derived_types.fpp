@@ -168,6 +168,9 @@ module m_derived_types
         !! patch geometries. It is specified through its x-, y-, and z-components
         !! respectively.
 
+        real(wp) :: amplitude, wavelength !<
+        !! The amplitude and wavelength of the sine wave for the sine interface patch geometries.
+
         real(wp) :: epsilon, beta !<
         !! The isentropic vortex parameters for the amplitude of the disturbance and
         !! domain of influence.
