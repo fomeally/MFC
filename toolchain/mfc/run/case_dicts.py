@@ -218,8 +218,6 @@ SIMULATION.update({
     'mp_weno': ParamType.LOG,
     'weno_avg': ParamType.LOG,
     'weno_Re_flux': ParamType.LOG,
-    'weno_Dif_flux': ParamType.LOG,
-    'Dif_fv': ParamType.LOG,
     'dif_order': ParamType.INT,
     'small_num_dif': ParamType.REAL,
     'riemann_solver': ParamType.INT,
@@ -325,8 +323,8 @@ for probe_id in range(1,3+1):
 for f_id in range(1,10+1):
     for real_attr in [
         "gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
-        "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "W", "D", "cp", 
-        "T0", "h0", "k", "gas_mixture"
+        "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "W", "D", "cp",
+        "k", "gas_mixture"
     ]:
         if real_attr == "D":
             for j in range(1, 10+1):

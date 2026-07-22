@@ -833,7 +833,7 @@ contains
 
         call s_generate_initial_condition()
 
-        if (relax) then
+        if (relax .and. relax_model /= 7) then
             if (proc_rank == 0) then
                 print *, 'initial condition might have been altered due to enforcement of &
 &                pTg-equilirium (relax = "T" activated)'

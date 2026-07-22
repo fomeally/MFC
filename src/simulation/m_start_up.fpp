@@ -154,8 +154,8 @@ contains
             ib, num_ibs, patch_ib, &
             fluid_pp, probe_wrt, prim_vars_wrt, &
             fd_order, probe, num_probes, t_step_old, &
-            alt_soundspeed, mixture_err, weno_Re_flux, weno_Dif_flux, &
-            Dif_fv, dif_order, small_num_dif, null_weights, precision, & 
+            alt_soundspeed, mixture_err, weno_Re_flux, &
+            dif_order, small_num_dif, null_weights, precision, & 
             parallel_io, cyl_coord, rhoref, pref, bubbles_euler, bubble_model, &
             R0ref, chem_params, &
 #:if not MFC_CASE_OPTIMIZATION

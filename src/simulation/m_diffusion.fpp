@@ -52,13 +52,7 @@ s_finalize_diffusion_module
     !$acc declare create(Ws)
 
     real(wp), allocatable, dimension(:) :: cps
-    !$acc declare create(cp)
-
-    real(wp), allocatable, dimension(:) :: T0s
-    !$acc declare create(T0s)
-
-    real(wp), allocatable, dimension(:) :: h0s
-    !$acc declare create(h0s)
+    !$acc declare create(cps)
 
     real(wp), allocatable, dimension(:, :, :, :) :: dj_dx, dj_dy, dj_dz, djh_dx, djh_dy, djh_dz, dY_dx, dY_dy, dY_dz, alpha_K_dif, alpharho_K_dif, Y_dif, h_dif
     !$acc declare create(dj_dx, dj_dy, dj_dz, djh_dx, djh_dy, djh_dz, dY_dx, dY_dy, dY_dz, alpha_K_dif, alpharho_K_dif, Y_dif, h_dif)
@@ -106,16 +100,12 @@ contains
 
         @:ALLOCATE(Ws(1:Dif_size))
         @:ALLOCATE(cps(1:Dif_size))
-        @:ALLOCATE(T0s(1:Dif_size))
-        @:ALLOCATE(h0s(1:Dif_size))
         !$acc loop seq
         do i = 1, Dif_size
             Ws(i) = fluid_pp(Dif_idx(i))%W
             cps(i) = fluid_pp(Dif_idx(i))%cp
-            T0s(i) = fluid_pp(Dif_idx(i))%T0
-            h0s(i) = fluid_pp(Dif_idx(i))%h0
         end do
-        !$acc update device(Ws, cps, T0s, h0s)
+        !$acc update device(Ws, cps)
 
         @:ALLOCATE(w_interp2(0:1, -1:max(m, n, p), 1:num_dims))
         @:ALLOCATE(w_grad2(0:1, -1:max(m, n, p), 1:num_dims))
@@ -623,192 +613,187 @@ contains
         offsets = 0
         offsets(idir) = 1
         
-        if (Dif_fv) then
-            ! Finite Volume with j_src_n Approach
-            ! #########################################################################
-            ! #########################################################################
-            do q = isd3%beg, isd3%end
-                do l = isd2%beg, isd2%end
-                    do k = isd1%beg, isd1%end
+        ! Finite Volume with j_src_n Approach
+        ! #########################################################################
+        ! #########################################################################
+        do q = isd3%beg, isd3%end
+            do l = isd2%beg, isd2%end
+                do k = isd1%beg, isd1%end
+
+                    do i = 1, Dif_size
+                        j_src_n(Dif_idx(i))%sf(k, l, q) = 0._wp
+                    end do
+                    j_src_n(E_idx)%sf(k, l, q) = 0._wp
+
+                    ! ! Calculate grid spacing using direction-based indexing
+                    ! select case (idir)
+                    ! case (1)
+                    !     grid_spacing = x_cc(k + 1) - x_cc(k)
+                    ! case (2)
+                    !     grid_spacing = y_cc(l + 1) - y_cc(l)
+                    ! case (3)
+                    !     grid_spacing = z_cc(q + 1) - z_cc(q)
+                    ! end select
+
+                    ! Calculate grid spacing using direction-based indexing
+                    select case (idir)
+                    case (1)
+                        r = k
+                    case (2)
+                        r = l
+                    case (3)
+                        r = q
+                    end select
+
+                    alpha_m_L = q_prim_vf(advg_idx)%sf(k, l, q)
+                    alpha_m_R = q_prim_vf(advg_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                    alpha_m_LL = q_prim_vf(advg_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+                    alpha_m_RR = q_prim_vf(advg_idx)%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
+
+                    if (alpha_m_L < small_num_dif .or. alpha_m_R < small_num_dif) cycle
+                    
+                    if (alpha_m_LL > small_num_dif .and. alpha_m_RR > small_num_dif .and. dif_order == 4) then
 
                         do i = 1, Dif_size
-                            j_src_n(Dif_idx(i))%sf(k, l, q) = 0._wp
+                            alpharho_LL(i) = q_prim_vf(Dif_idx(i))%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+                            alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
+                            alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                            alpharho_RR(i) = q_prim_vf(Dif_idx(i))%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
+                            alpharho_f(i) = w_interp4(-1, r, idir)*alpharho_LL(i) + w_interp4(0, r, idir)*alpharho_L(i) + &
+                                            w_interp4(1, r, idir)*alpharho_R(i) + w_interp4(2, r, idir)*alpharho_RR(i)
                         end do
-                        j_src_n(E_idx)%sf(k, l, q) = 0._wp
 
-                        ! ! Calculate grid spacing using direction-based indexing
-                        ! select case (idir)
-                        ! case (1)
-                        !     grid_spacing = x_cc(k + 1) - x_cc(k)
-                        ! case (2)
-                        !     grid_spacing = y_cc(l + 1) - y_cc(l)
-                        ! case (3)
-                        !     grid_spacing = z_cc(q + 1) - z_cc(q)
-                        ! end select
+                        alpha_m_f = w_interp4(-1, r, idir)*alpha_m_LL + w_interp4(0, r, idir)*alpha_m_L + &
+                                    w_interp4(1, r, idir)*alpha_m_R + w_interp4(2, r, idir)*alpha_m_RR
 
-                        ! Calculate grid spacing using direction-based indexing
-                        select case (idir)
-                        case (1)
-                            r = k
-                        case (2)
-                            r = l
-                        case (3)
-                            r = q
-                        end select
+                        P_LL = q_prim_vf(E_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
+                        P_L = q_prim_vf(E_idx)%sf(k, l, q)
+                        P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                        P_RR = q_prim_vf(E_idx)%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
 
-                        alpha_m_L = q_prim_vf(advg_idx)%sf(k, l, q)
-                        alpha_m_R = q_prim_vf(advg_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                        alpha_m_LL = q_prim_vf(advg_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-                        alpha_m_RR = q_prim_vf(advg_idx)%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
+                        S_1 = abs(P_R - P_L) / max(P_L, P_R, small_num_dif)
+                        S_2 = abs(P_RR - P_R) / max(P_R, P_RR, small_num_dif)
+                        S_3 = abs(P_L - P_LL) / max(P_L, P_LL, small_num_dif)
+                        if (max(S_1, S_2, S_3) > 0.05_wp) cycle !crude shock sensor (dont calculate diffusion across shocks)
+                        P_f = w_interp4(-1, r, idir)*P_LL + w_interp4(0, r, idir)*P_L + &
+                                w_interp4(1, r, idir)*P_R + w_interp4(2, r, idir)*P_RR
+                        rho_LL = 0.0_wp
+                        rho_L = 0.0_wp
+                        rho_R = 0.0_wp
+                        rho_RR = 0.0_wp
+                        rho_f = 0.0_wp
 
-                        if (alpha_m_L < small_num_dif .or. alpha_m_R < small_num_dif) cycle
+                        do i = 1, Dif_size
+                            rho_LL = rho_LL + alpharho_LL(i)
+                            rho_L = rho_L + alpharho_L(i)
+                            rho_R = rho_R + alpharho_R(i)
+                            rho_RR = rho_RR + alpharho_RR(i)
+                            rho_f = rho_f + alpharho_f(i)
+                        end do
+
+                        do i = 1, Dif_size
+                            Y_LL(i) = alpharho_LL(i) / rho_LL
+                            Y_L(i) = alpharho_L(i) / rho_L
+                            Y_R(i) = alpharho_R(i) / rho_R
+                            Y_RR(i) = alpharho_RR(i) / rho_RR
+                            Y_f(i) = alpharho_f(i) / rho_f
+                        end do
                         
-                        if (alpha_m_LL > small_num_dif .and. alpha_m_RR > small_num_dif .and. dif_order == 4) then
-
-                            do i = 1, Dif_size
-                                alpharho_LL(i) = q_prim_vf(Dif_idx(i))%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-                                alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-                                alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                                alpharho_RR(i) = q_prim_vf(Dif_idx(i))%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
-                                alpharho_f(i) = w_interp4(-1, r, idir)*alpharho_LL(i) + w_interp4(0, r, idir)*alpharho_L(i) + &
-                                                w_interp4(1, r, idir)*alpharho_R(i) + w_interp4(2, r, idir)*alpharho_RR(i)
-                            end do
-
-                            alpha_m_f = w_interp4(-1, r, idir)*alpha_m_LL + w_interp4(0, r, idir)*alpha_m_L + &
-                                        w_interp4(1, r, idir)*alpha_m_R + w_interp4(2, r, idir)*alpha_m_RR
-
-                            P_LL = q_prim_vf(E_idx)%sf(k - offsets(1), l - offsets(2), q - offsets(3))
-                            P_L = q_prim_vf(E_idx)%sf(k, l, q)
-                            P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                            P_RR = q_prim_vf(E_idx)%sf(k + 2*offsets(1), l + 2*offsets(2), q + 2*offsets(3))
-
-                            S_1 = abs(P_R - P_L) / max(P_L, P_R, small_num_dif)
-                            S_2 = abs(P_RR - P_R) / max(P_R, P_RR, small_num_dif)
-                            S_3 = abs(P_L - P_LL) / max(P_L, P_LL, small_num_dif)
-                            if (max(S_1, S_2, S_3) > 0.05_wp) cycle !crude shock sensor (dont calculate diffusion across shocks)
-                            P_f = w_interp4(-1, r, idir)*P_LL + w_interp4(0, r, idir)*P_L + &
-                                  w_interp4(1, r, idir)*P_R + w_interp4(2, r, idir)*P_RR
-                            rho_LL = 0.0_wp
-                            rho_L = 0.0_wp
-                            rho_R = 0.0_wp
-                            rho_RR = 0.0_wp
-                            rho_f = 0.0_wp
-
-                            do i = 1, Dif_size
-                                rho_LL = rho_LL + alpharho_LL(i)
-                                rho_L = rho_L + alpharho_L(i)
-                                rho_R = rho_R + alpharho_R(i)
-                                rho_RR = rho_RR + alpharho_RR(i)
-                                rho_f = rho_f + alpharho_f(i)
-                            end do
-
-                            do i = 1, Dif_size
-                                Y_LL(i) = alpharho_LL(i) / rho_LL
-                                Y_L(i) = alpharho_L(i) / rho_L
-                                Y_R(i) = alpharho_R(i) / rho_R
-                                Y_RR(i) = alpharho_RR(i) / rho_RR
-                                Y_f(i) = alpharho_f(i) / rho_f
-                            end do
-                            
-                            do i = 1, Dif_size
-                                dY_ds_f(i) = w_grad4(-1, r, idir)*Y_LL(i) + w_grad4(0, r, idir)*Y_L(i) + &
-                                     w_grad4(1, r, idir)*Y_R(i) + w_grad4(2, r, idir)*Y_RR(i)
-                            end do
-
-                        else !use 2nd order
-
-                            do i = 1, Dif_size
-                                alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
-                                alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-                                alpharho_f(i) = w_interp2(0, r, idir)*alpharho_L(i) + w_interp2(1, r, idir)*alpharho_R(i)
-                            end do
-
-                            alpha_m_f = w_interp2(0, r, idir)*alpha_m_L + w_interp2(1, r, idir)*alpha_m_R
-                            P_L = q_prim_vf(E_idx)%sf(k, l, q)
-                            P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
-
-                            if (abs(P_R - P_L) / max(P_L, P_R, small_num_dif) > 0.05_wp ) cycle !crude shock sensor (dont calculate diffusion across shocks)
-                            P_f = w_interp2(0, r, idir)*P_L + w_interp2(1, r, idir)*P_R
-
-                            rho_L = 0.0_wp
-                            rho_R = 0.0_wp
-                            rho_f = 0.0_wp
-                            do i = 1, Dif_size
-                                rho_L = rho_L + alpharho_L(i)
-                                rho_R = rho_R + alpharho_R(i)
-                                rho_f = rho_f + alpharho_f(i)
-                            end do
-
-                            do i = 1, Dif_size
-                                Y_L(i) = alpharho_L(i) / rho_L
-                                Y_R(i) = alpharho_R(i) / rho_R
-                                Y_f(i) = alpharho_f(i) / rho_f
-                            end do
-                            
-                            do i = 1, Dif_size
-                                dY_ds_f(i) = w_grad2(0, r, idir)*Y_L(i) + w_grad2(1, r, idir)*Y_R(i)
-                            end do
-                        end if
-
-                        g_f = 2.0_wp * (alpha_m_L**n_gate) * (alpha_m_R**n_gate) / ( (alpha_m_L**n_gate) + (alpha_m_R**n_gate) )
-                        ! g_f = 1.0_wp
-                        ! Total gas density at face
-                        rhog_f = rho_f / alpha_m_f
-                        ! rhog_f = 101325.0_wp * 28.02_wp / (R_univ * 298.0_wp)
-
-                        W_f = 0._wp
-                        do i = 1, Dif_size  
-                            W_f = W_f + Y_f(i)/Ws(i)              
+                        do i = 1, Dif_size
+                            dY_ds_f(i) = w_grad4(-1, r, idir)*Y_LL(i) + w_grad4(0, r, idir)*Y_L(i) + &
+                                    w_grad4(1, r, idir)*Y_R(i) + w_grad4(2, r, idir)*Y_RR(i)
                         end do
 
-                        W_f = 1._wp / W_f
-
-                        T_f = P_f * W_f / (rhog_f * R_univ)
+                    else !use 2nd order
 
                         do i = 1, Dif_size
-                            h_f(i) = h0s(i) + cps(i)*(T_f - T0s(i))
+                            alpharho_L(i) = q_prim_vf(Dif_idx(i))%sf(k, l, q)
+                            alpharho_R(i) = q_prim_vf(Dif_idx(i))%sf(k + offsets(1), l + offsets(2), q + offsets(3))
+                            alpharho_f(i) = w_interp2(0, r, idir)*alpharho_L(i) + w_interp2(1, r, idir)*alpharho_R(i)
                         end do
 
-                        ! Compute diffusion fluxes
-                        if (Dif_size == 2) then
-                            j_flux(1) = -rhog_f*Ds(1,2)*dY_ds_f(1)
-                            j_flux(2) = -j_flux(1)
-                        else if (Dif_size == 3) then
-                            j_flux(1) = -rhog_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
-                                            ( Ds(1,2)*Ds(1,3)*dY_ds_f(1)*(1._wp - Y_f(1)) - Y_f(1)*Ds(2,3)*(Ds(1,2)*dY_ds_f(2) + Ds(1,3)*dY_ds_f(3)) )
+                        alpha_m_f = w_interp2(0, r, idir)*alpha_m_L + w_interp2(1, r, idir)*alpha_m_R
+                        P_L = q_prim_vf(E_idx)%sf(k, l, q)
+                        P_R = q_prim_vf(E_idx)%sf(k + offsets(1), l + offsets(2), q + offsets(3))
 
-                            j_flux(2) = -rhog_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
-                                            ( Ds(2,1)*Ds(2,3)*dY_ds_f(2)*(1._wp - Y_f(2)) - Y_f(2)*Ds(3,1)*(Ds(2,1)*dY_ds_f(1) + Ds(2,3)*dY_ds_f(3)) )
+                        if (abs(P_R - P_L) / max(P_L, P_R, small_num_dif) > 0.05_wp ) cycle !crude shock sensor (dont calculate diffusion across shocks)
+                        P_f = w_interp2(0, r, idir)*P_L + w_interp2(1, r, idir)*P_R
 
-                            j_flux(3) = -sum(j_flux(1:2))
-                        else
-                            call s_calculate_multicomponent_diffusion_flux(Dif_size, rhog_f, Y_f, dY_ds_f, j_flux)
-                        end if
-
-                        ! Enforce mass conservation of diffusion fluxes
-                        ! sum_jflux = 0.0_wp
-                        ! if (alpha_m_f > small_num_dif) then
-                        !     do i = 1, Dif_size
-                        !         sum_jflux = sum_jflux + j_flux(i)
-                        !     end do
-
-                        !     do i = 1, Dif_size
-                        !         j_flux(i) = j_flux(i) - Y_f(i)*sum_jflux
-                        !     end do
-                        ! end if
+                        rho_L = 0.0_wp
+                        rho_R = 0.0_wp
+                        rho_f = 0.0_wp
+                        do i = 1, Dif_size
+                            rho_L = rho_L + alpharho_L(i)
+                            rho_R = rho_R + alpharho_R(i)
+                            rho_f = rho_f + alpharho_f(i)
+                        end do
 
                         do i = 1, Dif_size
-                            j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + g_f*j_flux(i)
-                            j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) + g_f*h_f(i)*j_flux(i)
+                            Y_L(i) = alpharho_L(i) / rho_L
+                            Y_R(i) = alpharho_R(i) / rho_R
+                            Y_f(i) = alpharho_f(i) / rho_f
                         end do
+                        
+                        do i = 1, Dif_size
+                            dY_ds_f(i) = w_grad2(0, r, idir)*Y_L(i) + w_grad2(1, r, idir)*Y_R(i)
+                        end do
+                    end if
+
+                    g_f = 2.0_wp * (alpha_m_L**n_gate) * (alpha_m_R**n_gate) / ( (alpha_m_L**n_gate) + (alpha_m_R**n_gate) )
+                    ! g_f = 1.0_wp
+                    ! Total gas density at face
+                    rhog_f = rho_f / alpha_m_f
+                    ! rhog_f = 101325.0_wp * 28.02_wp / (R_univ * 298.0_wp)
+
+                    W_f = 0._wp
+                    do i = 1, Dif_size  
+                        W_f = W_f + Y_f(i)/Ws(i)              
+                    end do
+
+                    W_f = 1._wp / W_f
+
+                    T_f = P_f * W_f / (rhog_f * R_univ)
+
+                    do i = 1, Dif_size
+                        h_f(i) = qvs(Dif_idx(i)) + cps(i)*T_f
+                    end do
+
+                    ! Compute diffusion fluxes
+                    if (Dif_size == 2) then
+                        j_flux(1) = -rhog_f*Ds(1,2)*dY_ds_f(1)
+                        j_flux(2) = -j_flux(1)
+                    else if (Dif_size == 3) then
+                        j_flux(1) = -rhog_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                                        ( Ds(1,2)*Ds(1,3)*dY_ds_f(1)*(1._wp - Y_f(1)) - Y_f(1)*Ds(2,3)*(Ds(1,2)*dY_ds_f(2) + Ds(1,3)*dY_ds_f(3)) )
+
+                        j_flux(2) = -rhog_f / (Y_f(1)*Ds(2,3) + Y_f(2)*Ds(3,1) + Y_f(3)*Ds(1,2)) * &
+                                        ( Ds(2,1)*Ds(2,3)*dY_ds_f(2)*(1._wp - Y_f(2)) - Y_f(2)*Ds(3,1)*(Ds(2,1)*dY_ds_f(1) + Ds(2,3)*dY_ds_f(3)) )
+
+                        j_flux(3) = -sum(j_flux(1:2))
+                    else
+                        call s_calculate_multicomponent_diffusion_flux(Dif_size, rhog_f, Y_f, dY_ds_f, j_flux)
+                    end if
+
+                    ! Enforce mass conservation of diffusion fluxes
+                    ! sum_jflux = 0.0_wp
+                    ! if (alpha_m_f > small_num_dif) then
+                    !     do i = 1, Dif_size
+                    !         sum_jflux = sum_jflux + j_flux(i)
+                    !     end do
+
+                    !     do i = 1, Dif_size
+                    !         j_flux(i) = j_flux(i) - Y_f(i)*sum_jflux
+                    !     end do
+                    ! end if
+
+                    do i = 1, Dif_size
+                        j_src_n(Dif_idx(i))%sf(k, l, q) = j_src_n(Dif_idx(i))%sf(k, l, q) + g_f*j_flux(i)
+                        j_src_n(E_idx)%sf(k, l, q) = j_src_n(E_idx)%sf(k, l, q) + g_f*h_f(i)*j_flux(i)
                     end do
                 end do
             end do
+        end do
 
-        ! #########################################################################
-        ! #########################################################################
-            
-        end if
         ! #########################################################################
         ! #########################################################################
         
@@ -1001,11 +986,11 @@ contains
         @:DEALLOCATE(Ds)
         @:DEALLOCATE(Ws)
         @:DEALLOCATE(cps)
-        @:DEALLOCATE(T0s)
-        @:DEALLOCATE(h0s)
-        @:DEALLOCATE(w_interp2, w_grad2)
+        @:DEALLOCATE(w_interp2)
+        @:DEALLOCATE(w_grad2)
         if (dif_order == 4) then
-            @:DEALLOCATE(w_interp4, w_grad4)
+            @:DEALLOCATE(w_interp4)
+            @:DEALLOCATE(w_grad4)
         end if
 
     end subroutine s_finalize_diffusion_module

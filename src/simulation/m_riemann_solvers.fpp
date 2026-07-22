@@ -1310,9 +1310,13 @@ contains
 
                                     alpha_L(i) = qL_prim_rs${XYZ}$_vf(j, k, l, advxb + i - 1)
                                     alpha_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, advxb + i - 1)
-                                    alphag_L = qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)
-                                    alphag_R = qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx)
+                                    if (diffusion) then
+                                        alphag_L = qL_prim_rs${XYZ}$_vf(j, k, l, advg_idx)
+                                        alphag_R = qR_prim_rs${XYZ}$_vf(j + 1, k, l, advg_idx)
+                                    end if
                                 end do
+
+
 
                                 if (viscous) then
                                     !$acc loop seq

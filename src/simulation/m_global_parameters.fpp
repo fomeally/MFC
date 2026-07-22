@@ -134,8 +134,6 @@ module m_global_parameters
     logical :: mp_weno        !< Monotonicity preserving (MP) WENO
     logical :: weno_avg       ! Average left/right cell-boundary states
     logical :: weno_Re_flux   !< WENO reconstruct velocity gradients for viscous stress tensor
-    logical :: weno_Dif_flux  !< WENO reconstruct mass fraction gradients for mass diffusion flux
-    logical :: Dif_fv        !< use finite volume method for diffusion terms
     integer :: dif_order      !< order of accuracy for diffusion terms
     real(wp) :: small_num_dif !< small number for diffusion terms
     integer :: riemann_solver !< Riemann solver algorithm
@@ -531,8 +529,6 @@ contains
         mp_weno = .false.
         weno_avg = .false.
         weno_Re_flux = .false.
-        weno_Dif_flux = .false.
-        Dif_fv = .false.
         dif_order = 2
         small_num_dif = 1.0e-8_wp
         riemann_solver = dflt_int
@@ -610,8 +606,6 @@ contains
             fluid_pp(i)%W = 0._wp
             fluid_pp(i)%D(:) = 0._wp
             fluid_pp(i)%cp = 0._wp
-            fluid_pp(i)%T0 = 0._wp
-            fluid_pp(i)%h0 = 0._wp
             fluid_pp(i)%k = 0._wp
             fluid_pp(i)%gas_mixture = .false.
         end do

@@ -3172,7 +3172,6 @@ contains
             if (diffusion) then
                 do l = 1, Dif_size
                     @:DEALLOCATE(j_src_n(i)%vf(Dif_idx(l))%sf)
-                    ! @:DEALLOCATE(j_src_n(i)%vf(advxb + Dif_idx(l) - 1)%sf)
                 end do
                 @:DEALLOCATE(j_src_n(i)%vf(E_idx)%sf)
  

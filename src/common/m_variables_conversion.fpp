@@ -564,52 +564,52 @@ contains
         
         do i = 1, num_fluids
             rho_K = rho_K + alpha_rho_K(i)
-            ! gamma_K = gamma_K + alpha_K(i)*gammas(i)
+            gamma_K = gamma_K + alpha_K(i)*gammas(i)
             pi_inf_K = pi_inf_K + alpha_K(i)*pi_infs(i)
             qv_K = qv_K + alpha_rho_K(i)*qvs(i)
         end do
 
-        if (diffusion) then
-            gamma_g = 0._wp
-            rho_dif_K = 0._wp
-            alphag_K = 0._wp
-            gam_num = 0._wp
-            gam_denom = 0._wp
+        ! if (diffusion) then
+        !     gamma_g = 0._wp
+        !     rho_dif_K = 0._wp
+        !     alphag_K = 0._wp
+        !     gam_num = 0._wp
+        !     gam_denom = 0._wp
 
-            do i = 1, Dif_size
-                alphag_K = alphag_K + alpha_K(Dif_idx(i))
-            end do
+        !     do i = 1, Dif_size
+        !         alphag_K = alphag_K + alpha_K(Dif_idx(i))
+        !     end do
 
-            if (alphag_K > small_num_dif) then
+        !     if (alphag_K > small_num_dif) then
                 
-                do i = 1, Dif_size
-                    rho_dif_K = rho_dif_K + alpha_rho_K(Dif_idx(i))
-                end do
+        !         do i = 1, Dif_size
+        !             rho_dif_K = rho_dif_K + alpha_rho_K(Dif_idx(i))
+        !         end do
 
-                do i = 1, Dif_size
-                    Y_dif_K(i) = alpha_rho_K(Dif_idx(i))/rho_dif_K
-                end do
-                do i = 1, Dif_size
-                    gam_num = gam_num + Y_dif_K(i)*(1._wp + gammas(Dif_idx(i))) / fluid_pp(Dif_idx(i))%W
-                    gam_denom = gam_denom + Y_dif_K(i)*gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
-                end do
-                gamma_g = gam_num / gam_denom
-                gamma_g = 1._wp / (gamma_g - 1._wp)
-            end if
+        !         do i = 1, Dif_size
+        !             Y_dif_K(i) = alpha_rho_K(Dif_idx(i))/rho_dif_K
+        !         end do
+        !         do i = 1, Dif_size
+        !             gam_num = gam_num + Y_dif_K(i)*(1._wp + gammas(Dif_idx(i))) / fluid_pp(Dif_idx(i))%W
+        !             gam_denom = gam_denom + Y_dif_K(i)*gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+        !         end do
+        !         gamma_g = gam_num / gam_denom
+        !         gamma_g = 1._wp / (gamma_g - 1._wp)
+        !     end if
 
-            if (num_fluids > Dif_size) then
-                gamma_K = gamma_g*alphag_K + &
-                          alpha_K(liq_idx)*gammas(liq_idx)
+        !     if (num_fluids > Dif_size) then
+        !         gamma_K = gamma_g*alphag_K + &
+        !                   alpha_K(liq_idx)*gammas(liq_idx)
 
-            else 
-                gamma_K = gamma_g*alphag_K
-            end if
+        !     else 
+        !         gamma_K = gamma_g*alphag_K
+        !     end if
 
-        else
-            do i = 1, num_fluids
-                gamma_K = gamma_K + alpha_K(i)*gammas(i)
-            end do
-        end if
+        ! else
+        !     do i = 1, num_fluids
+        !         gamma_K = gamma_K + alpha_K(i)*gammas(i)
+        !     end do
+        ! end if
 
         if (present(G_K)) then
             G_K = 0._wp
