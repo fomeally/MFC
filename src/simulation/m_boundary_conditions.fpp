@@ -230,6 +230,10 @@ contains
         real(wp), dimension(startx:, starty:, startz:, 1:, 1:), intent(inout) :: pb, mv
         integer, intent(in) :: bc_dir, bc_loc
         integer :: j, k, l, q, i
+        logical :: ambient_state
+        real(wp) :: m_g
+
+        ambient_state = .true.
 
         !< x-direction
         if (bc_dir == 1) then !< x-direction
@@ -262,8 +266,38 @@ contains
                     end do
                 end do
 
-            end if
+                if (ambient_state) then
 
+                    !$acc parallel loop collapse(2) gang vector default(present) private(m_g)
+                    do l = 0, p
+                        do k = 0, n
+
+                            ! Total gas mass per mixture volume in the final interior cell
+                            m_g = 0.0_wp
+
+                            !$acc loop seq
+                            do i = 1, Dif_size
+                                m_g = m_g + q_prim_vf(Dif_idx(i))%sf(m, k, l)
+                            end do
+
+                            !$acc loop seq
+                            do j = 1, buff_size
+
+                                ! Water vapor
+                                q_prim_vf(2 + contxb - 1)%sf(m + j, k, l) = 0.0_wp
+                                q_prim_vf(2 + advxb  - 1)%sf(m + j, k, l) = 0.0_wp
+
+                                ! Dry air receives all gas mass and gas volume
+                                q_prim_vf(3 + contxb - 1)%sf(m + j, k, l) = m_g
+                                q_prim_vf(3 + advxb  - 1)%sf(m + j, k, l) = q_prim_vf(advg_idx)%sf(m, k, l)
+
+                            end do
+
+                        end do
+                    end do
+
+                end if
+            end if
             !< y-direction
         elseif (bc_dir == 2) then !< y-direction
 

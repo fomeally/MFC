@@ -237,6 +237,7 @@ contains
         type(scalar_field), dimension(1:sys_size) :: q_prim_vf
 
         real(wp) :: pi_inf, gamma, lit_gamma, b, c, d
+        real(wp) :: dx_local, half_width, xi, beta
 
         integer :: i, j, k !< Generic loop operators
 
@@ -245,6 +246,9 @@ contains
         lit_gamma = (1d0 + gamma)/gamma
 
         b = 20._wp
+        dx_local  = x_cc(1) - x_cc(0)
+        half_width = 1.5_wp*dx_local   ! Total transition width = 3*dx
+        beta       = 3.0_wp            ! Controls steepness within transition
         c = 0.5_wp
         d = 0.5_wp
 
@@ -268,19 +272,33 @@ contains
         ! to write to that cell. If both queries check out, the primitive
         ! variables of the current patch are assigned to this cell.
         do i = 0, m
-            
-
-            
 
             if (x_boundary%beg <= x_cc(i) .and. &
                 x_boundary%end >= x_cc(i) .and. &
                 patch_icpp(patch_id)%alter_patch(patch_id_fp(i, 0, 0))) then
 
-                eta = c*tanh(b*(x_cc(i) - x_centroid)) + d
-                call s_assign_patch_primitive_variables(patch_id, i, 0, 0, &
-                                            eta, q_prim_vf, patch_id_fp)
+                if (x_cc(i) <= x_centroid - half_width) then
+
+                    eta = 0.0_wp
+
+                else if (x_cc(i) >= x_centroid + half_width) then
+
+                    eta = 1.0_wp
+
+                else
+
+                    xi = (x_cc(i) - x_centroid)/half_width
+
+                    eta = 0.5_wp*(1.0_wp + &
+                        tanh(beta*xi)/tanh(beta))
+
+                end if
+
+                call s_assign_patch_primitive_variables( &
+                    patch_id, i, 0, 0, eta, q_prim_vf, patch_id_fp)
 
                 @:analytical()
+
             end if
 
         end do
