@@ -91,6 +91,8 @@ contains
         real(wp) :: TS, TSOV, TSSL, TSatOV, TSatSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(wp) :: rhoe, dynE, rhos !< total internal energy, kinetic energy, and total entropy
         real(wp) :: rho, rM, m1, m2, MCT !< total density, total reacting mass, individual reacting masses
+        real(wp) :: X_v, dXdm, DG_endpoint
+        logical :: accept_OV, accept_SL
         real(wp) :: TvF !< total volume fraction
         real(wp) :: m_g, dm, n_g, Y_sat, alpha_g !< auxiliary variables for the mass depletion procedure
         real(wp) :: dm_min, dm_max, p_lo, residual_tol, volume_tol, dm_bound_tol !< auxiliary variables for the mass depletion procedure
@@ -109,7 +111,7 @@ contains
         !$acc declare create(p_infOV, p_infpT, p_infSL, sk, hk, gk, ek, rhok)
 
         ! starting equilibrium solver
-        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, sk, hk, gk, ek, rhok,pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, dynE, rhos, rho, rM, m1, m2, MCT, TvF)
+        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, sk, hk, gk, ek, rhok,pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, dynE, rhos, rho, rM, m1, m2, MCT, TvF, X_v, dXdm, alpha_g, n_g, DG_endpoint, accept_OV, accept_SL)
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -153,17 +155,23 @@ contains
                     ! energy to preserved its value at sharp interfaces
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
 
+                    ! print *, "before pt relax"
                     ! Calling pT-equilibrium for either finishing phase-change module, or as an IC for the pTg-equilibrium
                     ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
                     call s_infinite_pt_relaxation_k(j, k, l, 2, pS, p_infpT, rM, q_cons_vf, rhoe, TS)
 
+                    ! print *, "after pt relax"
                     ! check if pTg-equilibrium is required
                     ! NOTE that NOTHING else needs to be updated OTHER than the individual partial densities
                     ! given the outputs from the pT- and pTg-equilibrium solvers are just p and one of the partial masses
                     ! (pTg- case)
+                    ! print *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l)
+                    ! print *, relax_model, rM
                     if ((relax_model == 6) .and. ((q_cons_vf(lp + contxb - 1)%sf(j, k, l) > mixM*rM) &
                                                   .and. (q_cons_vf(vp + contxb - 1)%sf(j, k, l) > mixM*rM)) &
                         .and. (pS < pCr) .and. (TS < TCr)) then
+
+                        ! print *, "pTg-equilibrium is required at cell: ", j, k, l
 
                         ! Checking if phase change is needed, by checking whether the final solution is either subcoooled
                         ! liquid or overheated vapor.
@@ -174,12 +182,35 @@ contains
 
                         ! tranferring the total mass to vapor
                         q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0_wp - mixM)*rM
-
+                        
+                        ! print *, "before pt relax for overheated vapor"
                         ! calling pT-equilibrium for overheated vapor, which is MFL = 0
                         call s_infinite_pt_relaxation_k(j, k, l, 0, pSOV, p_infOV, rM, q_cons_vf, rhoe, TSOV)
+                        ! print *, "after pt relax for overheated vapor"
+                        if (diffusion) then
+                            ! Test this endpoint using its own temperature and gas composition.
+                            accept_OV = .false.
+                            call s_get_vapor_mole_fraction(j, k, l, q_cons_vf, X_v, dXdm)
+                            if (ieee_is_finite(TSOV) .and. ieee_is_finite(pSOV) .and. ieee_is_finite(X_v)) then
+                                ! Reject the zero-temperature sentinel and invalid logarithm arguments.
+                                if (TSOV > 0.0_wp .and. X_v > 0.0_wp .and. &
+                                    pSOV + ps_inf(lp) > 0.0_wp .and. pSOV + ps_inf(vp) > 0.0_wp) then
+                                    ! Same g_l - g_v residual as the diffusion pTg solver.
+                                    DG_endpoint = TSOV*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
+                                        *(1.0_wp - log(TSOV)) - (qvps(lp) - qvps(vp)) &
+                                        + cvs(lp)*(gs_min(lp) - 1.0_wp)*log(pSOV + ps_inf(lp)) &
+                                        - cvs(vp)*(gs_min(vp) - 1.0_wp)*log(pSOV + ps_inf(vp))) &
+                                        + qvs(lp) - qvs(vp)
+                                    DG_endpoint = DG_endpoint - cvs(vp)*(gs_min(vp) - 1.0_wp)*TSOV*log(X_v)
+                                    if (ieee_is_finite(DG_endpoint)) accept_OV = (DG_endpoint >= 0.0_wp)
+                                end if
+                            end if
+                        else
+                            call s_TSat(pSOV, TSatOV, TSOV)
+                            accept_OV = (TSOV > TSatOV)
+                        end if
 
-                        ! calculating Saturation temperature
-                        call s_TSat(pSOV, TSatOV, TSOV)
+                        ! print *, "after TSat for overheated vapor"
 
                         ! subcooled liquid case
                         ! tranferring the total mass to liquid
@@ -190,12 +221,35 @@ contains
 
                         ! calling pT-equilibrium for subcooled liquid, which is MFL = 1
                         call s_infinite_pt_relaxation_k(j, k, l, 1, pSSL, p_infSL, rM, q_cons_vf, rhoe, TSSL)
+                        
+                        ! print *, "after pt relax for subcooled liquid"
+                        if (diffusion) then
+                            ! Test this endpoint using its own temperature and gas composition.
+                            accept_SL = .false.
+                            call s_get_vapor_mole_fraction(j, k, l, q_cons_vf, X_v, dXdm)
+                            if (ieee_is_finite(TSSL) .and. ieee_is_finite(pSSL) .and. ieee_is_finite(X_v)) then
+                                ! Reject the zero-temperature sentinel and invalid logarithm arguments.
+                                if (TSSL > 0.0_wp .and. X_v > 0.0_wp .and. &
+                                    pSSL + ps_inf(lp) > 0.0_wp .and. pSSL + ps_inf(vp) > 0.0_wp) then
+                                    ! Same g_l - g_v residual as the diffusion pTg solver.
+                                    DG_endpoint = TSSL*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
+                                        *(1.0_wp - log(TSSL)) - (qvps(lp) - qvps(vp)) &
+                                        + cvs(lp)*(gs_min(lp) - 1.0_wp)*log(pSSL + ps_inf(lp)) &
+                                        - cvs(vp)*(gs_min(vp) - 1.0_wp)*log(pSSL + ps_inf(vp))) &
+                                        + qvs(lp) - qvs(vp)
+                                    DG_endpoint = DG_endpoint - cvs(vp)*(gs_min(vp) - 1.0_wp)*TSSL*log(X_v)
+                                    if (ieee_is_finite(DG_endpoint)) accept_SL = (DG_endpoint <= 0.0_wp)
+                                end if
+                            end if
+                        else
+                            call s_TSat(pSSL, TSatSL, TSSL)
+                            accept_SL = (TSSL < TSatSL)
+                        end if
 
-                        ! calculating Saturation temperature
-                        call s_TSat(pSSL, TSatSL, TSSL)
+                        ! print *, "after TSat for subcooled liquid"
 
                         ! checking the conditions for overheated vapor and subcooled liquide
-                        if (TSOV > TSatOV) then
+                        if (accept_OV) then
 
                             ! Assigning pressure
                             pS = pSOV
@@ -209,7 +263,7 @@ contains
                             ! correcting the vapor partial density
                             q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0_wp - mixM)*rM
 
-                        elseif (TSSL < TSatSL) then
+                        elseif (accept_SL) then
 
                             ! Assigning pressure
                             pS = pSSL
@@ -232,13 +286,14 @@ contains
                             q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m2
 
                             ! calling the pTg-equilibrium solver
+                            ! print *, "before pTg relax"
                             call s_infinite_ptg_relaxation_k(j, k, l, pS, p_infpT, rhoe, q_cons_vf, TS)
-
+                            ! print *, "after pTg relax"
                         end if
 
                     else if (relax_model == 7) then
-                        if (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > 1.0e-2_wp &
-                            .and. q_cons_vf(advg_idx)%sf(j, k, l) > 1.0e-2_wp) then
+                        if (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > 1.0e-1_wp &
+                            .and. q_cons_vf(advg_idx)%sf(j, k, l) > 1.0e-1_wp) then
 
                                 max_iter = 22
                                 converged = .false.
@@ -522,12 +577,50 @@ contains
                     end if
 
                     ! Calculations AFTER equilibrium
+                    ! print *, "calculations after equilibrium"
+                    if ((relax_model /= 7) .and. (model_eqns == 2)) then
+                        ! Five-equation model: preserve total energy; update only volumes.
+                        !$acc loop seq
+                        do i = 1, num_fluids
+                            q_cons_vf(i + advxb - 1)%sf(j, k, l) = &
+                                q_cons_vf(i + contxb - 1)%sf(j, k, l) &
+                                *(gs_min(i) - 1.0_wp)*cvs(i)*TS/(pS + ps_inf(i))
+                        end do
+                        if (diffusion) then
+                            ! Ideal-gas equivalent volumes already satisfy alpha_i = X_i*alpha_g.
+                            alpha_g = 0.0_wp
+                            !$acc loop seq
+                            do i = 1, Dif_size
+                                alpha_g = alpha_g + q_cons_vf(Dif_idx(i) + advxb - 1)%sf(j, k, l)
+                            end do
+                            q_cons_vf(advg_idx)%sf(j, k, l) = alpha_g
+                        end if
 
-                    if ( relax_model /= 7) then
+                    else if ((relax_model /= 7) .and. (model_eqns == 3)) then
 
                         ! entropy
                         sk(1:num_fluids) = cvs(1:num_fluids)*log((TS**gs_min(1:num_fluids)) &
                                                                 /((pS + ps_inf(1:num_fluids))**(gs_min(1:num_fluids) - 1.0_wp))) + qvps(1:num_fluids)
+
+                        if (diffusion) then
+                            n_g = 0.0_wp
+                            !$acc loop seq
+                            do i = 1, Dif_size
+                                n_g = n_g + q_cons_vf(Dif_idx(i) + contxb - 1)%sf(j, k, l) &
+                                    /fluid_pp(Dif_idx(i))%W
+                            end do
+                            if (n_g > 0.0_wp) then
+                                !$acc loop seq
+                                do i = 1, Dif_size
+                                    X_v = q_cons_vf(Dif_idx(i) + contxb - 1)%sf(j, k, l) &
+                                        /(fluid_pp(Dif_idx(i))%W*n_g)
+                                    if (X_v > 0.0_wp) then
+                                        sk(Dif_idx(i)) = sk(Dif_idx(i)) &
+                                            - cvs(Dif_idx(i))*(gs_min(Dif_idx(i)) - 1.0_wp)*log(X_v)
+                                    end if
+                                end do
+                            end if
+                        end if
 
                         ! enthalpy
                         hk(1:num_fluids) = gs_min(1:num_fluids)*cvs(1:num_fluids)*TS &
@@ -562,6 +655,7 @@ contains
                         end do
 
                     end if
+                    ! print *, "calculations after equilibrium finished"
                 end do
             end do
         end do
@@ -657,6 +751,8 @@ contains
                 ! increasing counter
                 ns = ns + 1
 
+                ! print *, "pT-equilibrium iteration: ", ns, "pS: ", pS
+
                 ! updating old pressure
                 pO = pS
 
@@ -678,6 +774,16 @@ contains
                 ! updating common pressure for the newton solver
                 pS = pO + ((1.0_wp - gp)/gpp)/(1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) &
                                             /(2.0_wp*gpp)*hp)
+
+                if (mod(ns, 100000) == 0) then
+                    print *, "PT hang"
+                    print *, "ml, mv:", &
+                        q_cons_vf(lp + contxb - 1)%sf(j, k, l), &
+                        q_cons_vf(vp + contxb - 1)%sf(j, k, l)
+                    print *, "gp:", gp, "gpp:", gpp, "hp:", hp
+                    print *, "pS:", pS, "pO:", pO
+                    flush(6)
+                end if
             end do
         else ! vapor saturation model
             pS = ( rhoe - alphaPi_inf - mQ )/ alphaGam
@@ -715,6 +821,7 @@ contains
         real(wp), dimension(num_fluids) :: p_infpTg !< stiffness for the participating fluids for pTg-equilibrium
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac !< matrices for the Newton Solver
         real(wp), dimension(2) :: R2D, DeltamP !< residual and correction array
+        real(wp) :: step_factor, m_floor, mass_bound_tol
         real(wp) :: Om ! underrelaxation factor
         real(wp) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD ! auxiliary variables for the pTg-solver
 
@@ -725,8 +832,16 @@ contains
         ! counter
         ns = 0
 
+        ! Fixed trace-phase floor based on the conserved reacting inventory.
+        m_floor = mixM*(q_cons_vf(lp + contxb - 1)%sf(j, k, l) &
+            + q_cons_vf(vp + contxb - 1)%sf(j, k, l))
+        ! Allow roundoff-sized distance from the floor under fraction-to-boundary steps.
+        mass_bound_tol = 64.0_wp*epsilon(1.0_wp) &
+            *(q_cons_vf(lp + contxb - 1)%sf(j, k, l) &
+              + q_cons_vf(vp + contxb - 1)%sf(j, k, l))
+
         ! Relaxation factor
-        Om = 1.0e-3_wp
+        Om = 5.0e-2_wp
 
         p_infpTg = p_infpT
 
@@ -751,8 +866,11 @@ contains
                    .and. ((sqrt(R2D(1)**2 + R2D(2)**2)/rhoe) > (ptgalpha_eps/1e6_wp))) &
                   .or. (ns == 0))
 
+                
             ! Updating counter for the iterative procedure
             ns = ns + 1
+
+            ! print *, "pTg-equilibrium iteration: ", ns
 
             ! Auxiliary variables to help in the calculation of the residue
             mCP = 0.0_wp; mCPD = 0.0_wp; mCVGP = 0.0_wp; mCVGP2 = 0.0_wp; mQ = 0.0_wp; mQD = 0.0_wp
@@ -788,23 +906,68 @@ contains
 
             end do
 
+            ! Evaluate residual and Jacobian at the same current state.
+            call s_compute_pTg_residue(j, k, l, mCPD, mCVGP, mQD, q_cons_vf, pS, rhoe, R2D)
+
+            if (diffusion) then
+                ! At the retained liquid floor, evaporation-favoring DG is admissible.
+                ! R2D(1) = g_l - g_v; R2D(2) = fixed minus trial internal energy.
+                ! The residual temperature already enforces volume closure.
+                if (abs(q_cons_vf(lp + contxb - 1)%sf(j, k, l) - m_floor) <= mass_bound_tol) then
+                    if (all(ieee_is_finite(R2D))) then
+                        if (R2D(1) >= 0.0_wp .and. abs(R2D(2)) <= ptgalpha_eps) exit
+                    end if
+                end if
+            end if
+
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
             call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, mCPD, mCVGP, mCVGP2, pS, q_cons_vf, TJac)
 
             ! calculating correction array for Newton's method
             DeltamP = -1.0_wp*matmul(InvJac, R2D)
 
+            step_factor = Om
+            if (diffusion) then
+                ! Limit transfer to the available mass above the trace-phase floor.
+                if (DeltamP(1) > 0.0_wp) then
+                    step_factor = min(step_factor, 0.99_wp &
+                        *max(q_cons_vf(vp + contxb - 1)%sf(j, k, l) - m_floor, 0.0_wp)/DeltamP(1))
+                else if (DeltamP(1) < 0.0_wp) then
+                    step_factor = min(step_factor, 0.99_wp &
+                        *max(q_cons_vf(lp + contxb - 1)%sf(j, k, l) - m_floor, 0.0_wp)/(-DeltamP(1)))
+                end if
+                if (DeltamP(2) < 0.0_wp) then
+                    step_factor = min(step_factor, -0.99_wp*pS/DeltamP(2))
+                end if
+            end if
+
             ! updating two reacting 'masses'. Recall that inert 'masses' do not change during the phase change
             ! liquid
-            q_cons_vf(lp + contxb - 1)%sf(j, k, l) = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + Om*DeltamP(1)
+            q_cons_vf(lp + contxb - 1)%sf(j, k, l) = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + step_factor*DeltamP(1)
 
             ! gas
-            q_cons_vf(vp + contxb - 1)%sf(j, k, l) = q_cons_vf(vp + contxb - 1)%sf(j, k, l) - Om*DeltamP(1)
+            q_cons_vf(vp + contxb - 1)%sf(j, k, l) = q_cons_vf(vp + contxb - 1)%sf(j, k, l) - step_factor*DeltamP(1)
 
             ! updating pressure
-            pS = pS + Om*DeltamP(2)
+            pS = pS + step_factor*DeltamP(2)
+
+            if (mod(ns, 100000) == 0) then
+                print *, "PTG hang"
+                print *, "m_floor:", m_floor
+                print *, "ml, mv:", &
+                    q_cons_vf(lp + contxb - 1)%sf(j, k, l), &
+                    q_cons_vf(vp + contxb - 1)%sf(j, k, l)
+                print *, "pS:", pS, "rhoe:", rhoe
+                print *, "R2D:", R2D(1), R2D(2)
+                print *, "Newton corrections:", DeltamP(1), DeltamP(2)
+                print *, "Step factor:", step_factor
+                print *, "Applied corrections:", &
+                    step_factor*DeltamP(1), step_factor*DeltamP(2)
+                flush(6)
+            end if
 
             mCVGP = 0.0_wp
+            !$acc loop seq
             do i = 1, num_fluids
 
                 ! These auxiliary variables now need to be updated, as the partial densities now
@@ -822,6 +985,15 @@ contains
             ! and (ii) the energy before and after the phase-change process.
             call s_compute_pTg_residue(j, k, l, mCPD, mCVGP, mQD, q_cons_vf, pS, rhoe, R2D)
 
+        end do
+
+        ! Rebuild energy coefficients from the accepted masses, not the previous iterate.
+        mCP = 0.0_wp
+        mQ = 0.0_wp
+        !$acc loop seq
+        do i = 1, num_fluids
+            mCP = mCP + q_cons_vf(i + contxb - 1)%sf(j, k, l)*cvs(i)*gs_min(i)
+            mQ = mQ + q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
         end do
 
         ! common temperature
@@ -886,6 +1058,36 @@ contains
         end if
     end subroutine s_correct_partial_densities
 
+    !> Vapor mole fraction and its derivative with respect to liquid partial density.
+    !! The reacting inventory and all noncondensable masses are held fixed.
+    !! Diffusing gases use ideal-gas EOS parameters; the caller retains positive vapor.
+    subroutine s_get_vapor_mole_fraction(j, k, l, q_cons_vf, X_v, dXdm)
+#ifdef _CRAYFTN
+        !DIR$ INLINEALWAYS s_get_vapor_mole_fraction
+#else
+        !$acc routine seq
+#endif
+        integer, intent(in) :: j, k, l
+        type(scalar_field), dimension(sys_size), intent(in) :: q_cons_vf
+        real(wp), intent(out) :: X_v, dXdm
+        real(wp) :: n_g, n_v
+        integer :: i, idx
+
+        X_v = 1.0_wp
+        dXdm = 0.0_wp
+        if (diffusion) then
+            n_g = 0.0_wp
+            !$acc loop seq
+            do i = 1, Dif_size
+                idx = Dif_idx(i)
+                n_g = n_g + q_cons_vf(idx + contxb - 1)%sf(j, k, l)/fluid_pp(idx)%W
+            end do
+            n_v = q_cons_vf(vp + contxb - 1)%sf(j, k, l)/fluid_pp(vp)%W
+            X_v = n_v/n_g
+            dXdm = -(1.0_wp - X_v)/(fluid_pp(vp)%W*n_g)
+        end if
+    end subroutine s_get_vapor_mole_fraction
+
     !>  This auxiliary subroutine calculates the 2 x 2 Jacobian and, its inverse and transpose
         !!      to be used in the pTg-equilibirium procedure
         !!  @param InvJac Inverse of the Jacobian Matrix
@@ -917,6 +1119,8 @@ contains
 
         real(wp) :: ml, mT, TS, dFdT, dTdm, dTdp ! mass of the reacting fluid, total reacting mass, and auxiliary variables
 
+        real(wp) :: X_v, dXdm, Rv
+
         ! mass of the reacting liquid
         ml = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
 
@@ -935,6 +1139,10 @@ contains
             + cvs(lp)*(gs_min(lp) - 1)*log(pS + ps_inf(lp)) &
             - cvs(vp)*(gs_min(vp) - 1)*log(pS + ps_inf(vp))
 
+        call s_get_vapor_mole_fraction(j, k, l, q_cons_vf, X_v, dXdm)
+        Rv = cvs(vp)*(gs_min(vp) - 1.0_wp)
+        if (diffusion) dFdT = dFdT - Rv*log(X_v)
+
         dTdm = -(cvs(lp)*(gs_min(lp) - 1)/(pS + ps_inf(lp)) &
                  - cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)))*TS**2
 
@@ -949,6 +1157,10 @@ contains
         ! F2 = 0 is the enforcement of the thermodynamic (total - kinectic) energy
         ! dF1dm
         Jac(1, 1) = dFdT*dTdm
+        if (diffusion) then
+            ! Explicit mole-fraction dependence at fixed pressure.
+            Jac(1, 1) = Jac(1, 1) - Rv*TS*dXdm/X_v
+        end if
 
         ! dF1dp
         Jac(1, 2) = dFdT*dTdp + TS &
@@ -1022,6 +1234,8 @@ contains
 
         real(wp) :: ml, mT, TS !< mass of the reacting liquid, total reacting mass, equilibrium temperature
 
+        real(wp) :: X_v, dXdm
+
         ! mass of the reacting liquid
         ml = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
 
@@ -1041,6 +1255,12 @@ contains
                      - cvs(vp)*(gs_min(vp) - 1)*log(pS + ps_inf(vp))) &
                  + qvs(lp) - qvs(vp)
 
+        if (diffusion) then
+            call s_get_vapor_mole_fraction(j, k, l, q_cons_vf, X_v, dXdm)
+            ! g_l(T,P) - g_v(T,X_v*P); ideal vapor has ps_inf(vp) = 0.
+            R2D(1) = R2D(1) - cvs(vp)*(gs_min(vp) - 1.0_wp)*TS*log(X_v)
+        end if
+
         ! Constant Energy Process condition (DE)
         R2D(2) = (rhoe + pS &
                   + ml*(qvs(vp) - qvs(lp)) - mT*qvs(vp) - mQD &
@@ -1057,7 +1277,7 @@ contains
         !!  @param pSat Saturation Pressure
         !!  @param TSat Saturation Temperature
         !!  @param TSIn equilibrium Temperature
-    subroutine s_TSat(pSat, TSat, TSIn)
+    subroutine s_TSat(pSat, TSat, TSIn, X_v_in)
 
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_TSat
@@ -1068,11 +1288,17 @@ contains
         real(wp), intent(in) :: pSat
         real(wp), intent(out) :: TSat
         real(wp), intent(in) :: TSIn
+        real(wp), intent(in), optional :: X_v_in
+        real(wp) :: X_v, Rv
 
         real(wp) :: dFdT, FT, Om !< auxiliary variables
 
         ! Generic loop iterators
         integer :: ns
+
+        X_v = 1.0_wp
+        if (present(X_v_in)) X_v = X_v_in
+        Rv = cvs(vp)*(gs_min(vp) - 1.0_wp)
 
         if ((pSat == 0.0_wp) .and. (TSIn == 0.0_wp)) then
 
@@ -1089,10 +1315,12 @@ contains
             ns = 0
 
             ! underrelaxation factor
-            Om = 1.0e-3_wp
+            Om = 5.0e-2_wp
             do while ((abs(FT) > ptgalpha_eps) .or. (ns == 0))
                 ! increasing counter
                 ns = ns + 1
+
+                ! print *, "Saturation temperature iteration: ", ns
 
                 ! calculating residual
                 FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
@@ -1108,8 +1336,23 @@ contains
                     + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
                     - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))
 
+                if (diffusion) then
+                    FT = FT - Rv*TSat*log(X_v)
+                    dFdT = dFdT - Rv*log(X_v)
+                end if
+
+                ! Check the residual at the temperature that will be returned.
+                if (abs(FT) <= ptgalpha_eps) exit
+
                 ! updating saturation temperature
                 TSat = TSat - Om*FT/dFdT
+
+                if (mod(ns, 100000) == 0) then
+                    print *, "TSat hang"
+                    print *, "pSat:", pSat, "TSin:", TSin, "X_v:", X_v
+                    print *, "FT:", FT, "dFdT:", dFdT
+                    flush(6)
+                end if
 
             end do
 

@@ -3,11 +3,11 @@ import math, json
 
 
 p0 = 101325.0
-T0 = 350.0
+T0 = 298.0
 
 #water props
 # density - kg/m3
-rho0w = 965.0
+rho0w = 1000.0
 # gama
 gamw = 4.4
 # pi infty - Pa
@@ -18,15 +18,16 @@ cpw = gamw * cvw
 qvwl = -1167000
 # qv'
 qvpwl = 0.0e0
+lambda_wl = 0.60
 
 Rbar = 8314.462618
-small_fluid = 1.0e-13
+small_fluid = 1.0e-3
 
 
 # water vapor properties
 ## Vapor water
 
-Lv = 2.3e6
+Lv = 2.5e6
 # Lv = 0.0
 
 W_wv = 18.015
@@ -37,7 +38,10 @@ cv_wv = Rbar * Gamma_wv / W_wv
 cp_wv = gamma_wv*cv_wv
 qvwv = qvwl + Lv + (cpw - cp_wv)*T0
 # qv'
-qvpwv = -21884.3  # J/(kg K)
+# qvpwv = -21884.3  # J/(kg K)
+qvpwv = -24349.7
+# qvpwv = -32752.0
+lambda_wv = 0.018
 
 # air props
 gamma_air = 1.4
@@ -46,6 +50,7 @@ rho_air = p0*W_air / (Rbar * T0)
 Gamma_air = 1.0 / (gamma_air - 1.0)
 cv_air = Rbar * Gamma_air / W_air
 cp_air = gamma_air*cv_air
+lambda_air = 0.026
 
 # # c02 props
 # gamma_co2 = 1.28
@@ -104,25 +109,26 @@ print(
             "m": int(Nx),
             "n": 0,
             "p": 0,
-            "dt": 1.0e-11,
+            "dt": 0.5e-11,
             "t_step_start": 0,
-            "t_step_stop": 2000000,
-            "t_step_save": 10000,
-            "t_step_save": 1500,
+            "t_step_stop": 400000,
+            "t_step_save": 8000,
+            # "t_step_save":  800,
             # "t_step_stop": 326000,
             # "t_step_save": 3260,
-            # "t_step_print": 1,
+            "t_step_print": 4000,
             # Simulation Algorithm Parameters
             "num_patches": 3,
             "model_eqns": 2,
             "alt_soundspeed": "T",
             "diffusion": "T",
+            "conduction": "F",
             "num_fluids": 3,
             "mpp_lim": "T",
             "mixture_err": "T",
             "relax": "T",
-            "relax_model": 7,
-            "palpha_eps": 1.0e-2,
+            "relax_model": 6,
+            "palpha_eps": 1.0e-6,
             "ptgalpha_eps": 1.0e-2,
             "time_stepper": 3,
             "weno_order": 5,
@@ -183,11 +189,11 @@ print(
             "patch_icpp(3)%vel(1)": 0.0,
             "patch_icpp(3)%pres": p0,
             "patch_icpp(3)%alpha_rho(1)": 0.0,
-            "patch_icpp(3)%alpha_rho(2)": 0.0,
-            "patch_icpp(3)%alpha_rho(3)": rho_air,
+            "patch_icpp(3)%alpha_rho(2)": small_fluid * rho_wv,
+            "patch_icpp(3)%alpha_rho(3)": (1.0 - small_fluid) * rho_air,
             "patch_icpp(3)%alpha(1)": 0.0,
-            "patch_icpp(3)%alpha(2)": 0.0,
-            "patch_icpp(3)%alpha(3)": 1.0,
+            "patch_icpp(3)%alpha(2)": small_fluid,
+            "patch_icpp(3)%alpha(3)": 1.0 - small_fluid,
 
             # Fluids Physical Parameters
             # Liquid Water
@@ -196,6 +202,7 @@ print(
 	        "fluid_pp(1)%cv": cvw,
             "fluid_pp(1)%qv": qvwl,
             "fluid_pp(1)%qvp": qvpwl,
+            # "fluid_pp(1)%k": lambda_wl,
             "fluid_pp(1)%gas_mixture" : "F",
 
             # Water Vapor
@@ -208,6 +215,7 @@ print(
             "fluid_pp(2)%qvp": qvpwv,
             "fluid_pp(2)%D(1)": D22,
             "fluid_pp(2)%D(2)": D12,
+            # "fluid_pp(2)%k": lambda_wv,
             "fluid_pp(2)%gas_mixture" : "T",
 
             # Air
@@ -218,6 +226,7 @@ print(
             "fluid_pp(3)%cv": cv_air,
             "fluid_pp(3)%D(1)": D21,
             "fluid_pp(3)%D(2)": D22,
+            # "fluid_pp(3)%k": lambda_air,
             "fluid_pp(3)%gas_mixture" : "T",
 
         }
