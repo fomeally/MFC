@@ -189,7 +189,7 @@ contains
             & 'weno_Re_flux', 'alt_soundspeed', 'null_weights', 'mixture_err',   &
             & 'parallel_io', 'hypoelasticity', 'diffusion', 'conduction', 'bubbles_euler', 'polytropic',    &
             & 'polydisperse', 'qbmm', 'acoustic_source', 'probe_wrt', 'integral_wrt',   &
-            & 'prim_vars_wrt', 'weno_avg', 'file_per_process', 'relax',          &
+            & 'prim_vars_wrt', 'weno_avg', 'file_per_process', 'relax', 'adaptive_newton', &
             & 'adv_n', 'adap_dt', 'ib', 'bodyForces', 'bf_x', 'bf_y', 'bf_z',    &
             & 'bc_x%grcbc_in', 'bc_x%grcbc_out', 'bc_x%grcbc_vel_out',          &
             & 'bc_y%grcbc_in', 'bc_y%grcbc_out', 'bc_y%grcbc_vel_out',          &

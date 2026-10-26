@@ -580,11 +580,16 @@ contains
                     ! print *, "calculations after equilibrium"
                     if ((relax_model /= 7) .and. (model_eqns == 2)) then
                         ! Five-equation model: preserve total energy; update only volumes.
+                        ! Absent fluids take no volume (and avoid 0/0 when pS = -p_inf).
                         !$acc loop seq
                         do i = 1, num_fluids
-                            q_cons_vf(i + advxb - 1)%sf(j, k, l) = &
-                                q_cons_vf(i + contxb - 1)%sf(j, k, l) &
-                                *(gs_min(i) - 1.0_wp)*cvs(i)*TS/(pS + ps_inf(i))
+                            if (q_cons_vf(i + contxb - 1)%sf(j, k, l) > 0.0_wp) then
+                                q_cons_vf(i + advxb - 1)%sf(j, k, l) = &
+                                    q_cons_vf(i + contxb - 1)%sf(j, k, l) &
+                                    *(gs_min(i) - 1.0_wp)*cvs(i)*TS/(pS + ps_inf(i))
+                            else
+                                q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0.0_wp
+                            end if
                         end do
                         if (diffusion) then
                             ! Ideal-gas equivalent volumes already satisfy alpha_i = X_i*alpha_g.
@@ -690,6 +695,7 @@ contains
         real(wp), intent(in) :: rhoe
         real(wp), intent(out) :: TS
         real(wp) :: gp, gpp, hp, pO, mCP, mQ, alphaGam, alphaPi_inf !< variables for the Newton Solver
+        real(wp) :: pinf_min !< smallest stiffness among the fluids present in the cell
         real(wp), dimension(Dif_size) :: Y_g !< mass fractions of the gas mixture
         real(wp) :: W_g, m_g, rho_g, R_univ
 
@@ -716,8 +722,17 @@ contains
 
         end do
 
+        ! Only fluids with mass bound the pressure from below. An absent ideal gas
+        ! (p_inf = 0) would otherwise pin a liquid under tension at p = 0.
+        pinf_min = huge(1.0_wp)
+        !$acc loop seq
+        do i = 1, num_fluids
+            if (q_cons_vf(i + contxb - 1)%sf(j, k, l) > 0.0_wp) pinf_min = min(pinf_min, p_infpT(i))
+        end do
+        if (pinf_min == huge(1.0_wp)) pinf_min = minval(p_infpT)
+
         ! Checking energy constraint
-        if ((rhoe - mQ - minval(p_infpT)) < 0.0_wp) then
+        if ((rhoe - mQ - pinf_min) < 0.0_wp) then
 
             if ((MFL == 0) .or. (MFL == 1)) then
 
@@ -769,7 +784,7 @@ contains
 
                 end do
 
-                hp = 1.0_wp/(rhoe + pS - mQ) + 1.0_wp/(pS + minval(p_infpT))
+                hp = 1.0_wp/(rhoe + pS - mQ) + 1.0_wp/(pS + pinf_min)
 
                 ! updating common pressure for the newton solver
                 pS = pO + ((1.0_wp - gp)/gpp)/(1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) &
@@ -823,6 +838,7 @@ contains
         real(wp), dimension(2) :: R2D, DeltamP !< residual and correction array
         real(wp) :: step_factor, m_floor, mass_bound_tol
         real(wp) :: Om ! underrelaxation factor
+        logical :: step_accepted ! adaptive_newton found an admissible, residual-reducing step
         real(wp) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD ! auxiliary variables for the pTg-solver
 
         !< Generic loop iterators
@@ -941,15 +957,24 @@ contains
                 end if
             end if
 
-            ! updating two reacting 'masses'. Recall that inert 'masses' do not change during the phase change
-            ! liquid
-            q_cons_vf(lp + contxb - 1)%sf(j, k, l) = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + step_factor*DeltamP(1)
+            step_accepted = .false.
+            if (adaptive_newton) then
+                ! Backtracking from the full Newton step; updates the masses and pS when accepted.
+                call s_ptg_adaptive_step(j, k, l, DeltamP, R2D, m_floor, mCP, mQ, mCPD, mQD, &
+                                         rhoe, q_cons_vf, pS, step_factor, step_accepted)
+            end if
 
-            ! gas
-            q_cons_vf(vp + contxb - 1)%sf(j, k, l) = q_cons_vf(vp + contxb - 1)%sf(j, k, l) - step_factor*DeltamP(1)
+            if (.not. step_accepted) then
+                ! updating two reacting 'masses'. Recall that inert 'masses' do not change during the phase change
+                ! liquid
+                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + step_factor*DeltamP(1)
 
-            ! updating pressure
-            pS = pS + step_factor*DeltamP(2)
+                ! gas
+                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = q_cons_vf(vp + contxb - 1)%sf(j, k, l) - step_factor*DeltamP(1)
+
+                ! updating pressure
+                pS = pS + step_factor*DeltamP(2)
+            end if
 
             if (mod(ns, 100000) == 0) then
                 print *, "PTG hang"
@@ -999,6 +1024,98 @@ contains
         ! common temperature
         TS = (rhoe + pS - mQ)/mCP
     end subroutine s_infinite_ptg_relaxation_k
+
+    !>  Damped Newton step for the pTg-equilibrium solver (adaptive_newton). Starts from the full
+        !!      Newton step, limits it so the reacting masses and pS stay admissible, then halves it
+        !!      until the scaled residual decreases (Armijo condition). On success, the reacting
+        !!      masses and pS hold the accepted state; otherwise they are left untouched.
+        !!  @param DeltamP Newton correction (liquid mass, pressure)
+        !!  @param R2D residue at the current state
+        !!  @param m_floor lower bound for the reacting masses under diffusion
+        !!  @param mCP sum of alpha*rho*cp at the current state (residual scaling only)
+        !!  @param mQ sum of alpha*rho*q at the current state (residual scaling only)
+        !!  @param step_factor accepted step length (unchanged if no step is accepted)
+        !!  @param accepted whether a step was accepted
+    subroutine s_ptg_adaptive_step(j, k, l, DeltamP, R2D, m_floor, mCP, mQ, mCPD, mQD, &
+                                   rhoe, q_cons_vf, pS, step_factor, accepted)
+
+#ifdef _CRAYFTN
+        !DIR$ INLINEALWAYS s_ptg_adaptive_step
+#else
+        !$acc routine seq
+#endif
+
+        integer, intent(in) :: j, k, l
+        real(wp), dimension(2), intent(in) :: DeltamP, R2D
+        real(wp), intent(in) :: m_floor, mCP, mQ, mCPD, mQD, rhoe
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+        real(wp), intent(inout) :: pS, step_factor
+        logical, intent(out) :: accepted
+
+        integer, parameter :: max_backtrack = 30
+        real(wp), parameter :: armijo_c = 1.0e-4_wp
+        real(wp), parameter :: frac_to_bound = 0.99_wp
+
+        real(wp), dimension(2) :: R2Dt !< residue at the trial state
+        real(wp) :: ml0, mv0, pS0, m_low, lam, sc1, sc2, Rn0, Rnt, mCVGP
+        integer :: i, nb
+
+        accepted = .false.
+
+        ml0 = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
+        mv0 = q_cons_vf(vp + contxb - 1)%sf(j, k, l)
+        pS0 = pS
+
+        ! keep the reacting masses above the trace-phase floor (diffusion) or positive, and pS positive
+        m_low = 0.0_wp
+        if (diffusion) m_low = m_floor
+        lam = 1.0_wp
+        if (DeltamP(1) > 0.0_wp) then
+            lam = min(lam, frac_to_bound*max(mv0 - m_low, 0.0_wp)/DeltamP(1))
+        else if (DeltamP(1) < 0.0_wp) then
+            lam = min(lam, frac_to_bound*max(ml0 - m_low, 0.0_wp)/(-DeltamP(1)))
+        end if
+        if (DeltamP(2) < 0.0_wp) lam = min(lam, -frac_to_bound*pS0/DeltamP(2))
+        if (.not. (lam > 0.0_wp)) return
+
+        ! Scales fixed for this iteration: R2D(1) is a Gibbs energy (J/kg), R2D(2) an energy density (J/m^3)
+        sc1 = max(cvs(vp)*gs_min(vp)*abs((rhoe + pS0 - mQ)/mCP), sgm_eps)
+        sc2 = max(abs(rhoe) + abs(pS0), sgm_eps)
+        Rn0 = sqrt((R2D(1)/sc1)**2 + (R2D(2)/sc2)**2)
+        if (.not. ieee_is_finite(Rn0)) return
+
+        do nb = 1, max_backtrack
+            q_cons_vf(lp + contxb - 1)%sf(j, k, l) = ml0 + lam*DeltamP(1)
+            q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mv0 - lam*DeltamP(1)
+            pS = pS0 + lam*DeltamP(2)
+
+            mCVGP = 0.0_wp
+            !$acc loop seq
+            do i = 1, num_fluids
+                if ((i /= lp) .and. (i /= vp)) then
+                    mCVGP = mCVGP + q_cons_vf(i + contxb - 1)%sf(j, k, l) &
+                            *cvs(i)*(gs_min(i) - 1)/(pS + ps_inf(i))
+                end if
+            end do
+
+            call s_compute_pTg_residue(j, k, l, mCPD, mCVGP, mQD, q_cons_vf, pS, rhoe, R2Dt)
+            Rnt = sqrt((R2Dt(1)/sc1)**2 + (R2Dt(2)/sc2)**2)
+
+            if (ieee_is_finite(Rnt) .and. (Rnt <= (1.0_wp - armijo_c*lam)*Rn0)) then
+                accepted = .true.
+                step_factor = lam
+                return
+            end if
+
+            lam = 0.5_wp*lam
+        end do
+
+        ! no acceptable step: restore the state for the fixed-Om fallback
+        q_cons_vf(lp + contxb - 1)%sf(j, k, l) = ml0
+        q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mv0
+        pS = pS0
+
+    end subroutine s_ptg_adaptive_step
 
     !>  This auxiliary subroutine corrects the partial densities of the REACTING fluids in case one of them is negative
         !!      but their sum is positive. Inert phases are not corrected at this moment
@@ -1292,6 +1409,10 @@ contains
         real(wp) :: X_v, Rv
 
         real(wp) :: dFdT, FT, Om !< auxiliary variables
+        real(wp) :: lam, TSt, FTt !< adaptive_newton step length, trial temperature and residual
+        integer, parameter :: max_backtrack = 30
+        real(wp), parameter :: armijo_c = 1.0e-4_wp
+        integer :: nb
 
         ! Generic loop iterators
         integer :: ns
@@ -1344,8 +1465,29 @@ contains
                 ! Check the residual at the temperature that will be returned.
                 if (abs(FT) <= ptgalpha_eps) exit
 
-                ! updating saturation temperature
-                TSat = TSat - Om*FT/dFdT
+                if (adaptive_newton) then
+                    ! Backtracking from the full Newton step: keep TSat positive and require |F| to decrease.
+                    lam = 1.0_wp
+                    do nb = 1, max_backtrack
+                        TSt = TSat - lam*FT/dFdT
+                        if (TSt > 0.0_wp) then
+                            FTt = TSt*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
+                                       *(1 - log(TSt)) - (qvps(lp) - qvps(vp)) &
+                                       + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
+                                       - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
+                                  + qvs(lp) - qvs(vp)
+                            if (diffusion) FTt = FTt - Rv*TSt*log(X_v)
+                            if (ieee_is_finite(FTt) .and. (abs(FTt) <= (1.0_wp - armijo_c*lam)*abs(FT))) exit
+                        end if
+                        lam = 0.5_wp*lam
+                    end do
+                    ! no acceptable step: fall back to the fixed underrelaxation
+                    if (nb > max_backtrack) lam = Om
+                    TSat = TSat - lam*FT/dFdT
+                else
+                    ! updating saturation temperature
+                    TSat = TSat - Om*FT/dFdT
+                end if
 
                 if (mod(ns, 100000) == 0) then
                     print *, "TSat hang"

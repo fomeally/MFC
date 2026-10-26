@@ -976,6 +976,10 @@ contains
         real(wp) :: Y_dif(Dif_size)
         real(wp) :: rho_dif
         real(wp) :: D_max
+        real(wp) :: kappa  !< Largest phase thermal diffusivity in the cell
+        real(wp) :: Fo_lim !< Stable D*dt/min(dx)**2 for the time stepper
+
+        Fo_lim = f_diffusive_stability_limit()
 
         D_max = 0._wp
         if (diffusion) then
@@ -1027,7 +1031,10 @@ contains
                         call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c)
                     end if
 
-                    call s_compute_dt_from_cfl(vel, c, max_dt, rho, Re, j, k, l, D_max)
+                    kappa = 0._wp
+                    if (conduction) call s_compute_thermal_diffusivity(q_prim_vf, j, k, l, kappa)
+
+                    call s_compute_dt_from_cfl(vel, c, max_dt, rho, Re, j, k, l, D_max, kappa, Fo_lim)
                 end do
             end do
         end do

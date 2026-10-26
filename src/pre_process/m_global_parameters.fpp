@@ -79,6 +79,7 @@ module m_global_parameters
     integer :: relax_model           !< Relax Model
     real(wp) :: palpha_eps    !< trigger parameter for the p relaxation procedure, phase change model
     real(wp) :: ptgalpha_eps  !< trigger parameter for the pTg relaxation procedure, phase change model
+    logical :: adaptive_newton       !< backtracking Newton steps in the pTg and TSat solvers
     integer :: num_fluids            !< Number of different fluids present in the flow
     logical :: mpp_lim               !< Alpha limiter
     integer :: sys_size              !< Number of unknowns in the system of equations
@@ -319,6 +320,7 @@ contains
         relax_model = dflt_int
         palpha_eps = dflt_real
         ptgalpha_eps = dflt_real
+        adaptive_newton = .false.
         num_fluids = dflt_int
         weno_order = dflt_int
 

@@ -180,9 +180,10 @@ module m_global_parameters
     integer :: relax_model    !< Relaxation model
     real(wp) :: palpha_eps     !< trigger parameter for the p relaxation procedure, phase change model
     real(wp) :: ptgalpha_eps   !< trigger parameter for the pTg relaxation procedure, phase change model
+    logical :: adaptive_newton !< backtracking Newton steps in the pTg and TSat solvers
 
 !#ifndef _CRAYFTN
-!$acc declare create(relax, relax_model, palpha_eps,ptgalpha_eps)
+!$acc declare create(relax, relax_model, palpha_eps,ptgalpha_eps, adaptive_newton)
 !#endif
 
     !> @name Boundary conditions (BC) in the x-, y- and z-directions, respectively
@@ -545,6 +546,7 @@ contains
         relax_model = dflt_int
         palpha_eps = dflt_real
         ptgalpha_eps = dflt_real
+        adaptive_newton = .false.
         hypoelasticity = .false.
         diffusion = .false.
         conduction = .false.
@@ -1260,7 +1262,7 @@ contains
         !$acc enter data copyin(R_n, R_v, phi_vn, phi_nv, Pe_c, Tw, pv, M_n, M_v, k_n, k_v, pb0, mass_n0, mass_v0, Pe_T, Re_trans_T, Re_trans_c, Im_trans_T, Im_trans_c, omegaN, mul0, ss, gamma_v, mu_v, gamma_m, gamma_n, mu_n, gam)
         !$acc enter data copyin(dir_idx, dir_flg, dir_idx_tau)
 
-        !$acc enter data copyin(relax, relax_model, palpha_eps,ptgalpha_eps)
+        !$acc enter data copyin(relax, relax_model, palpha_eps,ptgalpha_eps, adaptive_newton)
 
         ! Allocating grid variables for the x-, y- and z-directions
         @:ALLOCATE(x_cb(-1 - buff_size:m + buff_size))

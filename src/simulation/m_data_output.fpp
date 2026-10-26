@@ -54,15 +54,17 @@ module m_data_output
     real(wp), allocatable, dimension(:, :, :) :: ccfl_sf  !< CCFL stability criterion
     real(wp), allocatable, dimension(:, :, :) :: Rc_sf  !< Rc stability criterion
     real(wp), allocatable, dimension(:, :, :) :: dcfl_sf  !< Diffusive CFL stability criterion
+    real(wp), allocatable, dimension(:, :, :) :: kcfl_sf  !< Conductive CFL stability criterion
     real(wp), public, allocatable, dimension(:, :) :: c_mass
-    !$acc declare create(icfl_sf, vcfl_sf, ccfl_sf, Rc_sf, dcfl_sf)
+    !$acc declare create(icfl_sf, vcfl_sf, ccfl_sf, Rc_sf, dcfl_sf, kcfl_sf)
 
     real(wp) :: icfl_max_loc, icfl_max_glb !< ICFL stability extrema on local and global grids
     real(wp) :: vcfl_max_loc, vcfl_max_glb !< VCFL stability extrema on local and global grids
     real(wp) :: ccfl_max_loc, ccfl_max_glb !< CCFL stability extrema on local and global grids
     real(wp) :: Rc_min_loc, Rc_min_glb !< Rc   stability extrema on local and global grids
     real(wp) :: dcfl_max_loc, dcfl_max_glb !< Diffusive CFL stability extrema on local and global grids
-    !$acc declare create(icfl_max_loc, icfl_max_glb, vcfl_max_loc, vcfl_max_glb, ccfl_max_loc, ccfl_max_glb, Rc_min_loc, Rc_min_glb, dcfl_max_loc, dcfl_max_glb)
+    real(wp) :: kcfl_max_loc, kcfl_max_glb !< Conductive CFL stability extrema on local and global grids
+    !$acc declare create(icfl_max_loc, icfl_max_glb, vcfl_max_loc, vcfl_max_glb, ccfl_max_loc, ccfl_max_glb, Rc_min_loc, Rc_min_glb, dcfl_max_loc, dcfl_max_glb, kcfl_max_loc, kcfl_max_glb)
 
     !> @name ICFL, VCFL, CCFL and Rc stability criteria extrema over all the time-steps
     !> @{
@@ -71,6 +73,7 @@ module m_data_output
     real(wp) :: ccfl_max !< CCFL criterion maximum
     real(wp) :: Rc_min !< Rc criterion maximum
     real(wp) :: dcfl_max !< Diffusive CFL criterion maximum
+    real(wp) :: kcfl_max !< Conductive CFL criterion maximum
     !> @}
 
 contains
@@ -135,7 +138,9 @@ contains
             'Courant-Friedrichs-Lewy (ICFL)'
         write (3, '(13X,A)') 'number, the viscous CFL (VCFL) number, '// &
             'the diffusive CFL (DCFL)'
-        write (3, '(13X,A)') 'number, the capillary CFL (CCFL) '// &
+        write (3, '(13X,A)') 'number, the conductive CFL (KCFL) '// &
+            'number,'
+        write (3, '(13X,A)') 'the capillary CFL (CCFL) '// &
             'number, and the cell Reynolds'
         write (3, '(13X,A)') '(Rc) number. Please note that only'
         write (3, '(13X,A)') 'those stability conditions pertinent '// &
@@ -153,33 +158,36 @@ contains
                 ! Generating table header for the stability criteria to be outputted
         if (cfl_dt) then
             if (viscous .and. diffusion) then
-                write (1, '(A)') '     Time-steps        dt     = Time         ICFL '// &
+                write (1, '(A)', advance='no') '     Time-steps        dt     = Time         ICFL '// &
                     'Max      VCFL Max      DCFL Max        Rc Min       ='
             elseif (viscous) then
-                write (1, '(A)') '     Time-steps        dt     = Time         ICFL '// &
+                write (1, '(A)', advance='no') '     Time-steps        dt     = Time         ICFL '// &
                     'Max      VCFL Max        Rc Min       ='
             elseif (diffusion) then
-                write (1, '(A)') '     Time-steps        dt     = Time         ICFL '// &
+                write (1, '(A)', advance='no') '     Time-steps        dt     = Time         ICFL '// &
                     'Max      DCFL Max       ='
             else
-                write (1, '(A)') '            Time-steps                dt       Time '// &
+                write (1, '(A)', advance='no') '            Time-steps                dt       Time '// &
                     '               ICFL Max              '
             end if
         else
             if (viscous .and. diffusion) then
-                write (1, '(A)') '     Time-steps        Time         ICFL '// &
+                write (1, '(A)', advance='no') '     Time-steps        Time         ICFL '// &
                     'Max      VCFL Max      DCFL Max        Rc Min        '
             elseif (viscous) then
-                write (1, '(A)') '     Time-steps        Time         ICFL '// &
+                write (1, '(A)', advance='no') '     Time-steps        Time         ICFL '// &
                     'Max      VCFL Max        Rc Min        '
             elseif (diffusion) then
-                write (1, '(A)') '     Time-steps        Time         ICFL '// &
+                write (1, '(A)', advance='no') '     Time-steps        Time         ICFL '// &
                     'Max      DCFL Max        '
             else
-                write (1, '(A)') '            Time-steps                Time '// &
+                write (1, '(A)', advance='no') '            Time-steps                Time '// &
                     '               ICFL Max              '
             end if
         end if
+
+        if (conduction) write (1, '(A)', advance='no') '      KCFL Max'
+        write (1, '(A)') ''
 
     end subroutine s_open_run_time_information_file
 
@@ -293,8 +301,13 @@ contains
         real(wp) :: Y_dif(Dif_size)
         real(wp), dimension(2) :: Re         !< Cell-avg. Reynolds numbers
         real(wp) :: D_max       !< Max binary diffusion coefficient
+        real(wp) :: kappa       !< Largest phase thermal diffusivity in the cell
+        real(wp) :: Fo_lim      !< Stable DCFL/KCFL for the dimension and time stepper
         integer :: j, k, l, i
-        
+
+        Fo_lim = f_diffusive_stability_limit()
+        D_max = 0._wp
+
         if (diffusion) then
             D_max = 0._wp
 
@@ -350,14 +363,25 @@ contains
                         call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c)
                     end if
                         
-                    if (viscous .and. diffusion) then
-                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, icfl_sf, vcfl_sf, Rc_sf, dcfl_sf)
+                    kappa = 0._wp
+                    if (conduction) call s_compute_thermal_diffusivity(q_prim_vf, j, k, l, kappa)
+
+                    if (viscous .and. diffusion .and. conduction) then
+                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, kappa, icfl_sf, vcfl_sf, Rc_sf, dcfl_sf, kcfl_sf)
+                    elseif (viscous .and. diffusion) then
+                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, kappa, icfl_sf, vcfl_sf, Rc_sf, dcfl_sf)
+                    elseif (viscous .and. conduction) then
+                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, kappa, icfl_sf, vcfl_sf, Rc_sf, kcfl_sf=kcfl_sf)
                     elseif (viscous) then
-                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, icfl_sf, vcfl_sf, Rc_sf)
+                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, kappa, icfl_sf, vcfl_sf, Rc_sf)
+                    elseif (diffusion .and. conduction) then
+                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, kappa, icfl_sf, dcfl_sf=dcfl_sf, kcfl_sf=kcfl_sf)
                     elseif (diffusion) then
-                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, icfl_sf, dcfl_sf=dcfl_sf)
+                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, kappa, icfl_sf, dcfl_sf=dcfl_sf)
+                    elseif (conduction) then
+                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, kappa, icfl_sf, kcfl_sf=kcfl_sf)
                     else
-                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, icfl_sf)
+                        call s_compute_stability_from_dt(vel, c, rho, Re, j, k, l, D_max, kappa, icfl_sf)
                     end if
 
                 end do
@@ -380,6 +404,10 @@ contains
             !$acc update host(dcfl_sf)
         end if
 
+        if (conduction) then
+            !$acc update host(kcfl_sf)
+        end if
+
         icfl_max_loc = maxval(icfl_sf)
 
         if (viscous) then
@@ -389,6 +417,10 @@ contains
 
         if (diffusion) then
             dcfl_max_loc = maxval(dcfl_sf)
+        end if
+
+        if (conduction) then
+            kcfl_max_loc = maxval(kcfl_sf)
         end if
 #else
         !$acc kernels
@@ -407,6 +439,12 @@ contains
             dcfl_max_loc = maxval(dcfl_sf)
             !$acc end kernels
         end if
+
+        if (conduction) then
+            !$acc kernels
+            kcfl_max_loc = maxval(kcfl_sf)
+            !$acc end kernels
+        end if
 #endif
 
         ! Determining global stability criteria extrema at current time-step
@@ -416,16 +454,19 @@ contains
                                                          ccfl_max_loc, &
                                                          Rc_min_loc, &
                                                          dcfl_max_loc, &
+                                                         kcfl_max_loc, &
                                                          icfl_max_glb, &
                                                          vcfl_max_glb, &
                                                          ccfl_max_glb, &
                                                          Rc_min_glb, &
-                                                         dcfl_max_glb)
+                                                         dcfl_max_glb, &
+                                                         kcfl_max_glb)
         else
             icfl_max_glb = icfl_max_loc
             if (viscous) vcfl_max_glb = vcfl_max_loc
             if (viscous) Rc_min_glb = Rc_min_loc
             if (diffusion) dcfl_max_glb = dcfl_max_loc
+            if (conduction) kcfl_max_glb = kcfl_max_loc
         end if
 
         ! Determining the stability criteria extrema over all the time-steps
@@ -440,23 +481,29 @@ contains
             if (dcfl_max_glb > dcfl_max) dcfl_max = dcfl_max_glb
         end if
 
+        if (conduction) then
+            if (kcfl_max_glb > kcfl_max) kcfl_max = kcfl_max_glb
+        end if
+
         ! Outputting global stability criteria extrema at current time-step
         if (proc_rank == 0) then
             if (viscous .and. diffusion) then
-                write (1, '(6X,I8,F10.6,6X,6X,F10.6,6X,F9.6,6X,F9.6,6X,F10.6,6X,F9.6)') &
+                write (1, '(6X,I8,F10.6,6X,6X,F10.6,6X,F9.6,6X,F9.6,6X,F10.6,6X,F9.6)', advance='no') &
                     t_step, dt, t_step*dt, icfl_max_glb, &
                     vcfl_max_glb, Rc_min_glb, dcfl_max_glb
             elseif (viscous) then
-                write (1, '(6X,I8,F10.6,6X,6X,F10.6,6X,F9.6,6X,F9.6,6X,F10.6)') &
+                write (1, '(6X,I8,F10.6,6X,6X,F10.6,6X,F9.6,6X,F9.6,6X,F10.6)', advance='no') &
                     t_step, dt, t_step*dt, icfl_max_glb, &
                     vcfl_max_glb, Rc_min_glb
             elseif (diffusion) then
-                write (1, '(6X,I8,F10.6,6X,6X,F10.6,6X,F9.6,6X,F9.6)') &
+                write (1, '(6X,I8,F10.6,6X,6X,F10.6,6X,F9.6,6X,F9.6)', advance='no') &
                     t_step, dt, t_step*dt, icfl_max_glb, dcfl_max_glb
             else
-                write (1, '(6X,I8,F10.6,6X,6X,F10.6,6X,F9.6)') &
+                write (1, '(6X,I8,F10.6,6X,6X,F10.6,6X,F9.6)', advance='no') &
                     t_step, dt, t_step*dt, icfl_max_glb
             end if
+            if (conduction) write (1, '(6X,F9.6)', advance='no') kcfl_max_glb
+            write (1, '(A)') ''
 
             if (icfl_max_glb /= icfl_max_glb) then
                 call s_mpi_abort('ICFL is NaN. Exiting.')
@@ -474,12 +521,23 @@ contains
                 end if
             end if
 
+            ! DCFL and KCFL are D*dt/min(dx)**2; the explicit limit depends on
+            ! the dimension and time stepper (0.209 in 3D with SSP-RK3)
             if (diffusion) then
                 if (dcfl_max_glb /= dcfl_max_glb) then
                     call s_mpi_abort('DCFL is NaN. Exiting.')
-                elseif (dcfl_max_glb > 1._wp) then
-                    print *, 'dcfl', dcfl_max_glb
-                    call s_mpi_abort('DCFL is greater than 1.0. Exiting.')
+                elseif (dcfl_max_glb > Fo_lim) then
+                    print *, 'dcfl', dcfl_max_glb, 'stability limit', Fo_lim
+                    call s_mpi_abort('DCFL exceeds the explicit diffusion stability limit. Exiting.')
+                end if
+            end if
+
+            if (conduction) then
+                if (kcfl_max_glb /= kcfl_max_glb) then
+                    call s_mpi_abort('KCFL is NaN. Exiting.')
+                elseif (kcfl_max_glb > Fo_lim) then
+                    print *, 'kcfl', kcfl_max_glb, 'stability limit', Fo_lim
+                    call s_mpi_abort('KCFL exceeds the explicit conduction stability limit. Exiting.')
                 end if
             end if
         end if
@@ -1803,6 +1861,7 @@ contains
         if (viscous) write (3, '(A,F9.6)') 'VCFL Max: ', vcfl_max
         if (viscous) write (3, '(A,F10.6)') 'Rc Min: ', Rc_min
         if (diffusion) write (3, '(A,F9.6)') 'DCFL Max: ', dcfl_max
+        if (conduction) write (3, '(A,F9.6)') 'KCFL Max: ', kcfl_max
 
         call cpu_time(run_time)
 
@@ -1860,6 +1919,11 @@ contains
             dcfl_max = 0._wp
         end if
 
+        if (conduction) then
+            @:ALLOCATE(kcfl_sf(0:m, 0:n, 0:p))
+            kcfl_max = 0._wp
+        end if
+
     end subroutine s_initialize_data_output_module
 
     !> Module deallocation and/or disassociation procedures
@@ -1877,6 +1941,10 @@ contains
 
         if (diffusion) then
             @:DEALLOCATE(dcfl_sf)
+        end if
+
+        if (conduction) then
+            @:DEALLOCATE(kcfl_sf)
         end if
 
     end subroutine s_finalize_data_output_module

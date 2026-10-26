@@ -233,7 +233,7 @@ contains
         logical :: ambient_state
         real(wp) :: m_g
 
-        ambient_state = .true.
+        ambient_state = .false.
 
         !< x-direction
         if (bc_dir == 1) then !< x-direction

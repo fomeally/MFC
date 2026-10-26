@@ -634,61 +634,34 @@ contains
                             gam_mix_avg = 0._wp
                             
                             if (diffusion .and. alt_soundspeed) then
+                                ! Mixture gamma of the gas from its volume fractions (mole fractions
+                                ! alpha_i/alpha_g); avoids 0/0 when the reconstructed gas partial
+                                ! densities are clipped to zero
                                 if (alphag_L > small_num_dif) then
-                                    !$acc loop seq
-                                    do i = 1, Dif_size
-                                        rho_dif_L = rho_dif_L + alpha_rho_L(Dif_idx(i))
-                                    end do
+                                    gam_num_L = 0._wp
+                                    gam_den_L = 0._wp
 
                                     !$acc loop seq
                                     do i = 1, Dif_size
-                                        Y_dif_L(i) = alpha_rho_L(Dif_idx(i)) / rho_dif_L
+                                        gam_num_L = gam_num_L + alpha_L(Dif_idx(i))*(gammas(Dif_idx(i)) + 1._wp)
+                                        gam_den_L = gam_den_L + alpha_L(Dif_idx(i))*gammas(Dif_idx(i))
                                     end do
-                                else
-                                    !$acc loop seq
-                                    do i = 1, Dif_size
-                                        Y_dif_L(i) = 0._wp
-                                    end do 
+
+                                    gam_mix_L = gam_num_L / gam_den_L
                                 end if
-
-                                gam_num_L = 0._wp
-                                gam_den_L = 0._wp
-
-                                do i = 1, Dif_size
-                                    gam_num_L = gam_num_L + Y_dif_L(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
-                                    gam_den_L = gam_den_L + Y_dif_L(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
-                                end do
-
-                                gam_mix_L = gam_num_L / gam_den_L
-
 
                                 if (alphag_R > small_num_dif) then
-                                    !$acc loop seq
-                                    do i = 1, Dif_size
-                                        rho_dif_R = rho_dif_R + alpha_rho_R(Dif_idx(i))
-                                    end do
+                                    gam_num_R = 0._wp
+                                    gam_den_R = 0._wp
 
                                     !$acc loop seq
                                     do i = 1, Dif_size
-                                        Y_dif_R(i) = alpha_rho_R(Dif_idx(i)) / rho_dif_R
+                                        gam_num_R = gam_num_R + alpha_R(Dif_idx(i))*(gammas(Dif_idx(i)) + 1._wp)
+                                        gam_den_R = gam_den_R + alpha_R(Dif_idx(i))*gammas(Dif_idx(i))
                                     end do
-                                else
-                                    !$acc loop seq
-                                    do i = 1, Dif_size
-                                        Y_dif_R(i) = 0._wp
-                                    end do 
+
+                                    gam_mix_R = gam_num_R / gam_den_R
                                 end if
-
-                                gam_num_R = 0._wp
-                                gam_den_R = 0._wp
-
-                                do i = 1, Dif_size
-                                    gam_num_R = gam_num_R + Y_dif_R(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
-                                    gam_den_R = gam_den_R + Y_dif_R(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
-                                end do
-
-                                gam_mix_R = gam_num_R / gam_den_R
-                            
                             end if
 
                             @:compute_average_state()
@@ -2632,61 +2605,34 @@ contains
                                 gam_mix_avg = 0._wp
 
                                 if (diffusion .and. alt_soundspeed) then
+                                    ! Mixture gamma of the gas from its volume fractions: alpha_i/alpha_g
+                                    ! is the mole fraction X_i, and Y_i/W_i is proportional to X_i, so this
+                                    ! equals the mass-fraction form but cannot give 0/0 when the
+                                    ! reconstructed gas partial densities are clipped to zero.
                                     if (alphag_L > small_num_dif) then
-                                        !$acc loop seq
-                                        do i = 1, Dif_size
-                                            rho_dif_L = rho_dif_L + qL_prim_rs${XYZ}$_vf(j, k, l, Dif_idx(i))
-                                        end do
-
-                                        !$acc loop seq
-                                        do i = 1, Dif_size
-                                            Y_dif_L(i) = qL_prim_rs${XYZ}$_vf(j, k, l, Dif_idx(i)) / rho_dif_L
-                                        end do
-
                                         gam_num_L = 0._wp
                                         gam_den_L = 0._wp
 
+                                        !$acc loop seq
                                         do i = 1, Dif_size
-                                            gam_num_L = gam_num_L + Y_dif_L(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
-                                            gam_den_L = gam_den_L + Y_dif_L(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                                            gam_num_L = gam_num_L + qL_prim_rs${XYZ}$_vf(j, k, l, E_idx + Dif_idx(i))*(gammas(Dif_idx(i)) + 1._wp)
+                                            gam_den_L = gam_den_L + qL_prim_rs${XYZ}$_vf(j, k, l, E_idx + Dif_idx(i))*gammas(Dif_idx(i))
                                         end do
 
                                         gam_mix_L = gam_num_L / gam_den_L
-                                    else
-                                        !$acc loop seq
-                                        do i = 1, Dif_size
-                                            Y_dif_L(i) = 0._wp
-                                        end do 
                                     end if
 
-                                    
-
-
                                     if (alphag_R > small_num_dif) then
-                                        !$acc loop seq
-                                        do i = 1, Dif_size
-                                            rho_dif_R = rho_dif_R + qR_prim_rs${XYZ}$_vf(j + 1, k, l, Dif_idx(i))
-                                        end do
-
-                                        !$acc loop seq
-                                        do i = 1, Dif_size
-                                            Y_dif_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, Dif_idx(i)) / rho_dif_R
-                                        end do
-
                                         gam_num_R = 0._wp
                                         gam_den_R = 0._wp
 
+                                        !$acc loop seq
                                         do i = 1, Dif_size
-                                            gam_num_R = gam_num_R + Y_dif_R(i) * (gammas(Dif_idx(i)) + 1._wp ) / fluid_pp(Dif_idx(i))%W
-                                            gam_den_R = gam_den_R + Y_dif_R(i) * gammas(Dif_idx(i)) / fluid_pp(Dif_idx(i))%W
+                                            gam_num_R = gam_num_R + qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + Dif_idx(i))*(gammas(Dif_idx(i)) + 1._wp)
+                                            gam_den_R = gam_den_R + qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + Dif_idx(i))*gammas(Dif_idx(i))
                                         end do
 
                                         gam_mix_R = gam_num_R / gam_den_R
-                                    else
-                                        !$acc loop seq
-                                        do i = 1, Dif_size
-                                            Y_dif_R(i) = 0._wp
-                                        end do 
                                     end if
                                 end if
 

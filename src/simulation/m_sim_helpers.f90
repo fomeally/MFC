@@ -9,6 +9,8 @@ module m_sim_helpers
     implicit none
 
     private; public :: s_compute_enthalpy, &
+ s_compute_thermal_diffusivity, &
+ f_diffusive_stability_limit, &
  s_compute_stability_from_dt, &
  s_compute_dt_from_cfl
 
@@ -86,6 +88,90 @@ contains
 
     end subroutine s_compute_enthalpy
 
+    !> Computes the largest thermal diffusivity k/(rho*cv) among the phases
+        !! that m_conduction conducts through: the gas mixture (mole-fraction
+        !! weighted k, as in m_conduction) and the liquid when diffusion is on,
+        !! otherwise each fluid separately. cv rather than cp is used because
+        !! the explicit update advances the energy at fixed density.
+        !! @param q_prim_vf cell centered primitive variables
+        !! @param j x index
+        !! @param k y index
+        !! @param l z index
+        !! @param kappa largest phase thermal diffusivity in the cell
+    subroutine s_compute_thermal_diffusivity(q_prim_vf, j, k, l, kappa)
+#ifdef _CRAYFTN
+        !DIR$ INLINEALWAYS s_compute_thermal_diffusivity
+#else
+        !$acc routine seq
+#endif
+
+        type(scalar_field), intent(in), dimension(sys_size) :: q_prim_vf
+        integer, intent(in) :: j, k, l
+        real(wp), intent(out) :: kappa
+
+        real(wp) :: alpha_i, alpharho_i, n_g, kn_g, rhocv_g
+        integer :: i, idx
+
+        kappa = 0._wp
+
+        if (diffusion) then
+            ! Gas mixture: kappa_g = (sum X_i k_i)/(rho_g cv_g), with
+            ! rho_g cv_g = sum(alpha_rho_i cv_i)/alpha_g
+            alpha_i = q_prim_vf(advg_idx)%sf(j, k, l)
+            if (alpha_i > small_num_dif) then
+                n_g = 0._wp; kn_g = 0._wp; rhocv_g = 0._wp
+                !$acc loop seq
+                do i = 1, Dif_size
+                    idx = Dif_idx(i)
+                    alpharho_i = max(q_prim_vf(idx)%sf(j, k, l), 0._wp)
+                    n_g = n_g + alpharho_i/fluid_pp(idx)%W
+                    kn_g = kn_g + alpharho_i/fluid_pp(idx)%W*fluid_pp(idx)%k
+                    rhocv_g = rhocv_g + alpharho_i*cvs(idx)
+                end do
+                if (n_g > 0._wp .and. rhocv_g > 0._wp) then
+                    kappa = max(kappa, (kn_g/n_g)*alpha_i/rhocv_g)
+                end if
+            end if
+
+            ! Liquid
+            if (num_fluids > Dif_size) then
+                alpha_i = q_prim_vf(E_idx + liq_idx)%sf(j, k, l)
+                alpharho_i = q_prim_vf(liq_idx)%sf(j, k, l)
+                if (alpha_i > small_num_dif .and. alpharho_i > 0._wp .and. cvs(liq_idx) > 0._wp) then
+                    kappa = max(kappa, fluid_pp(liq_idx)%k*alpha_i/(alpharho_i*cvs(liq_idx)))
+                end if
+            end if
+        else
+            !$acc loop seq
+            do i = 1, num_fluids
+                alpha_i = q_prim_vf(E_idx + i)%sf(j, k, l)
+                alpharho_i = q_prim_vf(i)%sf(j, k, l)
+                if (alpha_i > small_num_dif .and. alpharho_i > 0._wp .and. cvs(i) > 0._wp) then
+                    kappa = max(kappa, fluid_pp(i)%k*alpha_i/(alpharho_i*cvs(i)))
+                end if
+            end do
+        end if
+
+    end subroutine s_compute_thermal_diffusivity
+
+    !> Largest stable D*dt/min(dx)**2 for the explicit central diffusion and
+        !! conduction operators. Their most negative eigenvalue is about
+        !! -4*num_dims*D/min(dx)**2, which must stay inside the real-axis
+        !! stability interval [-R, 0] of the time stepper: R = 2 for RK1 and
+        !! RK2, 2.5127 for SSP-RK3, and the conservative R = 2 otherwise.
+        !! In 3D with SSP-RK3 the limit is 0.209.
+    function f_diffusive_stability_limit() result(Fo_lim)
+
+        real(wp) :: Fo_lim
+        real(wp) :: R_stab
+
+        R_stab = 2._wp
+        if (time_stepper == 3) R_stab = 2.5127_wp
+
+        Fo_lim = R_stab/(4._wp*real(num_dims, wp))
+
+    end function f_diffusive_stability_limit
+
     !> Computes stability criterion for a specified dt
         !! @param vel directional velocities
         !! @param c mixture speed of sound
@@ -96,16 +182,20 @@ contains
         !! @param icfl_sf cell centered inviscid cfl number
         !! @param vcfl_sf (optional) cell centered viscous cfl number
         !! @param Rc_sf (optional) cell centered Rc
+        !! @param D_max largest binary diffusion coefficient
+        !! @param kappa largest phase thermal diffusivity in the cell
         !! @param dcfl_sf (optional) cell centered diffusive cfl number
-    subroutine s_compute_stability_from_dt(vel, c, rho, Re_l, j, k, l, D_max, icfl_sf, vcfl_sf, Rc_sf, dcfl_sf)
+        !! @param kcfl_sf (optional) cell centered conductive cfl number
+    subroutine s_compute_stability_from_dt(vel, c, rho, Re_l, j, k, l, D_max, kappa, icfl_sf, vcfl_sf, Rc_sf, dcfl_sf, kcfl_sf)
         !$acc routine seq
         real(wp), intent(in), dimension(num_dims) :: vel
         real(wp), intent(in) :: c, rho
         real(wp), dimension(0:m, 0:n, 0:p), intent(inout) :: icfl_sf
-        real(wp), dimension(0:m, 0:n, 0:p), intent(inout), optional :: vcfl_sf, Rc_sf, dcfl_sf
+        real(wp), dimension(0:m, 0:n, 0:p), intent(inout), optional :: vcfl_sf, Rc_sf, dcfl_sf, kcfl_sf
         real(wp), dimension(2), intent(in) :: Re_l
         integer, intent(in) :: j, k, l
         real(wp) :: D_max
+        real(wp), intent(in) :: kappa
 
         real(wp) :: fltr_dtheta   !<
              !! Modified dtheta accounting for Fourier filtering in azimuthal direction.
@@ -168,6 +258,18 @@ contains
 
             end if
 
+            if (conduction) then
+
+                if (grid_geometry == 3) then
+                    kcfl_sf(j, k, l) = kappa*dt &
+                                    /min(dx(j), dy(k), fltr_dtheta)**2._wp
+                else
+                    kcfl_sf(j, k, l) = kappa*dt &
+                                    /min(dx(j), dy(k), dz(l))**2._wp
+                end if
+
+            end if
+
         elseif (n > 0) then
             !2D
             icfl_sf(j, k, l) = dt/min(dx(j)/(abs(vel(1)) + c), &
@@ -185,6 +287,8 @@ contains
 
             if (diffusion) dcfl_sf(j, k, l) = D_max*dt/min(dx(j), dy(k))**2._wp
 
+            if (conduction) kcfl_sf(j, k, l) = kappa*dt/min(dx(j), dy(k))**2._wp
+
         else
             !1D
             icfl_sf(j, k, l) = (dt/dx(j))*(abs(vel(1)) + c)
@@ -199,6 +303,8 @@ contains
 
             if (diffusion) dcfl_sf(j, k, l) = D_max*dt/dx(j)**2._wp
 
+            if (conduction) kcfl_sf(j, k, l) = kappa*dt/dx(j)**2._wp
+
         end if
 
     end subroutine s_compute_stability_from_dt
@@ -211,7 +317,11 @@ contains
         !! @param j x coordinate
         !! @param k y coordinate
         !! @param l z coordinate
-    subroutine s_compute_dt_from_cfl(vel, c, max_dt, rho, Re_l, j, k, l, D_max)
+        !! @param D_max largest binary diffusion coefficient
+        !! @param kappa largest phase thermal diffusivity in the cell
+        !! @param Fo_lim stable D*dt/min(dx)**2 (f_diffusive_stability_limit);
+        !!        cfl_target is applied as a fraction of it
+    subroutine s_compute_dt_from_cfl(vel, c, max_dt, rho, Re_l, j, k, l, D_max, kappa, Fo_lim)
         !$acc routine seq
         real(wp), dimension(num_dims), intent(in) :: vel
         real(wp), intent(in) :: c, rho
@@ -219,8 +329,10 @@ contains
         real(wp), dimension(2), intent(in) :: Re_l
         integer, intent(in) :: j, k, l
         real(wp) :: D_max
+        real(wp), intent(in) :: kappa, Fo_lim
 
-        real(wp) :: icfl_dt, vcfl_dt, dcfl_dt
+        real(wp) :: icfl_dt, vcfl_dt, dcfl_dt, kcfl_dt
+        real(wp) :: ds2 !< Squared smallest cell spacing for diffusion and conduction
         real(wp) :: fltr_dtheta   !<
              !! Modified dtheta accounting for Fourier filtering in azimuthal direction.
 
@@ -259,12 +371,10 @@ contains
                 end if
             end if
 
-            if (diffusion) then
-                if (grid_geometry == 3) then
-                    dcfl_dt = cfl_target*(min(dx(j), dy(k), fltr_dtheta)**2._wp)/D_max
-                else
-                    dcfl_dt = cfl_target*(min(dx(j), dy(k), dz(l))**2._wp)/D_max
-                end if
+            if (grid_geometry == 3) then
+                ds2 = min(dx(j), dy(k), fltr_dtheta)**2._wp
+            else
+                ds2 = min(dx(j), dy(k), dz(l))**2._wp
             end if
 
         elseif (n > 0) then
@@ -276,7 +386,7 @@ contains
                 vcfl_dt = cfl_target*(min(dx(j), dy(k))**2._wp)/maxval((1/Re_l)/rho)
             end if
 
-            if (diffusion) dcfl_dt = cfl_target*(min(dx(j), dy(k))**2._wp)/D_max
+            ds2 = min(dx(j), dy(k))**2._wp
 
         else
             !1D
@@ -286,18 +396,22 @@ contains
                 vcfl_dt = cfl_target*(dx(j)**2._wp)/minval(1/(rho*Re_l))
             end if
 
-            if (diffusion) dcfl_dt = cfl_target*(dx(j)**2._wp)/D_max
+            ds2 = dx(j)**2._wp
 
         end if
 
-        if (any(re_size > 0) .and. diffusion) then
-            max_dt(j, k, l) = min(icfl_dt, vcfl_dt, dcfl_dt)
-        elseif (any(re_size > 0)) then
-            max_dt(j, k, l) = min(icfl_dt, vcfl_dt)
-        elseif (diffusion) then
-            max_dt(j, k, l) = min(icfl_dt, dcfl_dt)
-        else
-            max_dt(j, k, l) = icfl_dt
+        max_dt(j, k, l) = icfl_dt
+
+        if (any(re_size > 0)) max_dt(j, k, l) = min(max_dt(j, k, l), vcfl_dt)
+
+        if (diffusion) then
+            dcfl_dt = cfl_target*Fo_lim*ds2/D_max
+            max_dt(j, k, l) = min(max_dt(j, k, l), dcfl_dt)
+        end if
+
+        if (conduction .and. kappa > 0._wp) then
+            kcfl_dt = cfl_target*Fo_lim*ds2/kappa
+            max_dt(j, k, l) = min(max_dt(j, k, l), kcfl_dt)
         end if
 
     end subroutine s_compute_dt_from_cfl

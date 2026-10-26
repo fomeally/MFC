@@ -292,28 +292,34 @@ contains
         !!  @param vcfl_max_glb Global maximum VCFL stability criterion
         !!  @param Rc_min_glb Global minimum Rc stability criterion
         !!  @param dcfl_max_glb Global maximum DCFL stability criterion
+        !!  @param kcfl_max_loc Local maximum KCFL (conduction) stability criterion
+        !!  @param kcfl_max_glb Global maximum KCFL (conduction) stability criterion
     subroutine s_mpi_reduce_stability_criteria_extrema(icfl_max_loc, &
                                                        vcfl_max_loc, &
                                                        ccfl_max_loc, &
                                                        Rc_min_loc, &
                                                        dcfl_max_loc, &
+                                                       kcfl_max_loc, &
                                                        icfl_max_glb, &
                                                        vcfl_max_glb, &
                                                        ccfl_max_glb, &
                                                        Rc_min_glb, &
-                                                       dcfl_max_glb)
+                                                       dcfl_max_glb, &
+                                                       kcfl_max_glb)
 
         real(wp), intent(in) :: icfl_max_loc
         real(wp), intent(in) :: vcfl_max_loc
         real(wp), intent(in) :: ccfl_max_loc
         real(wp), intent(in) :: Rc_min_loc
         real(wp), intent(in) :: dcfl_max_loc
+        real(wp), intent(in) :: kcfl_max_loc
 
         real(wp), intent(out) :: icfl_max_glb
         real(wp), intent(out) :: vcfl_max_glb
         real(wp), intent(out) :: ccfl_max_glb
         real(wp), intent(out) :: Rc_min_glb
         real(wp), intent(out) :: dcfl_max_glb
+        real(wp), intent(out) :: kcfl_max_glb
 
 #ifdef MFC_SIMULATION
 #ifdef MFC_MPI
@@ -339,6 +345,12 @@ contains
                             MPI_COMM_WORLD, ierr)
         end if
 
+        if (conduction) then
+            call MPI_REDUCE(kcfl_max_loc, kcfl_max_glb, 1, &
+                            mpi_p, MPI_MAX, 0, &
+                            MPI_COMM_WORLD, ierr)
+        end if
+
 #else
 
         icfl_max_glb = icfl_max_loc
@@ -349,6 +361,8 @@ contains
         end if
 
         if (diffusion) dcfl_max_glb = dcfl_max_loc
+
+        if (conduction) kcfl_max_glb = kcfl_max_loc
 
 #endif
 #endif

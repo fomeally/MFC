@@ -964,7 +964,7 @@ contains
                                              j_src_n(id)%vf, &
                                              rhs_vf, &
                                              q_prim_qp%vf, &
-                                             irx, iry, irz)
+                                             irx, iry, irz, t_step)
                 call nvtxEndRange
             end if
 
@@ -1019,6 +1019,12 @@ contains
 
         end do
         ! END: Dimensional Splitting Loop
+
+        ! Diffusion source correction of the incoming wave at -6/-8 CBC faces;
+        ! needs the diffusive fluxes of all directions
+        if (diffusion) then
+            call s_cbc_diffusion_source(q_prim_qp%vf, j_src_n, q_src_n, rhs_vf, t_step)
+        end if
 
         if (ib) then
             !$acc parallel loop collapse(3) gang vector default(present)
@@ -2481,11 +2487,12 @@ contains
         real(wp) :: alpha_i
         real(wp) :: alpharho_i
         real(wp) :: alpha_g
+        real(wp) :: alpharho_g
         real(wp) :: alpha_l
         real(wp) :: alpharho_l
 
         !$acc parallel loop collapse(3) gang vector default(present) &
-        !$acc private(sum_alpha, alpha_i, alpharho_i, alpha_g, alpha_l, alpharho_l)
+        !$acc private(sum_alpha, alpha_i, alpharho_i, alpha_g, alpharho_g, alpha_l, alpharho_l)
         do l = 0, p
             do k = 0, n
                 do j = 0, m
@@ -2556,6 +2563,19 @@ contains
                             do i = 1, Dif_size
                                 q_cons_vf(contxb + Dif_idx(i) - 1)%sf(j, k, l) = 0._wp
                             end do
+                        end if
+
+                        ! If the gas partial densities vanish, remove the gas volume as well;
+                        ! massless gas volume has no defined composition.
+                        alpharho_g = 0._wp
+                        !$acc loop seq
+                        do i = 1, Dif_size
+                            alpharho_g = alpharho_g + q_cons_vf(contxb + Dif_idx(i) - 1)%sf(j, k, l)
+                        end do
+
+                        if (alpharho_g <= 0._wp) then
+                            alpha_g = 0._wp
+                            q_cons_vf(advg_idx)%sf(j, k, l) = 0._wp
                         end if
 
                         sum_alpha = sum_alpha + alpha_g

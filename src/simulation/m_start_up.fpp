@@ -167,7 +167,7 @@ contains
             integral, integral_wrt, num_integrals, &
             polydisperse, poly_sigma, qbmm, &
             relax, relax_model, &
-            palpha_eps, ptgalpha_eps, &
+            palpha_eps, ptgalpha_eps, adaptive_newton, &
             R0_type, file_per_process, sigma, &
             pi_fac, adv_n, adap_dt, bf_x, bf_y, bf_z, &
             k_x, k_y, k_z, w_x, w_y, w_z, p_x, p_y, p_z, &
@@ -1436,6 +1436,9 @@ contains
             call s_write_data_files(q_cons_ts(1)%vf, q_T_sf, q_prim_vf, save_count)
         end if
 
+        ! Transparent diffusion BC history, next to the flow restart data
+        if (diffusion) call s_write_diffusion_tbc_restart(save_count)
+
         call nvtxEndRange
         call cpu_time(finish)
         if (cfl_dt) then
@@ -1652,7 +1655,7 @@ contains
 
         !$acc update device(relax, relax_model)
         if (relax) then
-            !$acc update device(palpha_eps, ptgalpha_eps)
+            !$acc update device(palpha_eps, ptgalpha_eps, adaptive_newton)
         end if
 
         if (ib) then

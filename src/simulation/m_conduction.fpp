@@ -243,8 +243,8 @@ contains
                             S_L = 0.0_wp
                             S_R = 0.0_wp   
                             do i = 1, Dif_size
-                                S_L = S_L + (alpha_m_L * Y_L(i) * W_L / fluid_pp(Dif_idx(i))%W) * ks(i)
-                                S_R = S_R + (alpha_m_R * Y_R(i) * W_R / fluid_pp(Dif_idx(i))%W) * ks(i)
+                                S_L = S_L + (alpha_m_L * Y_L(i) * W_L / fluid_pp(Dif_idx(i))%W) * ks(Dif_idx(i))
+                                S_R = S_R + (alpha_m_R * Y_R(i) * W_R / fluid_pp(Dif_idx(i))%W) * ks(Dif_idx(i))
                             end do
                             kg_f = (ds_L + ds_R) * S_L * S_R / (ds_L*S_R + ds_R*S_L)
                             q_src_n(E_idx)%sf(k, l, q) = q_src_n(E_idx)%sf(k, l, q) - kg_f * dTg_ds_f 

@@ -14,7 +14,7 @@ module m_constants
     real(wp), parameter :: pi = 3.141592653589793_wp !< Pi
     real(wp), parameter :: verysmall = 1.e-12_wp              !< Very small number
 
-    integer, parameter :: num_stcls_min = 5                       !< Minimum # of stencils
+    integer, parameter :: num_stcls_min = 2                       !< Minimum # of stencils
     integer, parameter :: path_len = 400                          !< Maximum path length
     integer, parameter :: name_len = 50                           !< Maximum name length
     integer, parameter :: dflt_int = -100                         !< Default integer value

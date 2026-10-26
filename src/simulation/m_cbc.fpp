@@ -32,7 +32,8 @@ module m_cbc
 
     implicit none
 
-    private; public :: s_initialize_cbc_module, s_cbc, s_finalize_cbc_module
+    private; public :: s_initialize_cbc_module, s_cbc, s_finalize_cbc_module, &
+ s_cbc_diffusion_source
 
     !! The cell-average primitive variables. They are obtained by reshaping (RS)
     !! q_prim_vf in the coordinate direction normal to the domain boundary along
@@ -110,6 +111,19 @@ module m_cbc
     !$acc declare create(vel_in, vel_out)
     !$acc declare create(alpha_rho_in, alpha_in)
     !$acc declare create(alphag_in)
+
+    !! Diffusion source correction of the incoming wave (s_cbc_diffusion_source)
+    logical, parameter :: cbc_dif_source = .true.  !< Apply the correction at -6 and -8 faces
+
+    type :: t_cbc_dif
+        real(wp), allocatable, dimension(:, :) :: V_prev !< Boundary-face volume flux at the last step
+        real(wp), allocatable, dimension(:, :) :: dV_dt  !< Its rate, frozen over the RK stages
+    end type t_cbc_dif
+
+    type(t_cbc_dif), dimension(1:3, 1:2) :: cbc_dif     !< (direction, 1 = beg / 2 = end)
+    integer :: cbc_dif_t_step = -huge(1)              !< Time step of the last call
+    real(wp) :: cbc_dif_t_prev = 0._wp                !< mytime at the first stage of that step
+    logical :: cbc_dif_have_prev = .false.
 
     !$acc declare create(q_prim_rsx_vf, q_prim_rsy_vf, q_prim_rsz_vf,  F_rsx_vf, F_src_rsx_vf,flux_rsx_vf_l, flux_src_rsx_vf_l, &
     !$acc                 F_rsy_vf, F_src_rsy_vf,flux_rsy_vf_l, flux_src_rsy_vf_l, F_rsz_vf, F_src_rsz_vf,flux_rsz_vf_l, flux_src_rsz_vf_l, &
@@ -2133,5 +2147,232 @@ contains
         end if
 
     end subroutine s_finalize_cbc_module
+
+    !> Source correction of the incoming acoustic wave at the non-reflecting
+        !! CBC faces (-6, -8) for mass diffusion and conduction, after
+        !! Sutherland & Kennedy (JCP 191, 2003).
+        !! s_cbc sets the incoming amplitude L_in = 0, but the diffusive RHS of the
+        !! boundary cell still changes its pressure at the rate S_p, so the incoming
+        !! invariant p -/+ rho c u integrates S_p and drifts once the diffusion front
+        !! reaches the boundary. LODI is linear in L_in, so instead of changing
+        !! s_cbc the response to
+        !!     delta = S_p - s rho c dV_b/dt      (s = -1 at beg, +1 at end)
+        !! is added to the assembled boundary-cell RHS. This holds p -/+ rho c (u + V_b)
+        !! fixed, where V_b is the volume flux of the diffusive fluxes through the
+        !! boundary face (ideal gas, along +idir):
+        !!     V = W_mix/rho_g sum_i j_i/W_i + q/(p (Gamma_g + 1))
+        !! Must be called after the diffusive/conductive fluxes of all directions are
+        !! in j_src_n/q_src_n. Cartesian only.
+    subroutine s_cbc_diffusion_source(q_prim_vf, j_src_n, q_src_n, rhs_vf, t_step)
+
+        type(scalar_field), dimension(sys_size), intent(in) :: q_prim_vf
+        type(vector_field), dimension(num_dims), intent(in) :: j_src_n, q_src_n
+        type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
+        integer, intent(in) :: t_step
+
+        integer :: idir, iside, bc, d, i, t1, t2, n1, n2
+        integer :: kc, lc, qc, kf, lf, qf
+        integer, dimension(3) :: e, ed
+        logical :: new_step
+        real(wp) :: sgn, h, rho, pres, gamma, pi_inf, qv, E_c, H_c, c, vel_K_sum
+        real(wp) :: alphag, advg, rho_dif, gam_num, gam_den, gam_mix, big_gam_mix, W_mix, Gam_eos
+        real(wp) :: drho, dE, dqv, dGam, drhog, S_p, V_b, delta, dp, du, drho_a
+        real(wp), dimension(num_fluids) :: alpha_rho, adv, alpha_rho_c, adv_c, dalpha_rho
+        real(wp), dimension(num_dims) :: vel
+        real(wp), dimension(Dif_size) :: Y_dif
+        real(wp), dimension(2) :: Re_c
+
+        if (.not. (cbc_dif_source .and. diffusion)) return
+        if (cyl_coord) return
+
+        new_step = (t_step /= cbc_dif_t_step)
+
+        do idir = 1, num_dims
+            select case (idir)
+            case (1)
+                n1 = n; n2 = p
+            case (2)
+                n1 = m; n2 = p
+            case default
+                n1 = m; n2 = n
+            end select
+            e = 0; e(idir) = 1
+
+            do iside = 1, 2
+                select case (idir)
+                case (1)
+                    bc = merge(bc_x%beg, bc_x%end, iside == 1)
+                case (2)
+                    bc = merge(bc_y%beg, bc_y%end, iside == 1)
+                case default
+                    bc = merge(bc_z%beg, bc_z%end, iside == 1)
+                end select
+                if (bc /= -6 .and. bc /= -8) cycle
+
+                if (.not. allocated(cbc_dif(idir, iside)%V_prev)) then
+                    allocate (cbc_dif(idir, iside)%V_prev(0:n1, 0:n2))
+                    allocate (cbc_dif(idir, iside)%dV_dt(0:n1, 0:n2))
+                    cbc_dif(idir, iside)%V_prev = 0._wp
+                    cbc_dif(idir, iside)%dV_dt = 0._wp
+                end if
+
+                sgn = merge(-1._wp, 1._wp, iside == 1)
+
+                do t2 = 0, n2
+                    do t1 = 0, n1
+                        ! Boundary cell and its outer face (face j lies between cells j and j + 1)
+                        select case (idir)
+                        case (1)
+                            kc = merge(0, m, iside == 1); lc = t1; qc = t2
+                        case (2)
+                            kc = t1; lc = merge(0, n, iside == 1); qc = t2
+                        case default
+                            kc = t1; lc = t2; qc = merge(0, p, iside == 1)
+                        end select
+                        kf = kc; lf = lc; qf = qc
+                        if (iside == 1) then
+                            kf = kc - e(1); lf = lc - e(2); qf = qc - e(3)
+                        end if
+
+                        ! Boundary-cell state
+                        do i = 1, num_fluids
+                            alpha_rho(i) = q_prim_vf(i)%sf(kc, lc, qc)
+                            adv(i) = q_prim_vf(E_idx + i)%sf(kc, lc, qc)
+                        end do
+                        do i = 1, num_dims
+                            vel(i) = q_prim_vf(contxe + i)%sf(kc, lc, qc)
+                        end do
+                        vel_K_sum = sum(vel**2._wp)
+                        pres = q_prim_vf(E_idx)%sf(kc, lc, qc)
+                        advg = q_prim_vf(advg_idx)%sf(kc, lc, qc)
+
+                        alphag = 0._wp
+                        rho_dif = 0._wp
+                        do i = 1, Dif_size
+                            alphag = alphag + adv(Dif_idx(i))
+                            rho_dif = rho_dif + alpha_rho(Dif_idx(i))
+                        end do
+
+                        V_b = 0._wp
+                        if (alphag <= small_num_dif .or. rho_dif <= 0._wp) then
+                            if (new_step) cbc_dif(idir, iside)%V_prev(t1, t2) = 0._wp
+                            cycle
+                        end if
+
+                        ! Gas-mixture Gamma, as in the conservative-to-primitive conversion
+                        gam_num = 0._wp; gam_den = 0._wp; W_mix = 0._wp
+                        do i = 1, Dif_size
+                            Y_dif(i) = alpha_rho(Dif_idx(i))/rho_dif
+                            gam_num = gam_num + Y_dif(i)*(gammas(Dif_idx(i)) + 1._wp)/fluid_pp(Dif_idx(i))%W
+                            gam_den = gam_den + Y_dif(i)*gammas(Dif_idx(i))/fluid_pp(Dif_idx(i))%W
+                            W_mix = W_mix + Y_dif(i)/fluid_pp(Dif_idx(i))%W
+                        end do
+                        W_mix = 1._wp/W_mix
+                        gam_mix = gam_num/gam_den
+                        big_gam_mix = 1._wp/(gam_mix - 1._wp)
+                        Gam_eos = alphag*big_gam_mix
+                        if (num_fluids > Dif_size) Gam_eos = Gam_eos + adv(liq_idx)*gammas(liq_idx)
+
+                        ! Diffusive/conductive rates of the boundary cell, all directions
+                        dalpha_rho = 0._wp
+                        dE = 0._wp
+                        do d = 1, num_dims
+                            ed = 0; ed(d) = 1
+                            select case (d)
+                            case (1)
+                                h = dx(kc)
+                            case (2)
+                                h = dy(lc)
+                            case default
+                                h = dz(qc)
+                            end select
+                            do i = 1, Dif_size
+                                dalpha_rho(Dif_idx(i)) = dalpha_rho(Dif_idx(i)) - &
+                                                         (j_src_n(d)%vf(Dif_idx(i))%sf(kc, lc, qc) - &
+                                                          j_src_n(d)%vf(Dif_idx(i))%sf(kc - ed(1), lc - ed(2), qc - ed(3)))/h
+                            end do
+                            dE = dE - (j_src_n(d)%vf(E_idx)%sf(kc, lc, qc) - &
+                                       j_src_n(d)%vf(E_idx)%sf(kc - ed(1), lc - ed(2), qc - ed(3)))/h
+                            if (conduction) then
+                                dE = dE - (q_src_n(d)%vf(E_idx)%sf(kc, lc, qc) - &
+                                           q_src_n(d)%vf(E_idx)%sf(kc - ed(1), lc - ed(2), qc - ed(3)))/h
+                            end if
+                        end do
+
+                        ! S_p = (dp/dt)_dif at fixed momentum and volume fractions
+                        drho = sum(dalpha_rho)
+                        dqv = 0._wp
+                        do i = 1, num_fluids
+                            dqv = dqv + dalpha_rho(i)*qvs(i)
+                        end do
+                        drhog = 0._wp
+                        do i = 1, Dif_size
+                            drhog = drhog + dalpha_rho(Dif_idx(i))
+                        end do
+                        dGam = 0._wp
+                        do i = 1, Dif_size
+                            dGam = dGam + (gammas(Dif_idx(i)) - big_gam_mix)/fluid_pp(Dif_idx(i))%W* &
+                                   (dalpha_rho(Dif_idx(i)) - Y_dif(i)*drhog)/rho_dif
+                        end do
+                        dGam = alphag*W_mix*dGam
+                        S_p = (dE + 5e-1_wp*vel_K_sum*drho - dqv - pres*dGam)/Gam_eos
+
+                        ! Volume flux through the boundary face and its (lagged) rate
+                        do i = 1, Dif_size
+                            V_b = V_b + j_src_n(idir)%vf(Dif_idx(i))%sf(kf, lf, qf)/fluid_pp(Dif_idx(i))%W
+                        end do
+                        V_b = V_b*W_mix*alphag/rho_dif
+                        if (conduction) V_b = V_b + q_src_n(idir)%vf(E_idx)%sf(kf, lf, qf)/(pres*(big_gam_mix + 1._wp))
+
+                        if (new_step) then
+                            if (cbc_dif_have_prev .and. mytime > cbc_dif_t_prev) then
+                                cbc_dif(idir, iside)%dV_dt(t1, t2) = &
+                                    (V_b - cbc_dif(idir, iside)%V_prev(t1, t2))/(mytime - cbc_dif_t_prev)
+                            end if
+                            cbc_dif(idir, iside)%V_prev(t1, t2) = V_b
+                        end if
+
+                        ! Sound speed exactly as in s_cbc
+                        alpha_rho_c = alpha_rho; adv_c = adv
+                        call s_convert_species_to_mixture_variables_acc(rho, gamma, pi_inf, qv, adv_c, alpha_rho_c, Re_c, kc, lc, qc)
+                        E_c = gamma*pres + pi_inf + 5e-1_wp*rho*vel_K_sum
+                        H_c = (E_c + pres)/rho
+                        if (alt_soundspeed) then
+                            call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H_c, adv, vel_K_sum, 0._wp, c, advg, gam_mix)
+                        else
+                            call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H_c, adv, vel_K_sum, 0._wp, c)
+                        end if
+
+                        ! Response of the boundary cell to the extra incoming amplitude delta:
+                        ! dp = -delta/2, du_n = s delta/(2 rho c), d(alpha_i rho_i) = mf_i dp/c^2,
+                        ! volume fractions and gas composition unchanged
+                        delta = S_p - sgn*rho*c*cbc_dif(idir, iside)%dV_dt(t1, t2)
+                        dp = -5e-1_wp*delta
+                        du = sgn*delta/(2._wp*rho*c)
+                        drho_a = dp/(c*c)
+
+                        dqv = 0._wp
+                        do i = 1, num_fluids
+                            rhs_vf(i)%sf(kc, lc, qc) = rhs_vf(i)%sf(kc, lc, qc) + alpha_rho(i)/rho*drho_a
+                            dqv = dqv + alpha_rho(i)/rho*drho_a*qvs(i)
+                        end do
+                        do i = 1, num_dims
+                            rhs_vf(momxb + i - 1)%sf(kc, lc, qc) = rhs_vf(momxb + i - 1)%sf(kc, lc, qc) + vel(i)*drho_a
+                        end do
+                        rhs_vf(momxb + idir - 1)%sf(kc, lc, qc) = rhs_vf(momxb + idir - 1)%sf(kc, lc, qc) + rho*du
+                        rhs_vf(E_idx)%sf(kc, lc, qc) = rhs_vf(E_idx)%sf(kc, lc, qc) + Gam_eos*dp + dqv + &
+                                                       5e-1_wp*vel_K_sum*drho_a + rho*vel(idir)*du
+                    end do
+                end do
+            end do
+        end do
+
+        if (new_step) then
+            cbc_dif_t_step = t_step
+            cbc_dif_t_prev = mytime
+            cbc_dif_have_prev = .true.
+        end if
+
+    end subroutine s_cbc_diffusion_source
 
 end module m_cbc
