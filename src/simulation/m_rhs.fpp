@@ -62,6 +62,8 @@ module m_rhs
     use m_diffusion
 
     use m_conduction
+
+    use m_thinc                !< THINC/MTHINC interface compression
     ! ==========================================================================
 
     implicit none
@@ -805,6 +807,12 @@ contains
             call s_get_capilary(q_prim_qp%vf)
             call nvtxEndRange
         end if
+
+        if (int_comp == int_comp_mthinc .and. n > 0) then
+            call nvtxStartRange("RHS-COMPRESSION-NORMALS")
+            call s_compute_mthinc_normals(q_prim_qp%vf)
+            call nvtxEndRange
+        end if
         ! Dimensional Splitting Loop
 
         do id = 1, num_dims
@@ -813,8 +821,10 @@ contains
 
             call nvtxStartRange("RHS-WENO")
             
-            if (.not. surface_tension .and. .not. diffusion) then
-                ! Reconstruct densitiess
+            if ((.not. surface_tension .and. .not. diffusion) .or. (diffusion .and. int_comp > 0)) then
+                ! Reconstruct densitiess; interface compression needs the whole state vector in one call, and with
+                ! diffusion the gas fractions it reconstructs are then reset from alpha_g by
+                ! s_correct_riemann_volume_fractions
                 iv%beg = 1; iv%end = sys_size
                 call s_reconstruct_cell_boundary_values( &
                     q_prim_qp%vf(1:sys_size), &
@@ -846,6 +856,23 @@ contains
                     qR_rsx_vf, qR_rsy_vf, qR_rsz_vf, &
                     id)
            
+            else if (surface_tension .and. int_comp > 0) then
+                ! Interface compression needs the whole state vector in one call
+                iv%beg = 1; iv%end = sys_size
+                call s_reconstruct_cell_boundary_values( &
+                    q_prim_qp%vf(1:sys_size), &
+                    qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, &
+                    qR_rsx_vf, qR_rsy_vf, qR_rsz_vf, &
+                    id)
+
+                ! Surface tension requires first-order energy; overwrite the higher-order result from the full pass above
+                iv%beg = E_idx; iv%end = E_idx
+                call s_reconstruct_cell_boundary_values_first_order( &
+                    q_prim_qp%vf(E_idx), &
+                    qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, &
+                    qR_rsx_vf, qR_rsy_vf, qR_rsz_vf, &
+                    id)
+
             else if (surface_tension) then
                 iv%beg = 1; iv%end = E_idx - 1
                 call s_reconstruct_cell_boundary_values( &

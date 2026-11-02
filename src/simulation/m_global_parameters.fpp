@@ -186,6 +186,11 @@ module m_global_parameters
 !$acc declare create(relax, relax_model, palpha_eps,ptgalpha_eps, adaptive_newton)
 !#endif
 
+    integer :: int_comp  !< Interface compression: 0 off, 1 THINC, 2 MTHINC
+    real(wp) :: ic_eps   !< THINC compresses only cells with ic_eps <= alpha_1 <= 1 - ic_eps
+    real(wp) :: ic_beta  !< THINC sharpness parameter
+    !$acc declare create(int_comp, ic_eps, ic_beta)
+
     !> @name Boundary conditions (BC) in the x-, y- and z-directions, respectively
     !> @{
     type(int_bounds_info) :: bc_x, bc_y, bc_z
@@ -547,6 +552,9 @@ contains
         palpha_eps = dflt_real
         ptgalpha_eps = dflt_real
         adaptive_newton = .false.
+        int_comp = 0
+        ic_eps = dflt_ic_eps
+        ic_beta = dflt_ic_beta
         hypoelasticity = .false.
         diffusion = .false.
         conduction = .false.

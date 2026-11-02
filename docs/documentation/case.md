@@ -367,6 +367,9 @@ Details of implementation of viscosity in MFC can be found in [Coralic (2015)](r
 | `teno_CT`              | Real    | TENO threshold for smoothness detection |
 | `null_weights`         | Logical | Null WENO weights at boundaries |
 | `mp_weno`              | Logical | Monotonicity preserving WENO |
+| `int_comp`             | Integer | Interface Compression [0] Off [1] THINC [2] MTHINC (default 0) |
+| `ic_eps`               | Real    | Interface compression threshold (default 1e-4) |
+| `ic_beta`              | Real    | Interface compression sharpness parameter (default 1.6) |
 | `riemann_solver`       | Integer | Riemann solver algorithm: [1] HLL*; [2] HLLC; [3] Exact*	 |
 | `low_Mach`             | Integer | Low Mach number correction for HLLC Riemann solver: [0] None; [1] Pressure (Chen et al. 2022); [2] Velocity (Thornber et al. 2008)	 |
 | `avg_state`	         | Integer | Averaged state evaluation method: [1] Roe average*; [2] Arithmetic mean  |
@@ -442,6 +445,10 @@ It is recommended to set `weno_eps` to $10^{-6}$ for WENO-JS, and to $10^{-40}$ 
 - `null_weights` activates nullification of the nonlinear WENO weights at the buffer regions outside the domain boundaries when the Riemann extrapolation boundary condition is specified (`bc_[x,y,z]%%beg[end]} = -4`).
 
 - `mp_weno` activates monotonicity preservation in the WENO reconstruction (MPWENO) such that the values of reconstructed variables do not reside outside the range spanned by WENO stencil ([Balsara and Shu, 2000](references.md#Balsara00); [Suresh and Huynh, 1997](references.md#Suresh97)).
+
+- `int_comp` activates interface compression using [1] THINC or [2] MTHINC (default off) used in variable reconstruction, with control parameters (`ic_eps`, and `ic_beta`).
+Fluid 1 is compressed: cells with `ic_eps` $\le \alpha_1 \le$ `1 - ic_eps` get a tanh face profile with sharpness `ic_beta`, and fluids 2 to `num_fluids` share $1 - \alpha_1$ at the faces in their cell-average proportions.
+With `diffusion`, fluid 1 must be the liquid. MTHINC requires a 2D or 3D case, and neither works with `model_eqns = 3` or `weno_order = 1`.
 
 - `riemann_solver` specifies the choice of the Riemann solver that is used in simulation by an integer from 1 through 3.
 `riemann_solver = 1`, `2`, and `3` correspond to HLL, HLLC, and Exact Riemann solver, respectively ([Toro, 2013](references.md#Toro13)).

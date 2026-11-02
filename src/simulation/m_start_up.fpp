@@ -85,6 +85,8 @@ module m_start_up
 
     use m_body_forces
 
+    use m_thinc                 !< THINC/MTHINC interface compression
+
     implicit none
 
     private; public :: s_read_input_file, &
@@ -168,6 +170,7 @@ contains
             polydisperse, poly_sigma, qbmm, &
             relax, relax_model, &
             palpha_eps, ptgalpha_eps, adaptive_newton, &
+            int_comp, ic_eps, ic_beta, &
             R0_type, file_per_process, sigma, &
             pi_fac, adv_n, adap_dt, bf_x, bf_y, bf_z, &
             k_x, k_y, k_z, w_x, w_y, w_z, p_x, p_y, p_z, &
@@ -1535,6 +1538,7 @@ contains
         ! and/or execution of any other tasks that are needed to properly configure
         ! the modules. The preparations below DO DEPEND on the grid being complete.
         call s_initialize_weno_module()
+        if (int_comp > 0) call s_initialize_thinc_module()
 
 #if defined(MFC_OpenACC) && defined(MFC_MEMORY_DUMP)
         print *, "[MEM-INST] After: s_initialize_weno_module"
@@ -1658,6 +1662,8 @@ contains
             !$acc update device(palpha_eps, ptgalpha_eps, adaptive_newton)
         end if
 
+        !$acc update device(int_comp, ic_eps, ic_beta)
+
         if (ib) then
             !$acc update device(ib_markers%sf)
         end if
@@ -1677,6 +1683,7 @@ contains
         call s_finalize_cbc_module()
         call s_finalize_riemann_solvers_module()
         call s_finalize_weno_module()
+        if (int_comp > 0) call s_finalize_thinc_module()
         call s_finalize_variables_conversion_module()
         if (grid_geometry == 3) call s_finalize_fftw_module
         call s_finalize_mpi_proxy_module()

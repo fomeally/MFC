@@ -30,6 +30,8 @@ module m_weno
 
     use m_mpi_proxy
 
+    use m_thinc, only: s_thinc_compression
+
     private; public :: s_initialize_weno_module, s_initialize_weno, s_finalize_weno_module, s_weno
 
     !> @name The cell-average variables that will be WENO-reconstructed. Formerly, they
@@ -1099,6 +1101,17 @@ contains
                     end do
                     !$acc end parallel loop
 
+                end if
+            #:endfor
+        end if
+
+        ! Interface compression of the face states; it needs every partial density and volume fraction, so it only runs when
+        ! the whole state vector was reconstructed in this call
+        if (int_comp > 0 .and. weno_order /= 1 .and. v_size == sys_size) then
+            #:for WENO_DIR, XYZ in [(1, 'x'), (2, 'y'), (3, 'z')]
+                if (weno_dir == ${WENO_DIR}$) then
+                    call s_thinc_compression(v_rs_ws_${XYZ}$, vL_rs_vf_${XYZ}$, vR_rs_vf_${XYZ}$, weno_dir, &
+                                             is1_weno, is2_weno, is3_weno)
                 end if
             #:endfor
         end if

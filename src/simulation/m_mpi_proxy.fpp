@@ -180,7 +180,7 @@ contains
             & 'bc_y%beg', 'bc_y%end', 'bc_z%beg', 'bc_z%end',  'fd_order',     &
             & 'num_probes', 'num_integrals', 'bubble_model', 'thermal',        &
             & 'R0_type', 'num_source', 'relax_model', 'num_ibs', 'n_start',    &
-            & 'dif_order']
+            & 'dif_order', 'int_comp']
             call MPI_BCAST(${VAR}$, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 
@@ -234,7 +234,8 @@ contains
             & 'bc_x%pres_in','bc_x%pres_out','bc_y%pres_in','bc_y%pres_out', 'bc_z%pres_in','bc_z%pres_out', &
             & 'x_domain%beg', 'x_domain%end', 'y_domain%beg', 'y_domain%end',    &
             & 'z_domain%beg', 'z_domain%end', 'x_a', 'x_b', 'y_a', 'y_b', 'z_a', &
-            & 'z_b', 't_stop', 't_save', 'cfl_target', 'rkck_tolerance', 'small_num_dif']
+            & 'z_b', 't_stop', 't_save', 'cfl_target', 'rkck_tolerance', 'small_num_dif', &
+            & 'ic_eps', 'ic_beta']
             call MPI_BCAST(${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 

@@ -27,6 +27,7 @@ contains
         call s_check_inputs_compilers
 
         call s_check_inputs_weno
+        call s_check_inputs_interface_compression
         call s_check_inputs_riemann_solver
         call s_check_inputs_time_stepping
         call s_check_inputs_model_eqns
@@ -85,6 +86,21 @@ contains
         @:PROHIBIT(weno_order /= 5 .and. mp_weno)
         @:PROHIBIT(model_eqns == 1 .and. weno_avg)
     end subroutine s_check_inputs_weno
+
+    !> Checks constraints on interface compression (THINC/MTHINC)
+    subroutine s_check_inputs_interface_compression
+        @:PROHIBIT(int_comp /= 0 .and. int_comp /= int_comp_thinc .and. int_comp /= int_comp_mthinc, &
+            "int_comp must be 0 (off), 1 (THINC), or 2 (MTHINC)")
+        @:PROHIBIT(int_comp == int_comp_mthinc .and. n == 0, "int_comp = 2 (MTHINC) requires at least 2D (n > 0)")
+        @:PROHIBIT(int_comp /= 0 .and. num_fluids < 2, "int_comp > 0 requires num_fluids >= 2")
+        @:PROHIBIT(int_comp /= 0 .and. model_eqns == 3, &
+            "int_comp > 0 is not supported with model_eqns = 3: THINC does not update per-fluid internal energies")
+        @:PROHIBIT(int_comp /= 0 .and. weno_order == 1, "int_comp > 0 requires weno_order > 1")
+        @:PROHIBIT(int_comp /= 0 .and. (ic_beta <= 0._wp .or. ic_eps <= 0._wp .or. ic_eps >= 0.5_wp), &
+            "int_comp > 0 requires ic_beta > 0 and 0 < ic_eps < 0.5")
+        @:PROHIBIT(int_comp /= 0 .and. diffusion .and. fluid_pp(1)%gas_mixture, &
+            "int_comp > 0 compresses fluid 1, which must be the liquid (gas_mixture = F) when diffusion is on")
+    end subroutine s_check_inputs_interface_compression
 
     !> Checks constraints on Riemann solver parameters
     subroutine s_check_inputs_riemann_solver
