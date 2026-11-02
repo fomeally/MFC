@@ -102,6 +102,7 @@ started, run ./mfc.sh build -h.""",
     run.add_argument("-a", "--account",            metavar="ACCOUNT",            type=str, default="",         help="(Batch) Account to charge.")
     run.add_argument("-@", "--email",              metavar="EMAIL",              type=str, default="",         help="(Batch) Email for job notification.")
     run.add_argument("-#", "--name",               metavar="NAME",               type=str, default="MFC",      help="(Batch) Job name.")
+    run.add_argument(      "--dependency",         metavar="JOBID",              type=str, default="",         help="(Batch) Start only after job JOBID completes successfully (PBS afterok).")
     run.add_argument("-s", "--scratch",            action="store_true",                    default=False,      help="Build from scratch.")
     run.add_argument("-b", "--binary",             choices=["mpirun", "jsrun", "srun", "mpiexec"],             type=str, default=None,       help="(Interactive) Override MPI execution binary")
     run.add_argument(      "--dry-run",            action="store_true",                    default=False,      help="(Batch) Run without submitting batch file.")

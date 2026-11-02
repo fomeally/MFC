@@ -93,6 +93,12 @@ contains
         !! weighted k, as in m_conduction) and the liquid when diffusion is on,
         !! otherwise each fluid separately. cv rather than cp is used because
         !! the explicit update advances the energy at fixed density.
+        !! The conduction flux changes only the mixture energy, and at fixed
+        !! alphas a phase temperature follows it through the pressure,
+        !! dT_i/dE = Gamma_i/(rho_i cv_i sum_j alpha_j Gamma_j), so each phase
+        !! diffusivity is weighted by its share alpha_i Gamma_i/sum_j alpha_j Gamma_j
+        !! (1 in a single-phase cell). Without it a trace gas in a liquid cell
+        !! gives a diffusivity set by its own tiny density.
         !! @param q_prim_vf cell centered primitive variables
         !! @param j x index
         !! @param k y index
@@ -109,45 +115,58 @@ contains
         integer, intent(in) :: j, k, l
         real(wp), intent(out) :: kappa
 
-        real(wp) :: alpha_i, alpharho_i, n_g, kn_g, rhocv_g
+        real(wp) :: alpha_i, alpharho_i, n_g, kn_g, ngam_g, rhocv_g
+        real(wp) :: gam_g, gam_l, gam_mix
         integer :: i, idx
 
         kappa = 0._wp
 
         if (diffusion) then
             ! Gas mixture: kappa_g = (sum X_i k_i)/(rho_g cv_g), with
-            ! rho_g cv_g = sum(alpha_rho_i cv_i)/alpha_g
+            ! rho_g cv_g = sum(alpha_rho_i cv_i)/alpha_g, and alpha_g*Gamma_g
+            ! with the mole-weighted Gamma_g of m_variables_conversion
             alpha_i = q_prim_vf(advg_idx)%sf(j, k, l)
+            n_g = 0._wp; kn_g = 0._wp; ngam_g = 0._wp; rhocv_g = 0._wp
             if (alpha_i > small_num_dif) then
-                n_g = 0._wp; kn_g = 0._wp; rhocv_g = 0._wp
                 !$acc loop seq
                 do i = 1, Dif_size
                     idx = Dif_idx(i)
                     alpharho_i = max(q_prim_vf(idx)%sf(j, k, l), 0._wp)
                     n_g = n_g + alpharho_i/fluid_pp(idx)%W
                     kn_g = kn_g + alpharho_i/fluid_pp(idx)%W*fluid_pp(idx)%k
+                    ngam_g = ngam_g + alpharho_i/fluid_pp(idx)%W*gammas(idx)
                     rhocv_g = rhocv_g + alpharho_i*cvs(idx)
                 end do
-                if (n_g > 0._wp .and. rhocv_g > 0._wp) then
-                    kappa = max(kappa, (kn_g/n_g)*alpha_i/rhocv_g)
-                end if
             end if
+            gam_g = 0._wp
+            if (n_g > 0._wp .and. rhocv_g > 0._wp) gam_g = alpha_i*ngam_g/n_g
 
             ! Liquid
+            gam_l = 0._wp
+            if (num_fluids > Dif_size) gam_l = max(q_prim_vf(E_idx + liq_idx)%sf(j, k, l), 0._wp)*gammas(liq_idx)
+
+            gam_mix = gam_g + gam_l
+            if (gam_g > 0._wp) kappa = max(kappa, (kn_g/n_g)*alpha_i/rhocv_g*gam_g/gam_mix)
+
             if (num_fluids > Dif_size) then
                 alpha_i = q_prim_vf(E_idx + liq_idx)%sf(j, k, l)
                 alpharho_i = q_prim_vf(liq_idx)%sf(j, k, l)
                 if (alpha_i > small_num_dif .and. alpharho_i > 0._wp .and. cvs(liq_idx) > 0._wp) then
-                    kappa = max(kappa, fluid_pp(liq_idx)%k*alpha_i/(alpharho_i*cvs(liq_idx)))
+                    kappa = max(kappa, fluid_pp(liq_idx)%k*alpha_i/(alpharho_i*cvs(liq_idx))*gam_l/gam_mix)
                 end if
             end if
         else
+            gam_mix = 0._wp
+            !$acc loop seq
+            do i = 1, num_fluids
+                gam_mix = gam_mix + max(q_prim_vf(E_idx + i)%sf(j, k, l), 0._wp)*gammas(i)
+            end do
             !$acc loop seq
             do i = 1, num_fluids
                 alpha_i = q_prim_vf(E_idx + i)%sf(j, k, l)
                 alpharho_i = q_prim_vf(i)%sf(j, k, l)
                 if (alpha_i > small_num_dif .and. alpharho_i > 0._wp .and. cvs(i) > 0._wp) then
-                    kappa = max(kappa, fluid_pp(i)%k*alpha_i/(alpharho_i*cvs(i)))
+                    kappa = max(kappa, fluid_pp(i)%k*alpha_i/(alpharho_i*cvs(i))*alpha_i*gammas(i)/gam_mix)
                 end if
             end do
         end if

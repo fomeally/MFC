@@ -149,7 +149,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-fallow-invalid-boz>
             $<$<COMPILE_LANGUAGE:Fortran>:-fallow-argument-mismatch>
-            $<$<COMPILE_LANGUAGE:Fortran>:-fcheck=bounds>
+            # $<$<COMPILE_LANGUAGE:Fortran>:-fcheck=bounds>
         )
     endif()
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Cray")

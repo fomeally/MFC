@@ -16,6 +16,9 @@
 #PBS -M ${email}
 #PBS -m abe
 % endif
+% if dependency:
+#PBS -W depend=afterok:${dependency}
+% endif
 #PBS -o "${name}.out"
 #PBS -e "${name}.err"
 #PBS -V
