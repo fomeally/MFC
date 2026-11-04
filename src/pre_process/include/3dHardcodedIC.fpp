@@ -5,7 +5,7 @@
 
     real(wp) :: eps
 
-    real(wp) :: r_d2, B_d2, phi_d2, Y_d2, T_d2, rhov_d2, rhoa_d2, alpv_d2, eta_d2
+    real(wp) :: r_d2, B_d2, phi_d2, Y_d2, T_d2, rhov_d2, rhoa_d2, alpv_d2, eta_d2, shift_d2
 
     eps = 1e-9_wp
 #:enddef
@@ -58,7 +58,7 @@
             q_prim_vf(advxe)%sf(i, j, k) = patch_icpp(1)%alpha(2)
         end if
 
-    case (302) ! Droplet of radius patch_icpp%radius at the patch centroid in the quasi-steady
+    case (302, 303) ! Droplet of radius patch_icpp%radius at the patch centroid in the quasi-steady
         ! d^2-law gas (Palmore & Desjardins 2019, Eqs. 82-83). With phi = (1 + B)**(1 - R/r),
         ! 1 - Y = (1 - Y_s)*phi and T = T_s + (T_inf - T_s)*(phi - 1)/B, B = (Y_s - Y_inf)/(1 - Y_s);
         ! inside r <= R the gas takes the surface state (T_s, Y_s). Fluid 1 is the liquid, fluid 2
@@ -66,6 +66,12 @@
         ! Liquid and gas are blended with the sphere patch's tanh, eta = 1 in the liquid; it is
         ! built here because a smoothed sphere patch would refill this patch's cells with its constants.
         ! a(2) = T_s, a(3) = Y_s, a(4) = T_inf, a(5) = Y_inf, a(6) = liquid density, a(7) = smooth_coeff
+        ! hcid 303 is the same, but the tanh is moved inward so the liquid volume fraction is a(8) at r = R
+        ! (the outer edge of the band, not its centre, sits at R); the gas profile stays anchored at R
+        shift_d2 = 0._wp
+        if (patch_icpp(patch_id)%hcid == 303) then
+            shift_d2 = atanh(1._wp - 2._wp*patch_icpp(patch_id)%a(8))*min(dx, dy, dz)/patch_icpp(patch_id)%a(7)
+        end if
         r_d2 = sqrt((x_cc(i) - x_centroid)**2 + (cart_y - y_centroid)**2 + (cart_z - z_centroid)**2)
         B_d2 = (patch_icpp(patch_id)%a(3) - patch_icpp(patch_id)%a(5))/(1._wp - patch_icpp(patch_id)%a(3))
         phi_d2 = (1._wp + B_d2)**(1._wp - min(patch_icpp(patch_id)%radius/max(r_d2, 1e-30_wp), 1._wp))
@@ -76,7 +82,7 @@
         rhoa_d2 = q_prim_vf(E_idx)%sf(i, j, k)*fluid_pp(3)%gamma/(fluid_pp(3)%cv*T_d2)
         alpv_d2 = (Y_d2/rhov_d2)/(Y_d2/rhov_d2 + (1._wp - Y_d2)/rhoa_d2)
 
-        eta_d2 = 0.5_wp - 0.5_wp*tanh(patch_icpp(patch_id)%a(7)/min(dx, dy, dz)*(r_d2 - patch_icpp(patch_id)%radius))
+        eta_d2 = 0.5_wp - 0.5_wp*tanh(patch_icpp(patch_id)%a(7)/min(dx, dy, dz)*(r_d2 - patch_icpp(patch_id)%radius + shift_d2))
 
         q_prim_vf(contxb)%sf(i, j, k) = eta_d2*patch_icpp(patch_id)%a(6)
         q_prim_vf(contxb + 1)%sf(i, j, k) = (1._wp - eta_d2)*alpv_d2*rhov_d2
